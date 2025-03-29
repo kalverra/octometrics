@@ -1,0 +1,27 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+    - id: check-yaml
+    - id: detect-aws-credentials
+    - id: detect-private-key
+    - id: end-of-file-fixer
+    - id: trailing-whitespace
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+    - id: codespell
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.0.2
+    hooks:
+    - id: golangci-lint-config-verify
+    - id: golangci-lint-full
+  - repo: local
+    hooks:
+    - id: go-unit-tests
+      name: go unit tests
+      entry: go test ./...
+      pass_filenames: false
+      types: [go]
+      language: golang
+      stages: [pre-push]
