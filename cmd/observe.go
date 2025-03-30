@@ -28,7 +28,10 @@ var observeCmd = &cobra.Command{
 		}
 
 		if pullRequestID != 0 {
-			fmt.Errorf("pull request gathering not implemented yet")
+			err := observe.PullRequest(githubClient, owner, repo, pullRequestID, outputTypes)
+			if err != nil {
+				return fmt.Errorf("failed to observe pull request: %w", err)
+			}
 		}
 
 		return observe.Serve("")

@@ -49,48 +49,50 @@ type JobData struct {
 	Cost int64 `json:"cost"`
 }
 
+func (j *JobData) GetRunner() string {
+	if j == nil || j.WorkflowJob == nil {
+		return ""
+	}
+	return j.Runner
+}
+
+func (j *JobData) GetCost() int64 {
+	if j == nil || j.WorkflowJob == nil {
+		return 0
+	}
+	return j.Cost
+}
+
 type WorkflowRunData struct {
 	*github.WorkflowRun
-	Jobs                []*JobData            `json:"jobs,omitempty"`
+	Jobs                []*JobData            `json:"jobs"`
+	Cost                int64                 `json:"cost"`
+	RunCompletedAt      time.Time             `json:"completed_at"`
 	MonitorObservations *monitor.Observations `json:"monitor_observations,omitempty"`
 }
 
-// DEBUG: Figuring out check suites
-// https://stackoverflow.com/questions/67919168/github-checks-api-vs-check-runs-vs-check-suites
-func WorkflowRuns(client *github.Client, owner, repo string, forceUpdate bool) ([]*WorkflowRunData, error) {
-	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	listSuites, _, err := client.Checks.ListCheckSuitesForRef(ctx, owner, repo, "utilizeParrot", nil)
-	cancel()
-	if err != nil {
-		return nil, err
+// GetJobs returns the list of jobs for the workflow run
+func (w *WorkflowRunData) GetJobs() []*JobData {
+	if w == nil || w.WorkflowRun == nil {
+		return nil
 	}
+	return w.Jobs
+}
 
-	data, err := json.Marshal(listSuites)
-	if err != nil {
-		return nil, err
+// GetCost returns the total cost of the workflow run in tenths of a cent
+func (w *WorkflowRunData) GetCost() int64 {
+	if w == nil || w.WorkflowRun == nil {
+		return 0
 	}
-	err = os.WriteFile("list_suites_for_ref.json", data, 0644)
-	if err != nil {
-		return nil, err
-	}
+	return w.Cost
+}
 
-	ctx, cancel = context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	checkRuns, _, err := client.Checks.ListCheckRunsCheckSuite(ctx, owner, repo, listSuites.CheckSuites[0].GetID(), nil)
-	cancel()
-	if err != nil {
-		return nil, err
+// GetRunCompletedAt returns the time the workflow run was completed
+func (w *WorkflowRunData) GetRunCompletedAt() time.Time {
+	if w == nil || w.WorkflowRun == nil {
+		return time.Time{}
 	}
-
-	data, err = json.Marshal(checkRuns)
-	if err != nil {
-		return nil, err
-	}
-	err = os.WriteFile("list_check_runs_for_suite.json", data, 0644)
-	if err != nil {
-		return nil, err
-	}
-
-	return nil, nil
+	return w.RunCompletedAt
 }
 
 // WorkflowRun gathers all metrics for a completed workflow run
@@ -111,12 +113,9 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 		fileExists = true
 	}
 
-	var (
-		startTime  = time.Now()
-		successLog = log.Info().
-				Str("duration", time.Since(startTime).String()).
-				Int64("workflow_run_id", workflowRunID)
-	)
+	startTime := time.Now()
+
+	log.Info().Int64("workflow_run_id", workflowRunID).Msg("Gathering workflow run data")
 
 	if !forceUpdate && fileExists {
 		log.Debug().Str("file", targetFile).Int64("workflow_run_id", workflowRunID).Msg("Reading workflow run data from file")
@@ -125,7 +124,10 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
 		}
 		err = json.Unmarshal(workflowFileBytes, &workflowRunData)
-		successLog.Msg("Gathered workflow run data")
+		log.Info().
+			Str("duration", time.Since(startTime).String()).
+			Int64("workflow_run_id", workflowRunID).
+			Msg("Gathered workflow run data")
 		return workflowRunData, err
 	}
 
@@ -170,10 +172,18 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 	}
 
 	for _, job := range workflowRunJobs {
+		// Calculate completed at for the workflow. GitHub API only gives "UpdatedAt" for workflows
+		if workflowRunData.RunCompletedAt.IsZero() {
+			workflowRunData.RunCompletedAt = job.GetCompletedAt().Time
+		} else if job.GetCompletedAt().Time.After(workflowRunData.RunCompletedAt) {
+			workflowRunData.RunCompletedAt = job.GetCompletedAt().Time
+		}
+
 		runner, cost, err := calculateJobRunBilling(job.GetID(), workflowBillingData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to calculate cost for job '%d': %w", job.GetID(), err)
 		}
+		workflowRunData.Cost += cost
 		workflowRunData.Jobs = append(workflowRunData.Jobs, &JobData{
 			WorkflowJob: job,
 			Runner:      runner,
@@ -190,7 +200,10 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 		return nil, fmt.Errorf("failed to write workflow run data to file for workflow run '%d': %w", workflowRunID, err)
 	}
 
-	successLog.Msg("Gathered workflow run data")
+	log.Info().
+		Str("duration", time.Since(startTime).String()).
+		Int64("workflow_run_id", workflowRunID).
+		Msg("Gathered workflow run data")
 	return workflowRunData, nil
 }
 

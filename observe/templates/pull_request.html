@@ -1,0 +1,33 @@
+{{- /* Go Template file */ -}}
+
+{{ define "pull_request_html" }}
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf">
+    <title>PR {{ .GetNumber }}</title>
+</head>
+
+<body>
+    <h1>
+        <a target="_blank" href="{{ .GetHTMLURL }}">Pull Request {{ .GetNumber }}</a>
+    </h1>
+    <p>State: {{ .GetState }}</p>
+    <p>Author: {{ .GetUser.GetLogin }}</p>
+
+    <h2>Commits</h2>
+    <ul>
+        {{ range .CommitData }}
+        <li>{{ .GetSHA }} - {{ .GetCommit.GetMessage }} ({{
+            .GetCommit.GetAuthor.GetDate.Time.Format
+            "2006-01-0215:04:05"
+            }})</li>
+        {{ end }}
+    </ul>
+
+</body>
+
+{{ end }}

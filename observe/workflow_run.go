@@ -43,7 +43,7 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 func buildWorkflowRunGanttData(workflowRun *gather.WorkflowRunData) (*ganttData, error) {
 	mermaidDateFormat, mermaidAxisFormat, goDateFormat := ganttDetermineDateFormat(
 		workflowRun.GetRunStartedAt().Time,
-		workflowRun.GetUpdatedAt().Time, // TODO: UpdatedAt is probably inaccurate
+		workflowRun.GetRunCompletedAt(),
 	)
 
 	tasks := make([]ganttItem, 0, len(workflowRun.Jobs))
