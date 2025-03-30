@@ -200,7 +200,7 @@ func setWorkflowRunsForCommit(
 				defer commitData.comparisonMutex.Unlock()
 				commitData.Conclusion = establishPRChecksConclusion(commitData.Conclusion, workflowRun.GetConclusion())
 				commitData.Cost += workflowRun.GetCost()
-				if workflowRun.GetRunStartedAt().Time.Before(commitData.StartActionsTime) || commitData.StartActionsTime.IsZero() {
+				if workflowRun.GetRunStartedAt().Before(commitData.StartActionsTime) || commitData.StartActionsTime.IsZero() {
 					commitData.StartActionsTime = workflowRun.GetRunStartedAt().Time
 				}
 				if workflowRun.GetRunCompletedAt().After(commitData.EndActionsTime) {

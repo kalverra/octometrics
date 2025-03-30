@@ -175,7 +175,7 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 		// Calculate completed at for the workflow. GitHub API only gives "UpdatedAt" for workflows
 		if workflowRunData.RunCompletedAt.IsZero() {
 			workflowRunData.RunCompletedAt = job.GetCompletedAt().Time
-		} else if job.GetCompletedAt().Time.After(workflowRunData.RunCompletedAt) {
+		} else if job.GetCompletedAt().After(workflowRunData.RunCompletedAt) {
 			workflowRunData.RunCompletedAt = job.GetCompletedAt().Time
 		}
 
