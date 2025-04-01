@@ -16,10 +16,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const commitsDir = "commits"
+const CommitsDataDir = "commits"
 
 type CommitData struct {
 	*github.RepositoryCommit
+	Owner            string             `json:"owner"`
+	Repo             string             `json:"repo"`
 	CheckRuns        []*github.CheckRun `json:"check_runs"`
 	WorkflowRunIDs   []int64            `json:"workflow_run_ids"`
 	StartActionsTime time.Time          `json:"start_actions_time"`
@@ -27,6 +29,14 @@ type CommitData struct {
 	Conclusion       string             `json:"conclusion"`
 	Cost             int64              `json:"cost"`
 	comparisonMutex  sync.Mutex         `json:"-"`
+}
+
+func (c *CommitData) GetOwner() string {
+	return c.Owner
+}
+
+func (c *CommitData) GetRepo() string {
+	return c.Repo
 }
 
 func (c *CommitData) GetCheckRuns() []*github.CheckRun {
@@ -55,15 +65,18 @@ func (c *CommitData) GetCost() int64 {
 
 func Commit(client *github.Client, owner, repo, sha string, forceUpdate bool) (*CommitData, error) {
 	var (
-		commitData = &CommitData{}
-		targetDir  = filepath.Join(dataDir, owner, repo, commitsDir)
+		commitData = &CommitData{
+			Owner: owner,
+			Repo:  repo,
+		}
+		targetDir  = filepath.Join(DataDir, owner, repo, CommitsDataDir)
 		targetFile = filepath.Join(targetDir, fmt.Sprintf("%s.json", sha))
 		fileExists = false
 	)
 
 	err := os.MkdirAll(targetDir, 0755)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make data dir '%s': %w", workflowRunsDir, err)
+		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
 	}
 
 	if _, err := os.Stat(targetFile); err == nil {

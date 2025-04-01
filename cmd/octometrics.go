@@ -33,23 +33,19 @@ var (
 	owner             string
 	repo              string
 	workflowRunID     int64
-	pullRequestID     int
+	pullRequestNumber int
 
 	githubClient *github.Client
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "octometrics",
-	Short: "", // TODO: Fill out
-	Long:  ``, // TODO: Fill out
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if workflowRunID == 0 && pullRequestID == 0 {
-			return fmt.Errorf("either workflow run ID or pull request ID must be provided")
-		}
-		if workflowRunID != 0 && pullRequestID != 0 {
-			return fmt.Errorf("only one of workflow run ID or pull request ID must be provided")
-		}
+	Short: "See metrics and profiling of your GitHub Actions",
+	Long: `See metrics and profiling of your GitHub Actions.
 
+GitHub Actions provides surprisingly little metrics to help you optimize things like runtime and profiling data.
+Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and inefficiencies in your CI/CD pipelines.`, // TODO: Fill out
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		err := setupLogging()
 		if err != nil {
 			return fmt.Errorf("failed to setup logging: %w", err)
@@ -64,16 +60,16 @@ var rootCmd = &cobra.Command{
 			Str("commit", commit).
 			Str("build_time", buildTime).
 			Str("built_by", builtBy).
-			Msg("Workflow Metrics Version Info")
+			Msg("Octometrics Version Info")
 		log.Debug().
 			Str("owner", owner).
 			Str("repo", repo).
 			Int64("workflow_run_id", workflowRunID).
-			Int("pull_request_id", pullRequestID).
+			Int("pull_request_number", pullRequestNumber).
 			Str("log_file", logFileName).
 			Str("log_level", logLevelInput).
 			Bool("disable_console_log", disableConsoleLog).
-			Msg("workflow-metrics flags")
+			Msg("octometrcis flags")
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -85,24 +81,15 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&logFileName, "log-file", "f", "workflow-metrics.log.json", "Log file name")
+	rootCmd.PersistentFlags().StringVarP(&logFileName, "log-file", "f", "octometrics.log.json", "Log file name")
 	rootCmd.PersistentFlags().StringVarP(&logLevelInput, "log-level", "l", "info", "Log level")
 	rootCmd.PersistentFlags().BoolVarP(&disableConsoleLog, "silent", "s", false, "Disables console logs. Still logs to file")
 
 	rootCmd.PersistentFlags().StringVarP(&owner, "owner", "o", "", "Repository owner")
 	rootCmd.PersistentFlags().StringVarP(&repo, "repo", "r", "", "Repository name")
 	rootCmd.PersistentFlags().Int64VarP(&workflowRunID, "workflow-run-id", "w", 0, "Workflow run ID")
-	rootCmd.PersistentFlags().IntVarP(&pullRequestID, "pull-request-id", "p", 0, "Pull request ID")
+	rootCmd.PersistentFlags().IntVarP(&pullRequestNumber, "pull-request-number", "p", 0, "Pull request number")
 	rootCmd.PersistentFlags().StringVarP(&githubToken, "github-token", "t", "", fmt.Sprintf("GitHub API token (can also be set via %s)", githubTokenEnvVar))
-
-	err := rootCmd.MarkPersistentFlagRequired("owner")
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to mark flag as required")
-	}
-	err = rootCmd.MarkPersistentFlagRequired("repo")
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to mark flag as required")
-	}
 }
 
 func Execute() {

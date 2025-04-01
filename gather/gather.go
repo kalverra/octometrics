@@ -11,7 +11,7 @@ import (
 const (
 	timeoutDur = 10 * time.Second
 
-	dataDir = "data"
+	DataDir = "data"
 )
 
 var (

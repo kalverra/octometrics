@@ -2,7 +2,7 @@ package observe
 
 import (
 	"fmt"
-	"strings"
+	"path/filepath"
 	"time"
 
 	"github.com/google/go-github/v70/github"
@@ -41,48 +41,35 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 }
 
 func buildWorkflowRunGanttData(workflowRun *gather.WorkflowRunData) (*ganttData, error) {
-	mermaidDateFormat, mermaidAxisFormat, goDateFormat := ganttDetermineDateFormat(
-		workflowRun.GetRunStartedAt().Time,
-		workflowRun.GetRunCompletedAt(),
-	)
-
 	tasks := make([]ganttItem, 0, len(workflowRun.Jobs))
 	owner := workflowRun.GetRepository().GetOwner().GetLogin()
 	repo := workflowRun.GetRepository().GetName()
 	workflowRunID := workflowRun.GetID()
 	for _, job := range workflowRun.Jobs {
-		if job.GetConclusion() == "skipped" {
-			continue
-		}
-
 		startedAt := job.GetStartedAt().Time
 		duration := job.GetCompletedAt().Sub(startedAt)
 
-		jobName := job.GetName()
-		saniName := strings.ReplaceAll(jobName, " ", "_")
-		// Colons in names break mermaid rendering https://github.com/mermaid-js/mermaid/issues/742
-		jobName = strings.ReplaceAll(jobName, ":", "#colon;")
-		tasks = append(tasks, ganttItem{
-			Name:       jobName,
-			MermaidID:  saniName,
+		newTask := ganttItem{
+			Name:       job.GetName(),
 			StartTime:  job.GetStartedAt().Time,
 			Conclusion: conclusionToGanntStatus(job.GetConclusion()),
 			Duration:   duration,
 			Link:       jobRunLink(owner, repo, job.GetID()) + ".html",
-		})
+		}
+		if job.GetConclusion() == "skipped" {
+			newTask.Name = fmt.Sprintf("%s (skipped)", job.GetName())
+		}
+		tasks = append(tasks, newTask)
 	}
 
 	templateData := &ganttData{
-		ID:           fmt.Sprint(workflowRunID),
-		Name:         fmt.Sprintf("Workflow Run %s, Run ID: %d", workflowRun.GetName(), workflowRun.GetID()),
-		Link:         workflowRun.GetHTMLURL(),
-		DateFormat:   mermaidDateFormat,
-		AxisFormat:   mermaidAxisFormat,
-		GoDateFormat: goDateFormat,
-		Items:        tasks,
-		Owner:        owner,
-		Repo:         repo,
-		DataType:     "workflow_run",
+		ID:       fmt.Sprint(workflowRunID),
+		Name:     fmt.Sprintf("Workflow Run %s, Run ID: %d", workflowRun.GetName(), workflowRun.GetID()),
+		Link:     workflowRun.GetHTMLURL(),
+		Items:    tasks,
+		Owner:    owner,
+		Repo:     repo,
+		DataType: "workflow_run",
 	}
 
 	return templateData, nil
@@ -95,4 +82,8 @@ func conclusionToGanntStatus(conclusion string) string {
 	}
 
 	return ""
+}
+
+func workflowRunLink(owner, repo string, workflowRunID int64) string {
+	return filepath.Join("/", owner, repo, gather.WorkflowRunsDataDir, fmt.Sprint(workflowRunID))
 }

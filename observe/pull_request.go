@@ -6,12 +6,11 @@ import (
 	htmlTemplate "html/template"
 	"os"
 	"path/filepath"
+	"text/template"
 
 	"github.com/google/go-github/v70/github"
 	"github.com/kalverra/workflow-metrics/gather"
 )
-
-const pullRequestOutputsDir = "pull_requests"
 
 func PullRequest(client *github.Client, owner, repo string, pullRequestNumber int, outputTypes []string) error {
 	prData, err := gather.PullRequest(client, owner, repo, pullRequestNumber, false)
@@ -20,7 +19,9 @@ func PullRequest(client *github.Client, owner, repo string, pullRequestNumber in
 	}
 
 	// TODO: Make markdown too
-	tmpl, err := htmlTemplate.New(fmt.Sprintf("pull_request_%s", "html")).ParseFiles(
+	tmpl, err := htmlTemplate.New(fmt.Sprintf("pull_request_%s", "html")).Funcs(template.FuncMap{
+		"commitRunLink": commitRunLink,
+	}).ParseFiles(
 		filepath.Join(templatesDir, fmt.Sprintf("pull_request.%s", "html")),
 	)
 	if err != nil {
@@ -35,7 +36,7 @@ func PullRequest(client *github.Client, owner, repo string, pullRequestNumber in
 	outputFile := filepath.Join(
 		htmlOutputDir,
 		owner, repo,
-		pullRequestOutputsDir,
+		gather.PullRequestsDataDir,
 		fmt.Sprintf("%d.html", pullRequestNumber),
 	)
 	err = os.MkdirAll(filepath.Dir(outputFile), 0755)
@@ -46,6 +47,5 @@ func PullRequest(client *github.Client, owner, repo string, pullRequestNumber in
 	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
-	fmt.Printf("Pull request data written to %s\n", outputFile)
 	return nil
 }

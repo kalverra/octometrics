@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/google/go-github/v70/github"
@@ -13,7 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const pullRequestsDir = "pull_requests"
+const PullRequestsDataDir = "pull_requests"
 
 type PullRequestData struct {
 	*github.PullRequest
@@ -32,14 +33,14 @@ func PullRequest(
 ) (*PullRequestData, error) {
 	var (
 		pullRequestData = &PullRequestData{}
-		targetDir       = filepath.Join(dataDir, owner, repo, pullRequestsDir)
+		targetDir       = filepath.Join(DataDir, owner, repo, PullRequestsDataDir)
 		targetFile      = filepath.Join(targetDir, fmt.Sprintf("%d.json", pullRequestNumber))
 		fileExists      = false
 	)
 
 	err := os.MkdirAll(targetDir, 0755)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make data dir '%s': %w", workflowRunsDir, err)
+		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
 	}
 
 	if _, err := os.Stat(targetFile); err == nil {
@@ -151,6 +152,12 @@ func prCommitData(client *github.Client, owner, repo string, prCommits []*github
 	for data := range commitDataChan {
 		commitData = append(commitData, data)
 	}
+
+	// Sort the commit data by commit date
+	sort.Slice(commitData, func(i, j int) bool {
+		return commitData[i].GetCommit().GetAuthor().GetDate().Before(
+			commitData[j].GetCommit().GetAuthor().GetDate().Time)
+	})
 
 	return commitData, nil
 }

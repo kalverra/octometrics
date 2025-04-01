@@ -33,5 +33,8 @@ metrics.log
 workflow-metrics.log
 workflow-metrics.log.json
 workflow-metrics.json
+octometrics.json
+octometrics.log
+octometrics.log.json
 data/
 observe_output/

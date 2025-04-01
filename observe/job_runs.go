@@ -3,7 +3,6 @@ package observe
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/google/go-github/v70/github"
@@ -53,40 +52,30 @@ func JobRuns(client *github.Client, owner, repo string, workflowRunID int64, out
 }
 
 func buildJobRunGanttData(owner, repo string, workflowRunID int64, job *gather.JobData) (*ganttData, error) {
-	mermaidDateFormat, mermaidAxisFormat, goDateFormat := ganttDetermineDateFormat(
-		job.GetStartedAt().Time,
-		job.GetCompletedAt().Time,
-	)
-
 	tasks := make([]ganttItem, 0, len(job.Steps))
 	for _, step := range job.Steps {
-		if step.GetConclusion() == "skipped" {
-			continue
-		}
-
-		saniName := strings.ReplaceAll(step.GetName(), " ", "_")
 		startTime := step.GetStartedAt().Time
 		duration := step.GetCompletedAt().Sub(startTime)
-		tasks = append(tasks, ganttItem{
+		newTask := ganttItem{
 			Name:       step.GetName(),
-			MermaidID:  saniName,
 			StartTime:  step.GetStartedAt().Time,
 			Conclusion: conclusionToGanntStatus(step.GetConclusion()),
 			Duration:   duration,
-		})
+		}
+		if step.GetConclusion() == "skipped" {
+			newTask.Name = fmt.Sprintf("%s (skipped)", step.GetName())
+		}
+		tasks = append(tasks, newTask)
 	}
 
 	return &ganttData{
-		ID:           fmt.Sprint(job.GetID()),
-		Name:         fmt.Sprintf("Job Run %s, ID: %d", job.GetName(), job.GetID()),
-		Link:         job.GetHTMLURL(),
-		DateFormat:   mermaidDateFormat,
-		AxisFormat:   mermaidAxisFormat,
-		GoDateFormat: goDateFormat,
-		Items:        tasks,
-		Owner:        owner,
-		Repo:         repo,
-		DataType:     "job_run",
+		ID:       fmt.Sprint(job.GetID()),
+		Name:     fmt.Sprintf("Job Run %s, ID: %d", job.GetName(), job.GetID()),
+		Link:     job.GetHTMLURL(),
+		Items:    tasks,
+		Owner:    owner,
+		Repo:     repo,
+		DataType: "job_run",
 	}, nil
 }
 

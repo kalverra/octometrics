@@ -19,6 +19,9 @@
     <h1>
         <a target="_blank" href="{{ .Link }}">{{ .Name }}</a>
     </h1>
+
+    <h2>Took {{ .TotalDuration }}</h2>
+
     <pre class="mermaid">
         gantt
             dateFormat {{ .DateFormat }}
@@ -26,10 +29,10 @@
 
             {{ $dateFormat := .GoDateFormat }}
             {{ range .Items }}
-            {{ .Name }} :{{ if .Conclusion }}{{ .Conclusion }},{{end}} {{ .MermaidID }}, {{ .StartTime.Format $dateFormat }}, {{ .Duration.Seconds }}s{{ end }}
+            {{ saniMermaidName .Name }} :{{ if .Conclusion }}{{ .Conclusion }},{{end}} {{ mermaidID .Name }}, {{ .StartTime.Format $dateFormat }}, {{ .Duration.Seconds }}s{{ end }}
 
             {{ range .Items }}
-            {{ if .Link }}click {{ .MermaidID }} href "{{ .Link }}" {{ end }}{{ end }}
+            {{ if .Link }}click {{ mermaidID .Name }} href "{{ .Link }}" {{ end }}{{ end }}
     </pre>
 
 </body>

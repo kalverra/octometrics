@@ -4,6 +4,8 @@
 
 # [{{ .Name }}]({{ .Link }})
 
+## Took {{ .TotalDuration }}
+
 ```mermaid
 gantt
     dateFormat {{ .DateFormat }}
@@ -11,7 +13,7 @@ gantt
 
     {{ $dateFormat := .GoDateFormat }}
     {{ range .Items }}
-    {{ .Name }} :{{ .MermaidID }}, {{ .StartTime.Format $dateFormat }}, {{ .Duration.Seconds }}s{{ end }}
+    {{ saniMermaidName .Name }} :{{ mermaidID .MermaidID }}, {{ .StartTime.Format $dateFormat }}, {{ .Duration.Seconds }}s{{ end }}
 ```
 
 {{ end }}

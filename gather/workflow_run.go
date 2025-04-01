@@ -15,7 +15,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const workflowRunsDir = "workflow_runs"
+const WorkflowRunsDataDir = "workflow_runs"
 
 // Mapping of how much a minute for each runner type costs
 // cost depicted in tenths of a cent
@@ -99,14 +99,14 @@ func (w *WorkflowRunData) GetRunCompletedAt() time.Time {
 func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64, forceUpdate bool) (*WorkflowRunData, error) {
 	var (
 		workflowRunData = &WorkflowRunData{}
-		targetDir       = filepath.Join(dataDir, owner, repo, workflowRunsDir)
+		targetDir       = filepath.Join(DataDir, owner, repo, WorkflowRunsDataDir)
 		targetFile      = filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
 		fileExists      = false
 	)
 
 	err := os.MkdirAll(targetDir, 0755)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make data dir '%s': %w", workflowRunsDir, err)
+		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
 	}
 
 	if _, err := os.Stat(targetFile); err == nil {

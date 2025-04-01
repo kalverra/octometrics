@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"errors"
+
 	"github.com/kalverra/workflow-metrics/gather"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -16,6 +18,23 @@ var (
 var gatherCmd = &cobra.Command{
 	Use:   "gather",
 	Short: "Gather metrics from GitHub",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if owner == "" {
+			return errors.New("owner must be provided")
+		}
+		if repo == "" {
+			return errors.New("repo must be provided")
+		}
+
+		if workflowRunID == 0 && pullRequestNumber == 0 {
+			return errors.New("either workflow run ID or pull request ID must be provided")
+		}
+		if workflowRunID != 0 && pullRequestNumber != 0 {
+			return errors.New("only one of workflow run ID or pull request ID must be provided")
+		}
+
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Debug().
 			Bool("force-update", forceUpdate).
@@ -26,8 +45,8 @@ var gatherCmd = &cobra.Command{
 			return err
 		}
 
-		if pullRequestID != 0 {
-			_, err := gather.PullRequest(githubClient, owner, repo, pullRequestID, forceUpdate)
+		if pullRequestNumber != 0 {
+			_, err := gather.PullRequest(githubClient, owner, repo, pullRequestNumber, forceUpdate)
 			return err
 		}
 
