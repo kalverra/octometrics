@@ -15,17 +15,21 @@ import (
 )
 
 type ganttData struct {
-	ID            string
-	Name          string
-	Link          string
-	DateFormat    string
-	AxisFormat    string
-	GoDateFormat  string
-	TotalDuration time.Duration
-	Items         []ganttItem
-	Owner         string
-	Repo          string
-	DataType      string
+	ID       string
+	Name     string
+	Link     string
+	Items    []ganttItem
+	Owner    string
+	Repo     string
+	DataType string
+
+	// Set by the renderer
+	StartTime    time.Time
+	EndTime      time.Time
+	GoDateFormat string
+	DateFormat   string
+	AxisFormat   string
+	Duration     time.Duration
 }
 
 type ganttItem struct {
@@ -63,7 +67,16 @@ func renderGantt(ganttData *ganttData, outputTypes []string) error {
 			endTime = item.StartTime.Add(item.Duration)
 		}
 	}
-	ganttData.TotalDuration = endTime.Sub(startTime)
+	ganttData.Duration = endTime.Sub(startTime)
+	ganttData.StartTime = startTime
+	ganttData.EndTime = endTime
+
+	// Adjust the start time of each item so that you start at 0
+	newStartTime := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, startTime.Location())
+	startTimeDiff := newStartTime.Sub(startTime)
+	for i := range ganttData.Items {
+		ganttData.Items[i].StartTime = ganttData.Items[i].StartTime.Add(startTimeDiff)
+	}
 
 	ganttData.DateFormat, ganttData.AxisFormat, ganttData.GoDateFormat = ganttDetermineDateFormat(
 		startTime,
@@ -121,10 +134,7 @@ func renderGantt(ganttData *ganttData, outputTypes []string) error {
 }
 
 func ganttDetermineDateFormat(start, end time.Time) (mermaidDateFormat, mermaidAxisFormat, goDateFormat string) {
-	if start.Day() != end.Day() {
-		return "YYYY-MM-DD HH:mm:ss", "%Y-%m-%d %H:%M:%S", "2006-01-02 15:04:05"
-	}
-	if start.Hour() != end.Hour() {
+	if end.Sub(start) >= time.Hour {
 		return "HH:mm:ss", "%H:%M:%S", "15:04:05"
 	}
 	return "mm:ss", "%M:%S", "04:05"

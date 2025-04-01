@@ -85,7 +85,7 @@ func Commit(client *github.Client, owner, repo, sha string, forceUpdate bool) (*
 
 	startTime := time.Now()
 
-	log.Info().Str("commit_sha", sha).Msg("Gathering commit data")
+	log.Debug().Str("commit_sha", sha).Msg("Gathering commit data")
 
 	if !forceUpdate && fileExists {
 		commitFileBytes, err := os.ReadFile(targetFile)
@@ -96,7 +96,7 @@ func Commit(client *github.Client, owner, repo, sha string, forceUpdate bool) (*
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal commit data: %w", err)
 		}
-		log.Info().
+		log.Debug().
 			Str("duration", time.Since(startTime).String()).
 			Str("commit_sha", sha).
 			Msg("Gathered commit data")
@@ -128,6 +128,10 @@ func Commit(client *github.Client, owner, repo, sha string, forceUpdate bool) (*
 		return nil, fmt.Errorf("failed to write commit data to file '%s': %w", sha, err)
 	}
 
+	log.Debug().
+		Str("duration", time.Since(startTime).String()).
+		Str("commit_sha", sha).
+		Msg("Gathered commit data")
 	return commitData, nil
 }
 

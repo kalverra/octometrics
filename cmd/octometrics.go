@@ -44,7 +44,7 @@ var rootCmd = &cobra.Command{
 	Long: `See metrics and profiling of your GitHub Actions.
 
 GitHub Actions provides surprisingly little metrics to help you optimize things like runtime and profiling data.
-Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and inefficiencies in your CI/CD pipelines.`, // TODO: Fill out
+Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and inefficiencies in your CI/CD pipelines.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		err := setupLogging()
 		if err != nil {

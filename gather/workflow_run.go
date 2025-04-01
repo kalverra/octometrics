@@ -115,7 +115,7 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 
 	startTime := time.Now()
 
-	log.Info().Int64("workflow_run_id", workflowRunID).Msg("Gathering workflow run data")
+	log.Debug().Int64("workflow_run_id", workflowRunID).Msg("Gathering workflow run data")
 
 	if !forceUpdate && fileExists {
 		log.Debug().Str("file", targetFile).Int64("workflow_run_id", workflowRunID).Msg("Reading workflow run data from file")
@@ -124,7 +124,7 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
 		}
 		err = json.Unmarshal(workflowFileBytes, &workflowRunData)
-		log.Info().
+		log.Debug().
 			Str("duration", time.Since(startTime).String()).
 			Int64("workflow_run_id", workflowRunID).
 			Msg("Gathered workflow run data")
@@ -200,7 +200,7 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 		return nil, fmt.Errorf("failed to write workflow run data to file for workflow run '%d': %w", workflowRunID, err)
 	}
 
-	log.Info().
+	log.Debug().
 		Str("duration", time.Since(startTime).String()).
 		Int64("workflow_run_id", workflowRunID).
 		Msg("Gathered workflow run data")

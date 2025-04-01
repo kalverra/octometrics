@@ -66,6 +66,7 @@ func buildCommitGanttData(commitData *gather.CommitData, workflowRuns []*gather.
 		Owner:    owner,
 		Repo:     repo,
 		Name:     "Commit " + commitSHA,
+		Link:     commitData.GetHTMLURL(),
 		DataType: "commit",
 		Items:    tasks,
 	}

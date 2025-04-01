@@ -20,7 +20,9 @@
         <a target="_blank" href="{{ .Link }}">{{ .Name }}</a>
     </h1>
 
-    <h2>Took {{ .TotalDuration }}</h2>
+    <h2>Ran from {{ .StartTime.Format "2006-01-02T15:04:05" }} to {{ .EndTime.Format "2006-01-02T15:04:05" }},
+        Took {{
+        .Duration }}</h2>
 
     <pre class="mermaid">
         gantt

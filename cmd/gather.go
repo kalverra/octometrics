@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"time"
 
 	"github.com/kalverra/workflow-metrics/gather"
 	"github.com/rs/zerolog/log"
@@ -40,6 +41,14 @@ var gatherCmd = &cobra.Command{
 			Bool("force-update", forceUpdate).
 			Msg("gather flags")
 
+		startTime := time.Now()
+
+		log.Info().
+			Str("owner", owner).
+			Str("repo", repo).
+			Int64("workflow_run_id", workflowRunID).
+			Int("pull_request_number", pullRequestNumber).
+			Msg("Gathering data from GitHub")
 		if workflowRunID != 0 {
 			_, err := gather.WorkflowRun(githubClient, owner, repo, workflowRunID, forceUpdate)
 			return err
@@ -50,6 +59,13 @@ var gatherCmd = &cobra.Command{
 			return err
 		}
 
+		log.Info().
+			Str("owner", owner).
+			Str("repo", repo).
+			Int64("workflow_run_id", workflowRunID).
+			Int("pull_request_number", pullRequestNumber).
+			Str("duration", time.Since(startTime).String()).
+			Msg("Gathered data from GitHub")
 		return nil
 	},
 }

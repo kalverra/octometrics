@@ -49,7 +49,7 @@ func PullRequest(
 
 	startTime := time.Now()
 
-	log.Info().Int("pull_request_number", pullRequestNumber).Msg("Gathering pull request data")
+	log.Debug().Int("pull_request_number", pullRequestNumber).Msg("Gathering pull request data")
 
 	if !forceUpdate && fileExists {
 		prFileBytes, err := os.ReadFile(targetFile)
@@ -57,7 +57,7 @@ func PullRequest(
 			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
 		}
 		err = json.Unmarshal(prFileBytes, &pullRequestData)
-		log.Info().
+		log.Debug().
 			Str("duration", time.Since(startTime).String()).
 			Int("pull_request_number", pullRequestNumber).
 			Msg("Gathered pull request data")
@@ -94,7 +94,7 @@ func PullRequest(
 	if err != nil {
 		return nil, fmt.Errorf("failed to write pull request data to file for pull request %d: %w", pullRequestNumber, err)
 	}
-	log.Info().
+	log.Debug().
 		Str("duration", time.Since(startTime).String()).
 		Int("pull_request_number", pullRequestNumber).
 		Msg("Gathered pull request data")
