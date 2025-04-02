@@ -12,16 +12,29 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	err := logging.Setup("test.log", "debug", true)
+	err := logging.Setup("gather.test.log.json", "debug", true)
 	if err != nil {
 		panic(err)
 	}
 	os.Exit(m.Run())
 }
 
+// testDataDir creates a temporary data directory for testing purposes.
+func testDataDir(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.MkdirTemp("", "octometrics-test")
+	require.NoError(t, err, "error creating temp dir")
+	t.Cleanup(func() {
+		err := os.RemoveAll(dir)
+		require.NoError(t, err, "error removing temp dir")
+	})
+	return dir
+}
+
 func TestGatherCommit(t *testing.T) {
 	t.Parallel()
-	t.Skip("not implemented properly yet")
+	t.Skip("skipping test for now, need to fix the test data generation")
 
 	mockedHTTPClient := mock.NewMockedHTTPClient(
 		mock.WithRequestMatch(
@@ -44,8 +57,10 @@ func TestGatherCommit(t *testing.T) {
 			},
 		),
 	)
+
+	testDataDir := testDataDir(t)
 	c := github.NewClient(mockedHTTPClient)
-	commit, err := Commit(c, "kalverra", "octometrics", "mocked-sha-1", false)
+	commit, err := Commit(c, "kalverra", "octometrics", "mocked-sha-1", ForceUpdate(), CustomDataFolder(testDataDir))
 	require.NoError(t, err, "error getting commit info")
 	require.NotNil(t, commit, "commit should not be nil")
 }

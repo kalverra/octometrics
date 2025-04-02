@@ -10,15 +10,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64, outputTypes []string) error {
-	workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, false)
+func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64, opts ...Option) error {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
 		return err
 	}
 
 	startTime := time.Now()
 
-	err = JobRuns(client, owner, repo, workflowRunID, outputTypes)
+	err = JobRuns(client, owner, repo, workflowRunID, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to observe job runs: %w", err)
 	}
@@ -28,7 +33,7 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 		return fmt.Errorf("failed to generate mermaid chart: %w", err)
 	}
 
-	err = renderGantt(workflowRunTemplateData, outputTypes)
+	err = renderGantt(workflowRunTemplateData, options.outputTypes)
 	if err != nil {
 		return fmt.Errorf("failed to render gantt chart: %w", err)
 	}

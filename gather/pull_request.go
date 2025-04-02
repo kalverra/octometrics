@@ -29,11 +29,18 @@ func PullRequest(
 	client *github.Client,
 	owner, repo string,
 	pullRequestNumber int,
-	forceUpdate bool,
+	opts ...Option,
 ) (*PullRequestData, error) {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	var (
+		forceUpdate = options.ForceUpdate
+
 		pullRequestData = &PullRequestData{}
-		targetDir       = filepath.Join(DataDir, owner, repo, PullRequestsDataDir)
+		targetDir       = filepath.Join(options.DataDir, owner, repo, PullRequestsDataDir)
 		targetFile      = filepath.Join(targetDir, fmt.Sprintf("%d.json", pullRequestNumber))
 		fileExists      = false
 	)
@@ -126,7 +133,12 @@ func prCommits(client *github.Client, owner, repo string, pullRequestNumber int)
 	return commits, nil
 }
 
-func prCommitData(client *github.Client, owner, repo string, prCommits []*github.RepositoryCommit) ([]*CommitData, error) {
+func prCommitData(
+	client *github.Client,
+	owner, repo string,
+	prCommits []*github.RepositoryCommit,
+	opts ...Option,
+) ([]*CommitData, error) {
 	var (
 		commitData     []*CommitData
 		commitDataChan = make(chan *CommitData, len(prCommits))
@@ -135,7 +147,7 @@ func prCommitData(client *github.Client, owner, repo string, prCommits []*github
 
 	for _, commit := range prCommits {
 		eg.Go(func() error {
-			data, err := Commit(client, owner, repo, commit.GetSHA(), false)
+			data, err := Commit(client, owner, repo, commit.GetSHA(), opts...)
 			if err != nil {
 				return fmt.Errorf("failed to gather data for commit '%s': %w", commit.GetSHA(), err)
 			}

@@ -96,12 +96,19 @@ func (w *WorkflowRunData) GetRunCompletedAt() time.Time {
 }
 
 // WorkflowRun gathers all metrics for a completed workflow run
-func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64, forceUpdate bool) (*WorkflowRunData, error) {
+func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64, opts ...Option) (*WorkflowRunData, error) {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	var (
 		workflowRunData = &WorkflowRunData{}
 		targetDir       = filepath.Join(DataDir, owner, repo, WorkflowRunsDataDir)
 		targetFile      = filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
 		fileExists      = false
+
+		forceUpdate = options.ForceUpdate
 	)
 
 	err := os.MkdirAll(targetDir, 0755)

@@ -74,13 +74,20 @@ func (c *CommitData) GetCost() int64 {
 }
 
 // Commit gathers commit data for a given commit SHA and enhances matches it with workflows that ran on that commit.
-func Commit(client *github.Client, owner, repo, sha string, forceUpdate bool) (*CommitData, error) {
+func Commit(client *github.Client, owner, repo, sha string, opts ...Option) (*CommitData, error) {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
 	var (
+		forceUpdate = options.ForceUpdate
+
 		commitData = &CommitData{
 			Owner: owner,
 			Repo:  repo,
 		}
-		targetDir  = filepath.Join(DataDir, owner, repo, CommitsDataDir)
+		targetDir  = filepath.Join(options.DataDir, owner, repo, CommitsDataDir)
 		targetFile = filepath.Join(targetDir, fmt.Sprintf("%s.json", sha))
 		fileExists = false
 	)
@@ -125,7 +132,7 @@ func Commit(client *github.Client, owner, repo, sha string, forceUpdate bool) (*
 	if err != nil {
 		return nil, err
 	}
-	err = setWorkflowRunsForCommit(client, owner, repo, commitData.CheckRuns, commitData, forceUpdate)
+	err = setWorkflowRunsForCommit(client, owner, repo, commitData.CheckRuns, commitData, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather workflow runs for commit '%s': %w", sha, err)
 	}
@@ -165,7 +172,7 @@ func checkRunsForCommit(client *github.Client, owner, repo string, sha string) (
 		checkRuns, resp, err = client.Checks.ListCheckRunsForRef(ctx, owner, repo, sha, listOpts)
 		cancel()
 		if err != nil {
-			return nil, fmt.Errorf("failed to gather check runs for commit from GitHub '%s': %w", sha, err)
+			return nil, fmt.Errorf("failed to gather check runs from GitHub for commit '%s': %w", sha, err)
 		}
 		allCheckRuns = append(allCheckRuns, checkRuns.CheckRuns...)
 
@@ -185,7 +192,7 @@ func setWorkflowRunsForCommit(
 	owner, repo string,
 	checkRuns []*github.CheckRun,
 	commitData *CommitData,
-	forceUpdate bool,
+	opts []Option,
 ) error {
 	var (
 		workflowRunIDsSet = map[int64]struct{}{}
@@ -220,7 +227,7 @@ func setWorkflowRunsForCommit(
 	for workflowRunID := range workflowRunIDsSet {
 		eg.Go(func(workflowRunID int64) func() error {
 			return func() error {
-				workflowRun, err := WorkflowRun(client, owner, repo, workflowRunID, forceUpdate)
+				workflowRun, err := WorkflowRun(client, owner, repo, workflowRunID, opts...)
 				if err != nil {
 					return fmt.Errorf("failed to gather workflow run data for commit %s: %w", commitData.GetSHA(), err)
 				}

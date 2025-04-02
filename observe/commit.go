@@ -9,8 +9,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func Commit(client *github.Client, owner, repo string, commitSHA string, outputTypes []string) error {
-	commit, err := gather.Commit(client, owner, repo, commitSHA, false)
+func Commit(client *github.Client, owner, repo string, commitSHA string, opts ...Option) error {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	commit, err := gather.Commit(client, owner, repo, commitSHA, options.gatherOptions...)
 	if err != nil {
 		return err
 	}
@@ -19,7 +24,7 @@ func Commit(client *github.Client, owner, repo string, commitSHA string, outputT
 
 	workflowRuns := make([]*gather.WorkflowRunData, 0, len(commit.WorkflowRunIDs))
 	for _, workflowRunID := range commit.WorkflowRunIDs {
-		workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, false)
+		workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, options.gatherOptions...)
 		if err != nil {
 			return err
 		}
@@ -27,7 +32,7 @@ func Commit(client *github.Client, owner, repo string, commitSHA string, outputT
 	}
 
 	commitTemplateData := buildCommitGanttData(commit, workflowRuns)
-	err = renderGantt(commitTemplateData, outputTypes)
+	err = renderGantt(commitTemplateData, options.outputTypes)
 	if err != nil {
 		return err
 	}

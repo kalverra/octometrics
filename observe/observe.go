@@ -25,6 +25,48 @@ const (
 	templatesDir      = "observe/templates"
 )
 
+// Option manipulates how the observe command works
+type Option func(*options)
+
+// options contains the options for the observe command
+type options struct {
+	outputDir     string
+	outputTypes   []string
+	gatherOptions []gather.Option
+}
+
+func defaultOptions() *options {
+	return &options{
+		gatherOptions: []gather.Option{},
+		outputDir:     OutputDir,
+		outputTypes:   []string{"html", "md"},
+	}
+}
+
+// WithCustomOutputDir sets the output directory for the observe command.
+// This is useful for testing and debugging purposes.
+func WithCustomOutputDir(outputDir string) Option {
+	return func(o *options) {
+		o.outputDir = outputDir
+	}
+}
+
+// WithGatherOptions sets the gather options for the observe command.
+// Observe uses gather to get data, so you can pass options to gather from here.
+func WithGatherOptions(opts ...gather.Option) Option {
+	return func(o *options) {
+		o.gatherOptions = opts
+	}
+}
+
+// WithOutputTypes sets the output types for the observe command.
+func WithOutputTypes(outputTypes []string) Option {
+	return func(o *options) {
+		o.outputTypes = outputTypes
+	}
+}
+
+// All generates all downloaded data in HTML and serves it on a local server.
 func All(client *github.Client) error {
 	startTime := time.Now()
 	err := generateAllHTMLObserveData(client)
@@ -105,6 +147,7 @@ func generateAllHTMLObserveData(client *github.Client) error {
 		dataDir := pathComponents[3]
 		dataName := strings.TrimSuffix(pathComponents[4], ".json")
 
+		outputOpt := WithOutputTypes([]string{"html"})
 		switch dataDir {
 		case gather.WorkflowRunsDataDir:
 			var workflowRunID int64
@@ -112,18 +155,18 @@ func generateAllHTMLObserveData(client *github.Client) error {
 			if err != nil {
 				return fmt.Errorf("failed to parse workflow run ID: %w", err)
 			}
-			err = WorkflowRun(client, owner, repo, workflowRunID, []string{"html"})
+			err = WorkflowRun(client, owner, repo, workflowRunID, outputOpt)
 		case gather.PullRequestsDataDir:
 			var pullRequestNumber int64
 			pullRequestNumber, err = strconv.ParseInt(dataName, 10, 64)
 			if err != nil {
 				return fmt.Errorf("failed to parse pull request number: %w", err)
 			}
-			err = PullRequest(client, owner, repo, int(pullRequestNumber), []string{"html"})
+			err = PullRequest(client, owner, repo, int(pullRequestNumber), outputOpt)
 		case gather.CommitsDataDir:
 			var commitSHA string
 			commitSHA = dataName
-			err = Commit(client, owner, repo, commitSHA, []string{"html"})
+			err = Commit(client, owner, repo, commitSHA, outputOpt)
 		}
 
 		if err != nil {

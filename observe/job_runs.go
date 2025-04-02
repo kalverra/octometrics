@@ -13,9 +13,13 @@ import (
 
 const jobRunOutputDir = "job_runs"
 
-// TODO: Likely not necessary
-func JobRuns(client *github.Client, owner, repo string, workflowRunID int64, outputTypes []string) error {
-	workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, false)
+func JobRuns(client *github.Client, owner, repo string, workflowRunID int64, opts ...Option) error {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
 		return err
 	}
@@ -32,7 +36,7 @@ func JobRuns(client *github.Client, owner, repo string, workflowRunID int64, out
 				return fmt.Errorf("failed to build gantt chart for job '%d': %w", job.GetID(), err)
 			}
 
-			err = renderGantt(jobRunTemplateData, outputTypes)
+			err = renderGantt(jobRunTemplateData, options.outputTypes)
 			if err != nil {
 				return fmt.Errorf("failed to render gantt chart for job '%d': %w", job.GetID(), err)
 			}

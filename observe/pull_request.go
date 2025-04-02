@@ -12,8 +12,13 @@ import (
 	"github.com/kalverra/octometrics/gather"
 )
 
-func PullRequest(client *github.Client, owner, repo string, pullRequestNumber int, outputTypes []string) error {
-	prData, err := gather.PullRequest(client, owner, repo, pullRequestNumber, false)
+func PullRequest(client *github.Client, owner, repo string, pullRequestNumber int, opts ...Option) error {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	prData, err := gather.PullRequest(client, owner, repo, pullRequestNumber, options.gatherOptions...)
 	if err != nil {
 		return err
 	}

@@ -49,13 +49,20 @@ var gatherCmd = &cobra.Command{
 			Int64("workflow_run_id", workflowRunID).
 			Int("pull_request_number", pullRequestNumber).
 			Msg("Gathering data from GitHub")
+
+		opts := []gather.Option{}
+
+		if forceUpdate {
+			opts = append(opts, gather.ForceUpdate())
+		}
+
 		if workflowRunID != 0 {
-			_, err := gather.WorkflowRun(githubClient, owner, repo, workflowRunID, forceUpdate)
+			_, err := gather.WorkflowRun(githubClient, owner, repo, workflowRunID, opts...)
 			return err
 		}
 
 		if pullRequestNumber != 0 {
-			_, err := gather.PullRequest(githubClient, owner, repo, pullRequestNumber, forceUpdate)
+			_, err := gather.PullRequest(githubClient, owner, repo, pullRequestNumber, opts...)
 			return err
 		}
 
