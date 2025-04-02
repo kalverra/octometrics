@@ -15,7 +15,7 @@ import (
 
 	"github.com/google/go-github/v70/github"
 	"github.com/kalverra/octometrics/gather"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -67,9 +67,9 @@ func WithOutputTypes(outputTypes []string) Option {
 }
 
 // All generates all downloaded data in HTML and serves it on a local server.
-func All(client *github.Client) error {
+func All(log zerolog.Logger, client *github.Client) error {
 	startTime := time.Now()
-	err := generateAllHTMLObserveData(client)
+	err := generateAllHTMLObserveData(log, client)
 	if err != nil {
 		return fmt.Errorf("failed to generate all HTML observe data: %w", err)
 	}
@@ -124,7 +124,7 @@ func openBrowser(url string) error {
 	return exec.Command(cmd, cmdArgs...).Run()
 }
 
-func generateAllHTMLObserveData(client *github.Client) error {
+func generateAllHTMLObserveData(log zerolog.Logger, client *github.Client) error {
 	return filepath.WalkDir(gather.DataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -155,18 +155,18 @@ func generateAllHTMLObserveData(client *github.Client) error {
 			if err != nil {
 				return fmt.Errorf("failed to parse workflow run ID: %w", err)
 			}
-			err = WorkflowRun(client, owner, repo, workflowRunID, outputOpt)
+			err = WorkflowRun(log, client, owner, repo, workflowRunID, outputOpt)
 		case gather.PullRequestsDataDir:
 			var pullRequestNumber int64
 			pullRequestNumber, err = strconv.ParseInt(dataName, 10, 64)
 			if err != nil {
 				return fmt.Errorf("failed to parse pull request number: %w", err)
 			}
-			err = PullRequest(client, owner, repo, int(pullRequestNumber), outputOpt)
+			err = PullRequest(log, client, owner, repo, int(pullRequestNumber), outputOpt)
 		case gather.CommitsDataDir:
 			var commitSHA string
 			commitSHA = dataName
-			err = Commit(client, owner, repo, commitSHA, outputOpt)
+			err = Commit(log, client, owner, repo, commitSHA, outputOpt)
 		}
 
 		if err != nil {

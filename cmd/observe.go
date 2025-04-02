@@ -37,7 +37,7 @@ var observeCmd = &cobra.Command{
 		// 	}
 		// }
 
-		return observe.All(githubClient)
+		return observe.All(logger, githubClient)
 	},
 }
 

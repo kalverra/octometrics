@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -26,6 +26,7 @@ func (p *PullRequestData) GetCommitData() []*CommitData {
 }
 
 func PullRequest(
+	log zerolog.Logger,
 	client *github.Client,
 	owner, repo string,
 	pullRequestNumber int,
@@ -72,7 +73,8 @@ func PullRequest(
 	}
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	pr, _, err := client.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
+	startCall := time.Now()
+	pr, resp, err := client.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
 	cancel()
 	if err != nil {
 		return nil, err
@@ -80,15 +82,20 @@ func PullRequest(
 	if pr == nil {
 		return nil, fmt.Errorf("pull request '%d' not found on GitHub", pullRequestNumber)
 	}
+	log.Trace().
+		Int("pr_number", pullRequestNumber).
+		Str("duration", time.Since(startCall).String()).
+		Str("url", resp.Request.RequestURI).
+		Msg("Gathered check runs for commit from GitHub")
 
 	pullRequestData.PullRequest = pr
 	// Get the commits associated with the pull request
-	prCommits, err := prCommits(client, owner, repo, pullRequestNumber)
+	prCommits, err := prCommits(log, client, owner, repo, pullRequestNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather commits for pull request %d: %w", pullRequestNumber, err)
 	}
 
-	pullRequestData.CommitData, err = prCommitData(client, owner, repo, prCommits)
+	pullRequestData.CommitData, err = prCommitData(log, client, owner, repo, prCommits)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather commit data for pull request %d: %w", pullRequestNumber, err)
 	}
@@ -108,7 +115,12 @@ func PullRequest(
 	return pullRequestData, nil
 }
 
-func prCommits(client *github.Client, owner, repo string, pullRequestNumber int) ([]*github.RepositoryCommit, error) {
+func prCommits(
+	log zerolog.Logger,
+	client *github.Client,
+	owner, repo string,
+	pullRequestNumber int,
+) ([]*github.RepositoryCommit, error) {
 	var (
 		commits  []*github.RepositoryCommit
 		listOpts = &github.ListOptions{
@@ -118,11 +130,17 @@ func prCommits(client *github.Client, owner, repo string, pullRequestNumber int)
 
 	for {
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+		startCall := time.Now()
 		commitsPage, resp, err := client.PullRequests.ListCommits(ctx, owner, repo, pullRequestNumber, listOpts)
 		cancel()
 		if err != nil {
 			return nil, err
 		}
+		log.Trace().
+			Int("pr_number", pullRequestNumber).
+			Str("duration", time.Since(startCall).String()).
+			Str("url", resp.Request.RequestURI).
+			Msg("Gathered commits for pull request from GitHub")
 		commits = append(commits, commitsPage...)
 		if resp.NextPage == 0 {
 			break
@@ -134,6 +152,7 @@ func prCommits(client *github.Client, owner, repo string, pullRequestNumber int)
 }
 
 func prCommitData(
+	log zerolog.Logger,
 	client *github.Client,
 	owner, repo string,
 	prCommits []*github.RepositoryCommit,
@@ -147,7 +166,7 @@ func prCommitData(
 
 	for _, commit := range prCommits {
 		eg.Go(func() error {
-			data, err := Commit(client, owner, repo, commit.GetSHA(), opts...)
+			data, err := Commit(log, client, owner, repo, commit.GetSHA(), opts...)
 			if err != nil {
 				return fmt.Errorf("failed to gather data for commit '%s': %w", commit.GetSHA(), err)
 			}

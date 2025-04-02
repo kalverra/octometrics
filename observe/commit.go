@@ -6,16 +6,22 @@ import (
 
 	"github.com/google/go-github/v70/github"
 	"github.com/kalverra/octometrics/gather"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
-func Commit(client *github.Client, owner, repo string, commitSHA string, opts ...Option) error {
+func Commit(
+	log zerolog.Logger,
+	client *github.Client,
+	owner, repo string,
+	commitSHA string,
+	opts ...Option,
+) error {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	commit, err := gather.Commit(client, owner, repo, commitSHA, options.gatherOptions...)
+	commit, err := gather.Commit(log, client, owner, repo, commitSHA, options.gatherOptions...)
 	if err != nil {
 		return err
 	}
@@ -24,7 +30,7 @@ func Commit(client *github.Client, owner, repo string, commitSHA string, opts ..
 
 	workflowRuns := make([]*gather.WorkflowRunData, 0, len(commit.WorkflowRunIDs))
 	for _, workflowRunID := range commit.WorkflowRunIDs {
-		workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, options.gatherOptions...)
+		workflowRun, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
 		if err != nil {
 			return err
 		}

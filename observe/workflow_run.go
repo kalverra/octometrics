@@ -7,23 +7,29 @@ import (
 
 	"github.com/google/go-github/v70/github"
 	"github.com/kalverra/octometrics/gather"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
-func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64, opts ...Option) error {
+func WorkflowRun(
+	log zerolog.Logger,
+	client *github.Client,
+	owner, repo string,
+	workflowRunID int64,
+	opts ...Option,
+) error {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, options.gatherOptions...)
+	workflowRun, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
 		return err
 	}
 
 	startTime := time.Now()
 
-	err = JobRuns(client, owner, repo, workflowRunID, opts...)
+	err = JobRuns(log, client, owner, repo, workflowRunID, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to observe job runs: %w", err)
 	}

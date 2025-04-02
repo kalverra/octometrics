@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/go-github/v70/github"
 	"github.com/kalverra/octometrics/monitor"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -96,7 +96,13 @@ func (w *WorkflowRunData) GetRunCompletedAt() time.Time {
 }
 
 // WorkflowRun gathers all metrics for a completed workflow run
-func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64, opts ...Option) (*WorkflowRunData, error) {
+func WorkflowRun(
+	log zerolog.Logger,
+	client *github.Client,
+	owner, repo string,
+	workflowRunID int64,
+	opts ...Option,
+) (*WorkflowRunData, error) {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
@@ -164,13 +170,13 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 
 	eg.Go(func() error {
 		var jobsErr error
-		workflowRunJobs, jobsErr = jobsData(client, owner, repo, workflowRunID)
+		workflowRunJobs, jobsErr = jobsData(log, client, owner, repo, workflowRunID)
 		return jobsErr
 	})
 
 	eg.Go(func() error {
 		var billingErr error
-		workflowBillingData, billingErr = billingData(client, owner, repo, workflowRunID)
+		workflowBillingData, billingErr = billingData(log, client, owner, repo, workflowRunID)
 		return billingErr
 	})
 
@@ -215,7 +221,12 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 }
 
 // jobsData fetches all jobs for a workflow run from GitHub
-func jobsData(client *github.Client, owner, repo string, workflowRunID int64) ([]*github.WorkflowJob, error) {
+func jobsData(
+	log zerolog.Logger,
+	client *github.Client,
+	owner, repo string,
+	workflowRunID int64,
+) ([]*github.WorkflowJob, error) {
 	var (
 		workflowJobs = []*github.WorkflowJob{}
 		listOpts     = &github.ListWorkflowJobsOptions{
@@ -264,7 +275,12 @@ func jobsData(client *github.Client, owner, repo string, workflowRunID int64) ([
 }
 
 // billingData fetches the billing data for a workflow run from GitHub
-func billingData(client *github.Client, owner, repo string, workflowRunID int64) (*github.WorkflowRunUsage, error) {
+func billingData(
+	log zerolog.Logger,
+	client *github.Client,
+	owner, repo string,
+	workflowRunID int64,
+) (*github.WorkflowRunUsage, error) {
 	startTime := time.Now()
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
 	usage, resp, err := client.Actions.GetWorkflowRunUsageByID(ctx, owner, repo, workflowRunID)

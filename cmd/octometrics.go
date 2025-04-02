@@ -9,7 +9,7 @@ import (
 	"github.com/gofri/go-github-ratelimit/github_ratelimit"
 	"github.com/google/go-github/v70/github"
 	"github.com/kalverra/octometrics/logging"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -32,6 +32,7 @@ var (
 	pullRequestNumber int
 
 	githubClient *github.Client
+	logger       zerolog.Logger
 )
 
 var rootCmd = &cobra.Command{
@@ -42,22 +43,32 @@ var rootCmd = &cobra.Command{
 GitHub Actions provides surprisingly little metrics to help you optimize things like runtime and profiling data.
 Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and inefficiencies in your CI/CD pipelines.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		err := logging.Setup(logFileName, logLevelInput, disableConsoleLog)
+		var err error
+
+		loggingOpts := []logging.Option{
+			logging.WithFileName(logFileName),
+			logging.WithLevel(logLevelInput),
+		}
+		if disableConsoleLog {
+			loggingOpts = append(loggingOpts, logging.DisableConsoleLog())
+		}
+		logger, err = logging.New(loggingOpts...)
 		if err != nil {
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
-		githubClient, err = getGitHubClient()
+
+		githubClient, err = getGitHubClient(logger)
 		if err != nil {
 			return fmt.Errorf("failed to create GitHub client: %w", err)
 		}
 
-		log.Debug().
+		logger.Debug().
 			Str("version", version).
 			Str("commit", commit).
 			Str("build_time", buildTime).
 			Str("built_by", builtBy).
 			Msg("Octometrics Version Info")
-		log.Debug().
+		logger.Debug().
 			Str("owner", owner).
 			Str("repo", repo).
 			Int64("workflow_run_id", workflowRunID).
@@ -71,7 +82,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 	Run: func(cmd *cobra.Command, args []string) {
 		err := cmd.Help()
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to print help message")
+			logger.Fatal().Err(err).Msg("Failed to print help message")
 		}
 	},
 }
@@ -90,24 +101,24 @@ func init() {
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to execute command")
+		logger.Fatal().Err(err).Msg("Failed to execute command")
 		os.Exit(1)
 	}
 }
 
-func getGitHubClient() (*github.Client, error) {
+func getGitHubClient(logger zerolog.Logger) (*github.Client, error) {
 	if githubToken != "" {
-		log.Debug().Msg("Using GitHub token from flag")
+		logger.Debug().Msg("Using GitHub token from flag")
 	} else if os.Getenv(githubTokenEnvVar) != "" {
 		githubToken = os.Getenv(githubTokenEnvVar)
-		log.Debug().Msg("Using GitHub token from environment variable")
+		logger.Debug().Msg("Using GitHub token from environment variable")
 	} else {
-		log.Warn().Msg("GitHub token not provided, will likely hit rate limits quickly")
+		logger.Warn().Msg("GitHub token not provided, will likely hit rate limits quickly")
 	}
 
-	rateLimiter, err := github_ratelimit.NewRateLimitWaiterClient(nil)
+	rateLimiter, err := github_ratelimit.NewRateLimitWaiterClient(logging.GitHubClientRoundTripper(logger))
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create rate limiter")
+		return nil, err
 	}
 	client := github.NewClient(rateLimiter)
 	if githubToken != "" {
@@ -119,9 +130,9 @@ func getGitHubClient() (*github.Client, error) {
 	}
 	rateLimit := limits.GetCore().Limit
 	rateRemaining := limits.GetCore().Remaining
-	log.Debug().Int("limit", rateLimit).Int("remaining", rateRemaining).Msg("GitHub rate limits")
+	logger.Debug().Int("limit", rateLimit).Int("remaining", rateRemaining).Msg("GitHub rate limits")
 	if rateLimit <= 60 {
-		log.Warn().
+		logger.Warn().
 			Int("limit", rateLimit).
 			Int("remaining", rateRemaining).
 			Msg("GitHub rate limit is low. You're either not providing a token, or your token isn't valid.")

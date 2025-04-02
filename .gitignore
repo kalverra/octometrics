@@ -34,3 +34,4 @@ workflow-metrics.json
 octometrics.json
 data/
 observe_output/
+*_testdata/

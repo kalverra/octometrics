@@ -10,15 +10,22 @@ import (
 
 	"github.com/google/go-github/v70/github"
 	"github.com/kalverra/octometrics/gather"
+	"github.com/rs/zerolog"
 )
 
-func PullRequest(client *github.Client, owner, repo string, pullRequestNumber int, opts ...Option) error {
+func PullRequest(
+	log zerolog.Logger,
+	client *github.Client,
+	owner, repo string,
+	pullRequestNumber int,
+	opts ...Option,
+) error {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	prData, err := gather.PullRequest(client, owner, repo, pullRequestNumber, options.gatherOptions...)
+	prData, err := gather.PullRequest(log, client, owner, repo, pullRequestNumber, options.gatherOptions...)
 	if err != nil {
 		return err
 	}
