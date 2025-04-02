@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/workflow-metrics/gather"
+	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog/log"
 )
 

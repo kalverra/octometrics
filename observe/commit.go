@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/workflow-metrics/gather"
+	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog/log"
 )
 
@@ -68,6 +68,7 @@ func buildCommitGanttData(commitData *gather.CommitData, workflowRuns []*gather.
 		Name:     "Commit " + commitSHA,
 		Link:     commitData.GetHTMLURL(),
 		DataType: "commit",
+		Cost:     commitData.GetCost(),
 		Items:    tasks,
 	}
 }

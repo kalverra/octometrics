@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/workflow-metrics/gather"
+	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog/log"
 )
 
@@ -59,6 +59,9 @@ func buildWorkflowRunGanttData(workflowRun *gather.WorkflowRunData) (*ganttData,
 		if job.GetConclusion() == "skipped" {
 			newTask.Name = fmt.Sprintf("%s (skipped)", job.GetName())
 		}
+		if job.GetRunAttempt() > 1 {
+			newTask.Name = fmt.Sprintf("%s (attempt %d)", job.GetName(), job.GetRunAttempt())
+		}
 		tasks = append(tasks, newTask)
 	}
 
@@ -69,6 +72,7 @@ func buildWorkflowRunGanttData(workflowRun *gather.WorkflowRunData) (*ganttData,
 		Items:    tasks,
 		Owner:    owner,
 		Repo:     repo,
+		Cost:     workflowRun.GetCost(),
 		DataType: "workflow_run",
 	}
 

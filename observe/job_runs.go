@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/workflow-metrics/gather"
+	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 )
 
 const jobRunOutputDir = "job_runs"
 
+// TODO: Likely not necessary
 func JobRuns(client *github.Client, owner, repo string, workflowRunID int64, outputTypes []string) error {
 	workflowRun, err := gather.WorkflowRun(client, owner, repo, workflowRunID, false)
 	if err != nil {
@@ -75,6 +76,7 @@ func buildJobRunGanttData(owner, repo string, workflowRunID int64, job *gather.J
 		Items:    tasks,
 		Owner:    owner,
 		Repo:     repo,
+		Cost:     job.GetCost(),
 		DataType: "job_run",
 	}, nil
 }

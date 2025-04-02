@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/kalverra/workflow-metrics/gather"
+	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )

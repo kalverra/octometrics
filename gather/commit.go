@@ -18,6 +18,8 @@ import (
 
 const CommitsDataDir = "commits"
 
+// CommitData contains the commit data for a given commit SHA.
+// It also includes some additional info that makes it easier to map to its associated workflows.
 type CommitData struct {
 	*github.RepositoryCommit
 	Owner            string             `json:"owner"`
@@ -31,38 +33,47 @@ type CommitData struct {
 	comparisonMutex  sync.Mutex         `json:"-"`
 }
 
+// GetOwner returns the owner of the repository for the commit.
 func (c *CommitData) GetOwner() string {
 	return c.Owner
 }
 
+// GetRepo returns the repository name for the commit.
 func (c *CommitData) GetRepo() string {
 	return c.Repo
 }
 
+// GetCheckRuns returns the check runs associated with the commit.
 func (c *CommitData) GetCheckRuns() []*github.CheckRun {
 	return c.CheckRuns
 }
 
+// GetWorkflowRunIDs returns the workflow run IDs associated with the commit.
 func (c *CommitData) GetWorkflowRunIDs() []int64 {
 	return c.WorkflowRunIDs
 }
 
+// GetStartActionsTime returns the earliest start time of all actions that ran for the commit.
 func (c *CommitData) GetStartActionsTime() time.Time {
 	return c.StartActionsTime
 }
 
+// GetEndActionsTime returns the latest end time of all actions that ran for the commit.
 func (c *CommitData) GetEndActionsTime() time.Time {
 	return c.EndActionsTime
 }
 
+// GetConclusion returns the overall conclusion of all actions that ran for the commit.
 func (c *CommitData) GetConclusion() string {
 	return c.Conclusion
 }
 
+// GetCost returns the total cost of all actions that ran for the commit in tenths of a cent.
 func (c *CommitData) GetCost() int64 {
 	return c.Cost
 }
 
+// Commit gathers commit data for a given commit SHA and enhances matches it with workflows that ran on that commit.
 func Commit(client *github.Client, owner, repo, sha string, forceUpdate bool) (*CommitData, error) {
 	var (
 		commitData = &CommitData{

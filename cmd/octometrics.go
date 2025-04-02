@@ -3,25 +3,21 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
 	"github.com/gofri/go-github-ratelimit/github_ratelimit"
 	"github.com/google/go-github/v70/github"
-	"github.com/rs/zerolog"
+	"github.com/kalverra/octometrics/logging"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
-
-const logTimeFormat = "2006-01-02T15:04:05.000"
 
 // These variables are set at build time and describe the version and build of the application
 var (
 	version   = "dev"
 	commit    = "dev"
-	buildTime = time.Now().Format(logTimeFormat)
+	buildTime = time.Now().Format("2006-01-02T15:04:05.000")
 	builtBy   = "local"
 )
 
@@ -46,7 +42,7 @@ var rootCmd = &cobra.Command{
 GitHub Actions provides surprisingly little metrics to help you optimize things like runtime and profiling data.
 Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and inefficiencies in your CI/CD pipelines.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		err := setupLogging()
+		err := logging.Setup(logFileName, logLevelInput, disableConsoleLog)
 		if err != nil {
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
@@ -131,33 +127,4 @@ func getGitHubClient() (*github.Client, error) {
 			Msg("GitHub rate limit is low. You're either not providing a token, or your token isn't valid.")
 	}
 	return client, nil
-}
-
-func setupLogging() error {
-	err := os.WriteFile(logFileName, []byte{}, 0644)
-	if err != nil {
-		return err
-	}
-
-	lumberLogger := &lumberjack.Logger{
-		Filename:   logFileName,
-		MaxSize:    100, // megabytes
-		MaxBackups: 10,
-		MaxAge:     30,
-	}
-
-	writers := []io.Writer{lumberLogger}
-	if !disableConsoleLog {
-		writers = append(writers, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: logTimeFormat})
-	}
-
-	logLevel, err := zerolog.ParseLevel(logLevelInput)
-	if err != nil {
-		return err
-	}
-
-	zerolog.TimeFieldFormat = logTimeFormat
-	multiWriter := zerolog.MultiLevelWriter(writers...)
-	log.Logger = zerolog.New(multiWriter).Level(logLevel).With().Timestamp().Logger()
-	return nil
 }

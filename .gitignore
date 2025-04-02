@@ -28,13 +28,9 @@ go.work.sum
 .idea/
 .DS_Store
 
-metrics.json
-metrics.log
-workflow-metrics.log
-workflow-metrics.log.json
+*.log
+*.log.json
 workflow-metrics.json
 octometrics.json
-octometrics.log
-octometrics.log.json
 data/
 observe_output/

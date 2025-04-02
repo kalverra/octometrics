@@ -9,7 +9,7 @@ import (
 	"text/template"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/workflow-metrics/gather"
+	"github.com/kalverra/octometrics/gather"
 )
 
 func PullRequest(client *github.Client, owner, repo string, pullRequestNumber int, outputTypes []string) error {

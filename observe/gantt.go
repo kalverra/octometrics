@@ -22,6 +22,7 @@ type ganttData struct {
 	Owner    string
 	Repo     string
 	DataType string
+	Cost     int64 // Cost in tenths of a cent
 
 	// Set by the renderer
 	StartTime    time.Time

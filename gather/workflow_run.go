@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/workflow-metrics/monitor"
+	"github.com/kalverra/octometrics/monitor"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 )
@@ -147,7 +147,7 @@ func WorkflowRun(client *github.Client, owner, repo string, workflowRunID int64,
 	}
 	workflowRunData.WorkflowRun = workflowRun
 
-	// TODO: Check for workflow-metrics artifact
+	// TODO: Check for octometrics artifact
 
 	var (
 		eg                  errgroup.Group

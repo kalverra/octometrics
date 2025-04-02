@@ -1,6 +1,6 @@
 package main
 
-import "github.com/kalverra/workflow-metrics/cmd"
+import "github.com/kalverra/octometrics/cmd"
 
 func main() {
 	cmd.Execute()

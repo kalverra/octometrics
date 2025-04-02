@@ -3,7 +3,7 @@ package cmd
 import (
 	"os"
 
-	"github.com/kalverra/workflow-metrics/observe"
+	"github.com/kalverra/octometrics/observe"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
