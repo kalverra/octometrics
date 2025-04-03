@@ -122,11 +122,11 @@ func renderGantt(ganttData *ganttData, outputTypes []string) error {
 			return fmt.Errorf("failed to execute template: %w", err)
 		}
 
-		err = os.MkdirAll(filepath.Dir(outputFile), 0755)
+		err = os.MkdirAll(filepath.Dir(outputFile), 0700)
 		if err != nil {
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
-		err = os.WriteFile(outputFile, rendered.Bytes(), 0644)
+		err = os.WriteFile(outputFile, rendered.Bytes(), 0600)
 		if err != nil {
 			return fmt.Errorf("failed to write %s file: %w", outputType, err)
 		}

@@ -113,28 +113,27 @@ func WorkflowRun(
 	client *github.Client,
 	owner, repo string,
 	workflowRunID int64,
-	opts ...Option,
-) (*WorkflowRunData, error) {
-	options := defaultOptions()
-	for _, opt := range opts {
-		opt(options)
+	options ...Option,
+) (workflowRunData *WorkflowRunData, targetFile string, err error) {
+	opts := defaultOptions()
+	for _, opt := range options {
+		opt(opts)
 	}
 
 	var (
-		workflowRunData = &WorkflowRunData{}
-		targetDir       = filepath.Join(DataDir, owner, repo, WorkflowRunsDataDir)
-		targetFile      = filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
-		fileExists      = false
-
-		forceUpdate = options.ForceUpdate
+		targetDir  = filepath.Join(opts.DataDir, owner, repo, WorkflowRunsDataDir)
+		fileExists = false
 	)
+	workflowRunData = &WorkflowRunData{}
+	targetFile = filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
+
 	log = log.With().
 		Str("target_file", targetFile).
 		Logger()
 
-	err := os.MkdirAll(targetDir, 0755)
+	err = os.MkdirAll(targetDir, 0700)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
+		return nil, "", fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
 	}
 
 	if _, err := os.Stat(targetFile); err == nil {
@@ -145,17 +144,22 @@ func WorkflowRun(
 
 	log.Debug().Msg("Gathering workflow run data")
 
-	if !forceUpdate && fileExists {
+	if !opts.ForceUpdate && fileExists {
 		log.Debug().Msg("Reading workflow run data from file")
+		//nolint:gosec // I don't care
 		workflowFileBytes, err := os.ReadFile(targetFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
+			return nil, "", fmt.Errorf("failed to open workflow run file: %w", err)
 		}
 		err = json.Unmarshal(workflowFileBytes, &workflowRunData)
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).
 			Msg("Gathered workflow run data")
-		return workflowRunData, err
+		return workflowRunData, targetFile, err
+	}
+
+	if client == nil {
+		return nil, "", fmt.Errorf("GitHub client is nil")
 	}
 
 	log.Debug().Msg("Fetching workflow run data from GitHub")
@@ -164,16 +168,16 @@ func WorkflowRun(
 	workflowRun, resp, err := client.Actions.GetWorkflowRunByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		return nil, "", fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 	if workflowRun == nil {
-		return nil, fmt.Errorf("workflow run '%d' not found on GitHub", workflowRunID)
+		return nil, "", fmt.Errorf("workflow run '%d' not found on GitHub", workflowRunID)
 	}
 	if workflowRun.GetStatus() != "completed" {
-		return nil, fmt.Errorf("workflow run '%d' is still in progress", workflowRunID)
+		return nil, "", fmt.Errorf("workflow run '%d' is still in progress", workflowRunID)
 	}
 
 	workflowRunData.WorkflowRun = workflowRun
@@ -199,7 +203,7 @@ func WorkflowRun(
 	})
 
 	if err := eg.Wait(); err != nil {
-		return nil, fmt.Errorf("failed to collect job and/or billing data for workflow run '%d': %w", workflowRunID, err)
+		return nil, "", fmt.Errorf("failed to collect job and/or billing data for workflow run '%d': %w", workflowRunID, err)
 	}
 	workflowRunData.Usage = workflowBillingData
 
@@ -213,7 +217,7 @@ func WorkflowRun(
 
 		runner, cost, err := calculateJobRunBilling(job.GetID(), workflowBillingData)
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate cost for job '%d': %w", job.GetID(), err)
+			return nil, "", fmt.Errorf("failed to calculate cost for job '%d': %w", job.GetID(), err)
 		}
 		workflowRunData.Cost += cost
 		workflowRunData.Jobs = append(workflowRunData.Jobs, &JobData{
@@ -225,17 +229,17 @@ func WorkflowRun(
 
 	data, err := json.Marshal(workflowRunData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal workflow run data to json for workflow run '%d': %w", workflowRunID, err)
+		return nil, "", fmt.Errorf("failed to marshal workflow run data to json for workflow run '%d': %w", workflowRunID, err)
 	}
-	err = os.WriteFile(targetFile, data, 0644)
+	err = os.WriteFile(targetFile, data, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("failed to write workflow run data to file for workflow run '%d': %w", workflowRunID, err)
+		return nil, "", fmt.Errorf("failed to write workflow run data to file for workflow run '%d': %w", workflowRunID, err)
 	}
 
 	log.Debug().
 		Str("duration", time.Since(startTime).String()).
 		Msg("Gathered workflow run data")
-	return workflowRunData, nil
+	return workflowRunData, targetFile, nil
 }
 
 // jobsData fetches all jobs for a workflow run from GitHub

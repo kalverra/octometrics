@@ -25,7 +25,7 @@ func JobRuns(
 		opt(options)
 	}
 
-	workflowRun, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
+	workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
 		return err
 	}
@@ -37,7 +37,7 @@ func JobRuns(
 
 	for _, job := range workflowRun.Jobs {
 		eg.Go(func() error {
-			jobRunTemplateData, err := buildJobRunGanttData(owner, repo, workflowRunID, job)
+			jobRunTemplateData, err := buildJobRunGanttData(owner, repo, job)
 			if err != nil {
 				return fmt.Errorf("failed to build gantt chart for job '%d': %w", job.GetID(), err)
 			}
@@ -62,7 +62,7 @@ func JobRuns(
 	return nil
 }
 
-func buildJobRunGanttData(owner, repo string, workflowRunID int64, job *gather.JobData) (*ganttData, error) {
+func buildJobRunGanttData(owner, repo string, job *gather.JobData) (*ganttData, error) {
 	tasks := make([]ganttItem, 0, len(job.Steps))
 	for _, step := range job.Steps {
 		startTime := step.GetStartedAt().Time

@@ -11,64 +11,22 @@ import (
 
 func TestGatherCommit(t *testing.T) {
 	t.Parallel()
-	t.Skip("skipping test, issues not fixed yet")
+	t.Skip("Check runs in the mock client seem to be broken, skipping test")
 
-	mockedSha := "mocked-sha"
 	mockedHTTPClient := mock.NewMockedHTTPClient(
 		mock.WithRequestMatch(
 			mock.GetReposCommitsByOwnerByRepoByRef,
-			github.RepositoryCommit{
-				SHA: github.Ptr(mockedSha),
-				Commit: &github.Commit{
-					SHA: github.Ptr(mockedSha),
-				},
-			},
+			mockedCommit,
 		),
 		mock.WithRequestMatchPages(
 			mock.GetReposCommitsCheckRunsByOwnerByRepoByRef,
-			[]github.CheckRun{
-				{
-					ID:          github.Ptr(int64(1)),
-					Name:        github.Ptr("mocked-check-run-1"),
-					Status:      github.Ptr("completed"),
-					Conclusion:  github.Ptr("success"),
-					StartedAt:   github.Ptr(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
-					CompletedAt: github.Ptr(github.Timestamp{Time: time.Now()}),
-					HTMLURL:     github.Ptr("https://github.com/kalverra/octometrics/actions/runs/1"),
-					HeadSHA:     github.Ptr(mockedSha),
-				},
-				{
-					ID:          github.Ptr(int64(2)),
-					Name:        github.Ptr("mocked-check-run-2"),
-					Status:      github.Ptr("completed"),
-					Conclusion:  github.Ptr("failure"),
-					StartedAt:   github.Ptr(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
-					CompletedAt: github.Ptr(github.Timestamp{Time: time.Now()}),
-					HTMLURL:     github.Ptr("https://github.com/kalverra/octometrics/actions/runs/2"),
-					HeadSHA:     github.Ptr(mockedSha),
-				},
+			github.ListCheckRunsResults{
+				Total:     github.Ptr(2),
+				CheckRuns: mockedCheckRuns[:1],
 			},
-			[]github.CheckRun{
-				{
-					ID:          github.Ptr(int64(3)),
-					Name:        github.Ptr("mocked-check-run-3"),
-					Status:      github.Ptr("completed"),
-					Conclusion:  github.Ptr("success"),
-					StartedAt:   github.Ptr(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
-					CompletedAt: github.Ptr(github.Timestamp{Time: time.Now()}),
-					HTMLURL:     github.Ptr("https://github.com/kalverra/octometrics/actions/runs/3"),
-					HeadSHA:     github.Ptr(mockedSha),
-				},
-				{
-					ID:          github.Ptr(int64(4)),
-					Name:        github.Ptr("mocked-check-run-4"),
-					Status:      github.Ptr("completed"),
-					Conclusion:  github.Ptr("failure"),
-					StartedAt:   github.Ptr(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
-					CompletedAt: github.Ptr(github.Timestamp{Time: time.Now()}),
-					HTMLURL:     github.Ptr("https://github.com/kalverra/octometrics/actions/runs/4"),
-					HeadSHA:     github.Ptr(mockedSha),
-				},
+			github.ListCheckRunsResults{
+				Total:     github.Ptr(2),
+				CheckRuns: mockedCheckRuns[1:],
 			},
 		),
 	)
@@ -79,3 +37,35 @@ func TestGatherCommit(t *testing.T) {
 	require.NoError(t, err, "error getting commit info")
 	require.NotNil(t, commit, "commit should not be nil")
 }
+
+var (
+	mockedSha    = "mocked-sha"
+	mockedCommit = &github.RepositoryCommit{
+		SHA: github.Ptr(mockedSha),
+		Commit: &github.Commit{
+			SHA: github.Ptr(mockedSha),
+		},
+	}
+	mockedCheckRuns = []*github.CheckRun{
+		{
+			ID:          github.Ptr(int64(1)),
+			Name:        github.Ptr("mocked-check-run-1"),
+			Status:      github.Ptr("completed"),
+			Conclusion:  github.Ptr("success"),
+			StartedAt:   github.Ptr(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
+			CompletedAt: github.Ptr(github.Timestamp{Time: time.Now()}),
+			HTMLURL:     github.Ptr("https://github.com/kalverra/octometrics/actions/runs/1"),
+			HeadSHA:     github.Ptr(mockedSha),
+		},
+		{
+			ID:          github.Ptr(int64(2)),
+			Name:        github.Ptr("mocked-check-run-2"),
+			Status:      github.Ptr("completed"),
+			Conclusion:  github.Ptr("failure"),
+			StartedAt:   github.Ptr(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
+			CompletedAt: github.Ptr(github.Timestamp{Time: time.Now()}),
+			HTMLURL:     github.Ptr("https://github.com/kalverra/octometrics/actions/runs/2"),
+			HeadSHA:     github.Ptr(mockedSha),
+		},
+	}
+)

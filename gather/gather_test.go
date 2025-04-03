@@ -41,19 +41,10 @@ func testSetup(t *testing.T, mockedHTTPClient *http.Client) (log zerolog.Logger,
 	baseDirName := fmt.Sprintf("./%s_testdata", t.Name())
 	err := os.RemoveAll(baseDirName)
 	require.NoError(t, err, "error removing testdata dir")
-	err = os.Mkdir(baseDirName, 0755)
+	err = os.Mkdir(baseDirName, 0700)
 	require.NoError(t, err, "error creating testdata dir")
-	t.Cleanup(func() {
-		if t.Failed() {
-			log.Error().Str("data_dir", baseDirName).Msg("test failed, keeping data dir for debugging")
-			return
-		}
 
-		err := os.RemoveAll(baseDirName)
-		require.NoError(t, err, "error removing testdata dir")
-	})
-
-	logFile := filepath.Join(baseDirName, "log.json")
+	logFile := filepath.Join(baseDirName, "test.log.json")
 	loggingOpts := []logging.Option{
 		logging.WithFileName(logFile),
 		logging.WithLevel("trace"),
@@ -64,6 +55,18 @@ func testSetup(t *testing.T, mockedHTTPClient *http.Client) (log zerolog.Logger,
 	log, err = logging.New(loggingOpts...)
 	log = log.With().Str("test_name", t.Name()).Logger()
 	require.NoError(t, err, "error setting up logging")
+
+	t.Cleanup(func() {
+		log = log.With().Bool("test_failed", t.Failed()).Str("data_dir", baseDirName).Logger()
+		if t.Failed() {
+			log.Error().Msg("test failed, keeping data dir for debugging")
+			return
+		}
+
+		log.Debug().Msg("test completed, removing data dir")
+		err := os.RemoveAll(baseDirName)
+		require.NoError(t, err, "error removing testdata dir")
+	})
 
 	client, err = GitHubClient(log, MockGitHubToken, mockedHTTPClient)
 	require.NoError(t, err, "error creating GitHub client")

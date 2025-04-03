@@ -47,7 +47,7 @@ func PullRequest(
 		fileExists      = false
 	)
 
-	err := os.MkdirAll(targetDir, 0755)
+	err := os.MkdirAll(targetDir, 0700)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
 	}
@@ -61,6 +61,7 @@ func PullRequest(
 	log.Debug().Int("pull_request_number", pullRequestNumber).Msg("Gathering pull request data")
 
 	if !forceUpdate && fileExists {
+		//nolint:gosec // I don't care
 		prFileBytes, err := os.ReadFile(targetFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
@@ -72,6 +73,12 @@ func PullRequest(
 			Msg("Gathered pull request data")
 		return pullRequestData, err
 	}
+
+	if client == nil {
+		return nil, fmt.Errorf("GitHub client is nil")
+	}
+
+	log.Debug().Msg("Gathering pull request data from GitHub")
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
 	pr, resp, err := client.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
@@ -88,7 +95,7 @@ func PullRequest(
 
 	pullRequestData.PullRequest = pr
 	// Get the commits associated with the pull request
-	prCommits, err := prCommits(log, client, owner, repo, pullRequestNumber)
+	prCommits, err := prCommits(client, owner, repo, pullRequestNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather commits for pull request %d: %w", pullRequestNumber, err)
 	}
@@ -102,7 +109,7 @@ func PullRequest(
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal pull request data to json for pull request %d: %w", pullRequestNumber, err)
 	}
-	err = os.WriteFile(targetFile, data, 0644)
+	err = os.WriteFile(targetFile, data, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write pull request data to file for pull request %d: %w", pullRequestNumber, err)
 	}
@@ -114,7 +121,6 @@ func PullRequest(
 }
 
 func prCommits(
-	log zerolog.Logger,
 	client *github.Client,
 	owner, repo string,
 	pullRequestNumber int,

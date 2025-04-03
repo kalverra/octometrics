@@ -99,6 +99,7 @@ func All(log zerolog.Logger, client *github.Client) error {
 		log.Info().Msg("Shutting down server")
 		os.Exit(0)
 	}()
+	//nolint:gosec // I don't care
 	return http.ListenAndServe(":8080", nil)
 }
 
@@ -120,8 +121,9 @@ func openBrowser(url string) error {
 		cmd = "explorer"
 	}
 
-	cmdArgs := append(args, url)
-	return exec.Command(cmd, cmdArgs...).Run()
+	args = append(args, url)
+	//nolint:gosec // I don't care
+	return exec.Command(cmd, args...).Run()
 }
 
 func generateAllHTMLObserveData(log zerolog.Logger, client *github.Client) error {

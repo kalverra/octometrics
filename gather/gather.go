@@ -16,10 +16,12 @@ import (
 )
 
 const (
+	//nolint:gosec // Env var for getting token
 	GitHubTokenEnvVar = "GITHUB_TOKEN"
-	MockGitHubToken   = "mock_github_token"
-	timeoutDur        = 10 * time.Second
-	DataDir           = "data"
+	//nolint:gosec // This is a mock token for testing purposes
+	MockGitHubToken = "mock_github_token"
+	timeoutDur      = 10 * time.Second
+	DataDir         = "data"
 )
 
 var (
@@ -63,12 +65,13 @@ func CustomDataFolder(folder string) Option {
 
 // GitHubClient creates a new GitHub client with the provided token and logger.
 func GitHubClient(logger zerolog.Logger, githubToken string, optionalCustomClient *http.Client) (*github.Client, error) {
-	if githubToken != "" {
+	switch {
+	case githubToken != "":
 		logger.Debug().Msg("Using GitHub token from flag")
-	} else if os.Getenv(GitHubTokenEnvVar) != "" {
+	case os.Getenv(GitHubTokenEnvVar) != "":
 		githubToken = os.Getenv(GitHubTokenEnvVar)
 		logger.Debug().Msg("Using GitHub token from environment variable")
-	} else {
+	default:
 		logger.Warn().Msg("GitHub token not provided, will likely hit rate limits quickly")
 	}
 

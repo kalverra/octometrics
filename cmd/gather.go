@@ -58,7 +58,7 @@ var gatherCmd = &cobra.Command{
 
 		var err error
 		if workflowRunID != 0 {
-			_, err = gather.WorkflowRun(logger, githubClient, owner, repo, workflowRunID, opts...)
+			_, _, err = gather.WorkflowRun(logger, githubClient, owner, repo, workflowRunID, opts...)
 		} else if pullRequestNumber != 0 {
 			_, err = gather.PullRequest(logger, githubClient, owner, repo, pullRequestNumber, opts...)
 		}

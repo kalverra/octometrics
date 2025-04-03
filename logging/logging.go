@@ -60,7 +60,7 @@ func New(options ...Option) (zerolog.Logger, error) {
 		disableConsoleLog = opts.disableConsoleLog
 	)
 
-	err := os.WriteFile(logFileName, []byte{}, 0644)
+	err := os.WriteFile(logFileName, []byte{}, 0600)
 	if err != nil {
 		return zerolog.Logger{}, err
 	}

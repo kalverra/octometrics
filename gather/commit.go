@@ -104,7 +104,7 @@ func Commit(
 		Str("commit_sha", sha).
 		Logger()
 
-	err := os.MkdirAll(targetDir, 0755)
+	err := os.MkdirAll(targetDir, 0700)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
 	}
@@ -118,6 +118,7 @@ func Commit(
 	log.Debug().Msg("Gathering commit data")
 
 	if !forceUpdate && fileExists {
+		//nolint:gosec // I don't care
 		commitFileBytes, err := os.ReadFile(targetFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open commit file: %w", err)
@@ -132,6 +133,12 @@ func Commit(
 		return commitData, nil
 	}
 
+	if client == nil {
+		return nil, fmt.Errorf("GitHub client is nil")
+	}
+
+	log.Debug().Msg("Gathering commit data from GitHub")
+
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
 	commit, resp, err := client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
 	cancel()
@@ -141,6 +148,7 @@ func Commit(
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
+
 	commitData.RepositoryCommit = commit
 	commitData.CheckRuns, err = checkRunsForCommit(log, client, owner, repo, sha)
 	if err != nil {
@@ -155,7 +163,7 @@ func Commit(
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal commit data to json '%s': %w", sha, err)
 	}
-	err = os.WriteFile(targetFile, data, 0644)
+	err = os.WriteFile(targetFile, data, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write commit data to file '%s': %w", sha, err)
 	}
@@ -244,7 +252,7 @@ func setWorkflowRunsForCommit(
 	for workflowRunID := range workflowRunIDsSet {
 		eg.Go(func(workflowRunID int64) func() error {
 			return func() error {
-				workflowRun, err := WorkflowRun(log, client, owner, repo, workflowRunID, opts...)
+				workflowRun, _, err := WorkflowRun(log, client, owner, repo, workflowRunID, opts...)
 				if err != nil {
 					return fmt.Errorf("failed to gather workflow run data for commit %s: %w", commitData.GetSHA(), err)
 				}

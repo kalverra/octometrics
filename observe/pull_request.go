@@ -51,11 +51,11 @@ func PullRequest(
 		gather.PullRequestsDataDir,
 		fmt.Sprintf("%d.html", pullRequestNumber),
 	)
-	err = os.MkdirAll(filepath.Dir(outputFile), 0755)
+	err = os.MkdirAll(filepath.Dir(outputFile), 0700)
 	if err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
-	err = os.WriteFile(outputFile, rendered.Bytes(), 0644)
+	err = os.WriteFile(outputFile, rendered.Bytes(), 0600)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}

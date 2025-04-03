@@ -22,7 +22,7 @@ func WorkflowRun(
 		opt(options)
 	}
 
-	workflowRun, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
+	workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
 		return err
 	}
@@ -91,8 +91,7 @@ func buildWorkflowRunGanttData(workflowRun *gather.WorkflowRunData) (*ganttData,
 }
 
 func conclusionToGanntStatus(conclusion string) string {
-	switch conclusion {
-	case "failure":
+	if conclusion == "failure" {
 		return "crit"
 	}
 

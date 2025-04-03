@@ -30,7 +30,7 @@ func Commit(
 
 	workflowRuns := make([]*gather.WorkflowRunData, 0, len(commit.WorkflowRunIDs))
 	for _, workflowRunID := range commit.WorkflowRunIDs {
-		workflowRun, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
+		workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
 		if err != nil {
 			return err
 		}
