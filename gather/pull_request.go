@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -73,20 +74,17 @@ func PullRequest(
 	}
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	startCall := time.Now()
 	pr, resp, err := client.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
 	cancel()
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
 	if pr == nil {
 		return nil, fmt.Errorf("pull request '%d' not found on GitHub", pullRequestNumber)
 	}
-	log.Trace().
-		Int("pr_number", pullRequestNumber).
-		Str("duration", time.Since(startCall).String()).
-		Str("url", resp.Request.RequestURI).
-		Msg("Gathered check runs for commit from GitHub")
 
 	pullRequestData.PullRequest = pr
 	// Get the commits associated with the pull request
@@ -130,18 +128,17 @@ func prCommits(
 
 	for {
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-		startCall := time.Now()
 		commitsPage, resp, err := client.PullRequests.ListCommits(ctx, owner, repo, pullRequestNumber, listOpts)
 		cancel()
 		if err != nil {
 			return nil, err
 		}
-		log.Trace().
-			Int("pr_number", pullRequestNumber).
-			Str("duration", time.Since(startCall).String()).
-			Str("url", resp.Request.RequestURI).
-			Msg("Gathered commits for pull request from GitHub")
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		}
+
 		commits = append(commits, commitsPage...)
+
 		if resp.NextPage == 0 {
 			break
 		}

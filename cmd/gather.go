@@ -5,11 +5,8 @@ import (
 	"time"
 
 	"github.com/kalverra/octometrics/gather"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
-
-const githubTokenEnvVar = "GITHUB_TOKEN"
 
 var (
 	githubToken string
@@ -37,18 +34,21 @@ var gatherCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Debug().
+		logger.Debug().
 			Bool("force-update", forceUpdate).
 			Msg("gather flags")
 
 		startTime := time.Now()
 
-		log.Info().
-			Str("owner", owner).
-			Str("repo", repo).
-			Int64("workflow_run_id", workflowRunID).
-			Int("pull_request_number", pullRequestNumber).
-			Msg("Gathering data from GitHub")
+		logger = logger.With().Str("owner", owner).Str("repo", repo).Logger()
+
+		if workflowRunID != 0 {
+			logger = logger.With().Int64("workflow_run_id", workflowRunID).Logger()
+		} else if pullRequestNumber != 0 {
+			logger = logger.With().Int("pull_request_number", pullRequestNumber).Logger()
+		}
+
+		logger.Info().Msg("Gathering data")
 
 		opts := []gather.Option{}
 
@@ -56,23 +56,17 @@ var gatherCmd = &cobra.Command{
 			opts = append(opts, gather.ForceUpdate())
 		}
 
+		var err error
 		if workflowRunID != 0 {
-			_, err := gather.WorkflowRun(logger, githubClient, owner, repo, workflowRunID, opts...)
+			_, err = gather.WorkflowRun(logger, githubClient, owner, repo, workflowRunID, opts...)
+		} else if pullRequestNumber != 0 {
+			_, err = gather.PullRequest(logger, githubClient, owner, repo, pullRequestNumber, opts...)
+		}
+		if err != nil {
 			return err
 		}
 
-		if pullRequestNumber != 0 {
-			_, err := gather.PullRequest(logger, githubClient, owner, repo, pullRequestNumber, opts...)
-			return err
-		}
-
-		log.Info().
-			Str("owner", owner).
-			Str("repo", repo).
-			Int64("workflow_run_id", workflowRunID).
-			Int("pull_request_number", pullRequestNumber).
-			Str("duration", time.Since(startTime).String()).
-			Msg("Gathered data from GitHub")
+		logger.Info().Str("duration", time.Since(startTime).String()).Msg("Gathered data")
 		return nil
 	},
 }

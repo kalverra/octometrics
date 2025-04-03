@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -98,6 +99,11 @@ func Commit(
 		fileExists = false
 	)
 
+	log = log.With().
+		Str("target_file", targetFile).
+		Str("commit_sha", sha).
+		Logger()
+
 	err := os.MkdirAll(targetDir, 0755)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
@@ -109,7 +115,7 @@ func Commit(
 
 	startTime := time.Now()
 
-	log.Debug().Str("commit_sha", sha).Msg("Gathering commit data")
+	log.Debug().Msg("Gathering commit data")
 
 	if !forceUpdate && fileExists {
 		commitFileBytes, err := os.ReadFile(targetFile)
@@ -122,23 +128,19 @@ func Commit(
 		}
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).
-			Str("commit_sha", sha).
 			Msg("Gathered commit data")
 		return commitData, nil
 	}
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	startCall := time.Now()
 	commit, resp, err := client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
 	cancel()
 	if err != nil {
 		return nil, err
 	}
-	log.Trace().
-		Str("commit_sha", sha).
-		Str("duration", time.Since(startCall).String()).
-		Str("url", resp.Request.RequestURI).
-		Msg("Gathered check runs for commit from GitHub")
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
 	commitData.RepositoryCommit = commit
 	commitData.CheckRuns, err = checkRunsForCommit(log, client, owner, repo, sha)
 	if err != nil {
@@ -160,7 +162,6 @@ func Commit(
 
 	log.Debug().
 		Str("duration", time.Since(startTime).String()).
-		Str("commit_sha", sha).
 		Msg("Gathered commit data")
 	return commitData, nil
 }
@@ -181,18 +182,14 @@ func checkRunsForCommit(log zerolog.Logger, client *github.Client, owner, repo s
 	for {
 		var checkRuns *github.ListCheckRunsResults
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-		startCall := time.Now()
 		checkRuns, resp, err = client.Checks.ListCheckRunsForRef(ctx, owner, repo, sha, listOpts)
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("failed to gather check runs from GitHub for commit '%s': %w", sha, err)
 		}
-		log.Trace().
-			Str("commit_sha", sha).
-			Int("check_run_count", len(checkRuns.CheckRuns)).
-			Str("duration", time.Since(startCall).String()).
-			Str("url", resp.Request.RequestURI).
-			Msg("Gathered check runs for commit from GitHub")
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		}
 		allCheckRuns = append(allCheckRuns, checkRuns.CheckRuns...)
 
 		if resp.NextPage == 0 {

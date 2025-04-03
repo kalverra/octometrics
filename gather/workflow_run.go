@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -63,12 +64,15 @@ func (j *JobData) GetCost() int64 {
 	return j.Cost
 }
 
+// WorkflowRunData wraps standard GitHub WorkflowRun data with additional fields
+// to help with data visualization and cost calculation
 type WorkflowRunData struct {
 	*github.WorkflowRun
-	Jobs                []*JobData            `json:"jobs"`
-	Cost                int64                 `json:"cost"`
-	RunCompletedAt      time.Time             `json:"completed_at"`
-	MonitorObservations *monitor.Observations `json:"monitor_observations,omitempty"`
+	Jobs                []*JobData               `json:"jobs"`
+	Cost                int64                    `json:"cost"`
+	RunCompletedAt      time.Time                `json:"completed_at"`
+	MonitorObservations *monitor.Observations    `json:"monitor_observations,omitempty"`
+	Usage               *github.WorkflowRunUsage `json:"usage,omitempty"`
 }
 
 // GetJobs returns the list of jobs for the workflow run
@@ -95,6 +99,14 @@ func (w *WorkflowRunData) GetRunCompletedAt() time.Time {
 	return w.RunCompletedAt
 }
 
+// GetUsage returns the billing data for the workflow run
+func (w *WorkflowRunData) GetUsage() *github.WorkflowRunUsage {
+	if w == nil || w.WorkflowRun == nil {
+		return nil
+	}
+	return w.Usage
+}
+
 // WorkflowRun gathers all metrics for a completed workflow run
 func WorkflowRun(
 	log zerolog.Logger,
@@ -116,6 +128,9 @@ func WorkflowRun(
 
 		forceUpdate = options.ForceUpdate
 	)
+	log = log.With().
+		Str("target_file", targetFile).
+		Logger()
 
 	err := os.MkdirAll(targetDir, 0755)
 	if err != nil {
@@ -128,10 +143,10 @@ func WorkflowRun(
 
 	startTime := time.Now()
 
-	log.Debug().Int64("workflow_run_id", workflowRunID).Msg("Gathering workflow run data")
+	log.Debug().Msg("Gathering workflow run data")
 
 	if !forceUpdate && fileExists {
-		log.Debug().Str("file", targetFile).Int64("workflow_run_id", workflowRunID).Msg("Reading workflow run data from file")
+		log.Debug().Msg("Reading workflow run data from file")
 		workflowFileBytes, err := os.ReadFile(targetFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
@@ -139,25 +154,28 @@ func WorkflowRun(
 		err = json.Unmarshal(workflowFileBytes, &workflowRunData)
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).
-			Int64("workflow_run_id", workflowRunID).
 			Msg("Gathered workflow run data")
 		return workflowRunData, err
 	}
 
-	log.Debug().Int64("workflow_run_id", workflowRunID).Msg("Fetching workflow run data from GitHub")
+	log.Debug().Msg("Fetching workflow run data from GitHub")
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	workflowRun, _, err := client.Actions.GetWorkflowRunByID(ctx, owner, repo, workflowRunID)
+	workflowRun, resp, err := client.Actions.GetWorkflowRunByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
 	if workflowRun == nil {
 		return nil, fmt.Errorf("workflow run '%d' not found on GitHub", workflowRunID)
 	}
-	if workflowRun.Status == nil || *workflowRun.Status != "completed" {
+	if workflowRun.GetStatus() != "completed" {
 		return nil, fmt.Errorf("workflow run '%d' is still in progress", workflowRunID)
 	}
+
 	workflowRunData.WorkflowRun = workflowRun
 
 	// TODO: Check for octometrics artifact
@@ -183,6 +201,7 @@ func WorkflowRun(
 	if err := eg.Wait(); err != nil {
 		return nil, fmt.Errorf("failed to collect job and/or billing data for workflow run '%d': %w", workflowRunID, err)
 	}
+	workflowRunData.Usage = workflowBillingData
 
 	for _, job := range workflowRunJobs {
 		// Calculate completed at for the workflow. GitHub API only gives "UpdatedAt" for workflows
@@ -215,7 +234,6 @@ func WorkflowRun(
 
 	log.Debug().
 		Str("duration", time.Since(startTime).String()).
-		Int64("workflow_run_id", workflowRunID).
 		Msg("Gathered workflow run data")
 	return workflowRunData, nil
 }
@@ -238,8 +256,6 @@ func jobsData(
 		resp *github.Response
 	)
 
-	startTime := time.Now()
-
 	for { // Paginate through all jobs
 		var (
 			err  error
@@ -248,11 +264,14 @@ func jobsData(
 
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
 		jobs, resp, err = client.Actions.ListWorkflowJobs(ctx, owner, repo, workflowRunID, listOpts)
+		cancel()
 		if err != nil {
-			cancel()
 			return nil, err
 		}
-		cancel()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		}
+
 		workflowJobs = append(workflowJobs, jobs.Jobs...)
 		if resp.NextPage == 0 {
 			break
@@ -262,15 +281,6 @@ func jobsData(
 	sort.Slice(workflowJobs, func(i, j int) bool {
 		return workflowJobs[i].GetStartedAt().Before(workflowJobs[j].GetStartedAt().Time)
 	})
-	log.Trace().
-		Int("job_count", len(workflowJobs)).
-		Str("duration", time.Since(startTime).String()).
-		Int("api_calls_remaining", resp.Rate.Remaining).
-		Str("rate_limit_reset", resp.Rate.Reset.String()).
-		Str("owner", owner).
-		Str("repo", repo).
-		Int64("workflow_run_id", workflowRunID).
-		Msg("Fetched jobs from GitHub")
 	return workflowJobs, nil
 }
 
@@ -281,21 +291,16 @@ func billingData(
 	owner, repo string,
 	workflowRunID int64,
 ) (*github.WorkflowRunUsage, error) {
-	startTime := time.Now()
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
 	usage, resp, err := client.Actions.GetWorkflowRunUsageByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get billing data for workflow run '%d': %w", workflowRunID, err)
 	}
-	log.Trace().
-		Str("duration", time.Since(startTime).String()).
-		Int("api_calls_remaining", resp.Rate.Remaining).
-		Str("rate_limit_reset", resp.Rate.Reset.String()).
-		Str("owner", owner).
-		Str("repo", repo).
-		Int64("workflow_run_id", workflowRunID).
-		Msg("Fetched billing data from GitHub")
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+
 	return usage, err
 }
 

@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/kalverra/octometrics/observe"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +18,7 @@ var observeCmd = &cobra.Command{
 		return os.RemoveAll(observe.OutputDir)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		log.Debug().
+		logger.Debug().
 			Strs("output-types", outputTypes).
 			Msg("observe flags")
 
