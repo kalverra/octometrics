@@ -32,3 +32,5 @@ octometrics.log.json
 data/
 observe_output/
 test_results/
+# Added by goreleaser init:
+dist/

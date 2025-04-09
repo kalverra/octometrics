@@ -1,0 +1,32 @@
+name: E2E Test
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  e2e-test-monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Install Dependencies
+        run: go mod download
+      - name: Run Monitor
+        run: |
+          go run . monitor -duration 10s -interval 1s -output-file ./monitor.log.json
+      - name: Upload Monitor Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitor.log.json
+          path: ./monitor.log.json

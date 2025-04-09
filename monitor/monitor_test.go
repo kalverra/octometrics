@@ -88,6 +88,7 @@ func TestMonitorIntegration(t *testing.T) {
 
 			t.Cleanup(cancel)
 
+			startTime := time.Now()
 			// Start monitoring in a goroutine
 			go func() {
 				err = Start(ctx, append(tt.opts, WithOutputFile(outputFile))...)
@@ -96,6 +97,13 @@ func TestMonitorIntegration(t *testing.T) {
 			// Wait for the context to timeout
 			<-ctx.Done()
 
+			elapsedSeconds := time.Since(startTime).Truncate(time.Second).Seconds()
+			require.LessOrEqual(
+				t,
+				elapsedSeconds,
+				tt.monitorTime.Seconds(),
+				"monitor should have finished before or at the same time as the context timeout",
+			)
 			require.NoError(t, err, "error while monitoring")
 
 			// Verify the output file exists and has content
