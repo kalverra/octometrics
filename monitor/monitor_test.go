@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kalverra/octometrics/internal/testhelpers"
@@ -19,6 +20,8 @@ func TestMonitorIntegration(t *testing.T) {
 		t.Skip("skipping integration test in short mode")
 	}
 
+	defaultObserverInterval := 250 * time.Millisecond
+
 	tests := []struct {
 		name           string
 		opts           []Option
@@ -27,7 +30,7 @@ func TestMonitorIntegration(t *testing.T) {
 	}{
 		{
 			name:        "monitor all metrics",
-			opts:        []Option{WithObserveInterval(250 * time.Millisecond)},
+			opts:        []Option{WithObserveInterval(defaultObserverInterval)},
 			monitorTime: time.Second,
 		},
 		{
@@ -36,7 +39,37 @@ func TestMonitorIntegration(t *testing.T) {
 				DisableMemory(),
 				DisableDisk(),
 				DisableIO(),
-				WithObserveInterval(250 * time.Millisecond),
+				WithObserveInterval(defaultObserverInterval),
+			},
+			monitorTime: time.Second,
+		},
+		{
+			name: "monitor only memory",
+			opts: []Option{
+				DisableCPU(),
+				DisableDisk(),
+				DisableIO(),
+				WithObserveInterval(defaultObserverInterval),
+			},
+			monitorTime: time.Second,
+		},
+		{
+			name: "monitor only disk",
+			opts: []Option{
+				DisableCPU(),
+				DisableMemory(),
+				DisableIO(),
+				WithObserveInterval(defaultObserverInterval),
+			},
+			monitorTime: time.Second,
+		},
+		{
+			name: "monitor only IO",
+			opts: []Option{
+				DisableCPU(),
+				DisableMemory(),
+				DisableDisk(),
+				WithObserveInterval(defaultObserverInterval),
 			},
 			monitorTime: time.Second,
 		},
@@ -74,15 +107,43 @@ func TestMonitorIntegration(t *testing.T) {
 			// Verify the content has expected log messages
 			content := string(data)
 			require.Contains(t, content, "Starting Monitoring", "should contain start message")
-			require.Contains(t, content, "CPU System Info", "should contain CPU info")
-			require.Contains(t, content, "System Memory Info", "should contain memory info")
-			require.Contains(t, content, "System Disk Info", "should contain disk info")
 
-			// Verify we have some observations
-			require.Contains(t, content, "Observed CPU Usage", "should contain CPU observations")
-			require.Contains(t, content, "Observed Memory Usage", "should contain memory observations")
-			require.Contains(t, content, "Observed Disk Usage", "should contain disk observations")
-			require.Contains(t, content, "Observed IO Usage", "should contain IO observations")
+			// Create default options to check which metrics are enabled
+			opts := defaultOptions()
+			for _, opt := range tt.opts {
+				opt(opts)
+			}
+
+			// Check that basic system info is logged
+			assert.Contains(t, content, CPUSystemInfoMsg, "should contain CPU system info")
+			assert.Contains(t, content, MemSystemInfoMsg, "should contain memory system info")
+			assert.Contains(t, content, DiskSystemInfoMsg, "should contain disk system info")
+
+			// Only assert metrics that are enabled
+			if opts.MonitorCPU {
+
+				assert.Contains(t, content, ObservedCPUMsg, "should contain CPU observations")
+			} else {
+				assert.NotContains(t, content, ObservedCPUMsg, "should not contain CPU observations")
+			}
+
+			if opts.MonitorMemory {
+				assert.Contains(t, content, ObservedMemMsg, "should contain memory observations")
+			} else {
+				assert.NotContains(t, content, ObservedMemMsg, "should not contain memory observations")
+			}
+
+			if opts.MonitorDisk {
+				assert.Contains(t, content, ObservedDiskMsg, "should contain disk observations")
+			} else {
+				assert.NotContains(t, content, ObservedDiskMsg, "should not contain disk observations")
+			}
+
+			if opts.MonitorIO {
+				assert.Contains(t, content, ObservedIOMsg, "should contain IO observations")
+			} else {
+				assert.NotContains(t, content, ObservedIOMsg, "should not contain IO observations")
+			}
 		})
 	}
 }

@@ -2,10 +2,8 @@ package testhelpers
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -15,7 +13,7 @@ import (
 )
 
 var (
-	silentTests = flag.Bool("silent", false, "Disable test logging to console")
+	silenceTestLogs = flag.Bool("silence-test-logs", false, "Disable test logging to console")
 )
 
 type Option func(*options)
@@ -25,8 +23,8 @@ type options struct {
 }
 
 // Silent disables tests logging to console.
-// Can also be set via the -silent flag.
-// This option takes precedence over the -silent flag.
+// Can also be set via the -silence-test-logs flag.
+// This option takes precedence over the -silence-test-logs flag.
 func Silent() Option {
 	return func(o *options) {
 		o.silent = true
@@ -44,7 +42,7 @@ func defaultOptions() *options {
 func Setup(tb testing.TB, options ...Option) (log zerolog.Logger, testDir string) {
 	tb.Helper()
 
-	silent := *silentTests
+	silent := *silenceTestLogs
 
 	opts := defaultOptions()
 	for _, opt := range options {
@@ -53,14 +51,7 @@ func Setup(tb testing.TB, options ...Option) (log zerolog.Logger, testDir string
 
 	silent = silent || opts.silent
 
-	parts := strings.Split(tb.Name(), "/")
-	for i, part := range parts {
-		if part != "" {
-			parts[i] = fmt.Sprintf("%s_test_results", part)
-		}
-	}
-
-	testDir = filepath.Join(parts...)
+	testDir = filepath.Join("test_results", tb.Name())
 	err := os.RemoveAll(testDir)
 	require.NoError(tb, err, "error removing test_results dir")
 	err = os.MkdirAll(testDir, 0700)

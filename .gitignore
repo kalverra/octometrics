@@ -31,4 +31,4 @@ go.work.sum
 octometrics.log.json
 data/
 observe_output/
-*_test_results/
+test_results/

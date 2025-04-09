@@ -12,8 +12,8 @@ func TestAnalyze(t *testing.T) {
 	t.Parallel()
 
 	log, _ := testhelpers.Setup(t)
-	require.FileExists(t, "testdata/monitorlog", "monitor log file does not exist")
-	_, err := Analyze(log, "testdata/monitorlog")
+	require.FileExists(t, "testdata/monitor.log.json", "monitor log file does not exist")
+	_, err := Analyze(log, "testdata/monitor.log.json")
 	require.NoError(t, err, "error analyzing monitor log")
-	// TODO: Verify the analysis is as expected
+	t.Fatal("not implemented fully")
 }
