@@ -29,8 +29,10 @@ go.work.sum
 .DS_Store
 
 octometrics.log.json
+octometrics.monitor.json
 data/
 observe_output/
 test_results/
+
 # Added by goreleaser init:
 dist/
