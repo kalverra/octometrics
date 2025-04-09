@@ -24,7 +24,7 @@ jobs:
         run: go mod download
       - name: Run Monitor
         run: |
-          go run . monitor -duration 10s -interval 1s -output-file ./monitor.log.json
+          go run . monitor --duration 10s --interval 1s --output-file ./monitor.log.json
       - name: Upload Monitor Log
         uses: actions/upload-artifact@v4
         with:
