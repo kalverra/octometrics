@@ -115,10 +115,10 @@ func Commit(
 
 	startTime := time.Now()
 
-	log.Debug().Msg("Gathering commit data")
-
 	if !forceUpdate && fileExists {
-		//nolint:gosec // I don't care
+		log = log.With().
+			Str("source", "local file").
+			Logger()
 		commitFileBytes, err := os.ReadFile(targetFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open commit file: %w", err)
@@ -133,11 +133,13 @@ func Commit(
 		return commitData, nil
 	}
 
+	log = log.With().
+		Str("source", "GitHub API").
+		Logger()
+
 	if client == nil {
 		return nil, fmt.Errorf("GitHub client is nil")
 	}
-
-	log.Debug().Msg("Gathering commit data from GitHub")
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
 	commit, resp, err := client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
@@ -150,7 +152,7 @@ func Commit(
 	}
 
 	commitData.RepositoryCommit = commit
-	commitData.CheckRuns, err = checkRunsForCommit(log, client, owner, repo, sha)
+	commitData.CheckRuns, err = checkRunsForCommit(client, owner, repo, sha)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +176,11 @@ func Commit(
 	return commitData, nil
 }
 
-func checkRunsForCommit(log zerolog.Logger, client *github.Client, owner, repo string, sha string) ([]*github.CheckRun, error) {
+func checkRunsForCommit(
+	client *github.Client,
+	owner, repo string,
+	sha string,
+) ([]*github.CheckRun, error) {
 	var (
 		allCheckRuns []*github.CheckRun
 		listOpts     = &github.ListCheckRunsOptions{
@@ -222,7 +228,6 @@ func setWorkflowRunsForCommit(
 	var (
 		workflowRunIDsSet = map[int64]struct{}{}
 		workflowRunIDRe   = regexp.MustCompile(`\/actions\/runs\/(\d+)`)
-		startTime         = time.Now()
 		eg                errgroup.Group
 	)
 
@@ -260,7 +265,8 @@ func setWorkflowRunsForCommit(
 				defer commitData.comparisonMutex.Unlock()
 				commitData.Conclusion = establishPRChecksConclusion(commitData.Conclusion, workflowRun.GetConclusion())
 				commitData.Cost += workflowRun.GetCost()
-				if workflowRun.GetRunStartedAt().Before(commitData.StartActionsTime) || commitData.StartActionsTime.IsZero() {
+				if workflowRun.GetRunStartedAt().Before(commitData.StartActionsTime) ||
+					commitData.StartActionsTime.IsZero() {
 					commitData.StartActionsTime = workflowRun.GetRunStartedAt().Time
 				}
 				if workflowRun.GetRunCompletedAt().After(commitData.EndActionsTime) {
@@ -275,17 +281,6 @@ func setWorkflowRunsForCommit(
 	if err := eg.Wait(); err != nil {
 		return fmt.Errorf("failed to gather workflow runs for commit %s: %w", commitData.GetSHA(), err)
 	}
-
-	log.Trace().
-		Str("commit_sha", commitData.GetSHA()).
-		Str("workflow_run_ids", fmt.Sprintf("%v", commitData.WorkflowRunIDs)).
-		Str("start_actions_time", commitData.StartActionsTime.String()).
-		Str("end_actions_time", commitData.EndActionsTime.String()).
-		Str("conclusion", commitData.Conclusion).
-		Str("duration", time.Since(startTime).String()).
-		Str("repo", repo).
-		Str("owner", owner).
-		Msg("Gathered workflow runs for commit")
 
 	return nil
 }

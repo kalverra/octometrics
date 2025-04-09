@@ -25,7 +25,11 @@ const (
 )
 
 var (
-	ghCtx            = context.WithValue(context.Background(), github.SleepUntilPrimaryRateLimitResetWhenRateLimited, true)
+	ghCtx = context.WithValue(
+		context.Background(),
+		github.SleepUntilPrimaryRateLimitResetWhenRateLimited,
+		true,
+	)
 	errGitHubTimeout = errors.New("github API timeout")
 )
 
@@ -64,7 +68,11 @@ func CustomDataFolder(folder string) Option {
 }
 
 // GitHubClient creates a new GitHub client with the provided token and logger.
-func GitHubClient(logger zerolog.Logger, githubToken string, optionalCustomClient *http.Client) (*github.Client, error) {
+func GitHubClient(
+	logger zerolog.Logger,
+	githubToken string,
+	optionalCustomClient *http.Client,
+) (*github.Client, error) {
 	switch {
 	case githubToken != "":
 		logger.Debug().Msg("Using GitHub token from flag")

@@ -2,24 +2,24 @@ package observe
 
 import (
 	"fmt"
-	"path/filepath"
-	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/kalverra/octometrics/gather"
 )
 
 const jobRunOutputDir = "job_runs"
 
+// JobRuns observes all job runs for a given workflow run.
 func JobRuns(
 	log zerolog.Logger,
 	client *github.Client,
 	owner, repo string,
 	workflowRunID int64,
 	opts ...Option,
-) error {
+) ([]*Observation, error) {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
@@ -27,72 +27,82 @@ func JobRuns(
 
 	workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var (
-		startTime = time.Now()
-		eg        errgroup.Group
+		eg               errgroup.Group
+		observations     = make([]*Observation, 0, len(workflowRun.Jobs))
+		observationsChan = make(chan *Observation, len(workflowRun.Jobs))
 	)
 
 	for _, job := range workflowRun.Jobs {
 		eg.Go(func() error {
-			jobRunTemplateData, err := buildJobRunGanttData(owner, repo, job)
+			jobRunTemplateData, err := buildJobRunTimelineData(job)
 			if err != nil {
-				return fmt.Errorf("failed to build gantt chart for job '%d': %w", job.GetID(), err)
+				return fmt.Errorf("failed to build timeline for job '%d': %w", job.GetID(), err)
 			}
 
-			err = renderGantt(jobRunTemplateData, options.outputTypes)
-			if err != nil {
-				return fmt.Errorf("failed to render gantt chart for job '%d': %w", job.GetID(), err)
+			observationsChan <- &Observation{
+				ID:           fmt.Sprint(job.GetID()),
+				Name:         job.GetName(),
+				GitHubLink:   job.GetHTMLURL(),
+				TimelineData: jobRunTemplateData,
+				Owner:        owner,
+				Repo:         repo,
+				DataType:     "job_run",
+				State:        job.GetConclusion(),
+				Actor:        workflowRun.GetActor().GetLogin(),
+				Cost:         job.GetCost(),
 			}
 			return nil
 		})
 	}
 
 	if err := eg.Wait(); err != nil {
-		return fmt.Errorf("failed to observe job runs: %w", err)
+		return nil, fmt.Errorf("failed to observe job runs: %w", err)
 	}
 
-	log.Trace().
-		Int64("workflow_run_id", workflowRunID).
-		Int("job_count", len(workflowRun.Jobs)).
-		Str("duration", time.Since(startTime).String()).
-		Msg("Observed job runs")
-	return nil
+	close(observationsChan)
+	for observation := range observationsChan {
+		observations = append(observations, observation)
+	}
+
+	return observations, nil
 }
 
-func buildJobRunGanttData(owner, repo string, job *gather.JobData) (*ganttData, error) {
-	tasks := make([]ganttItem, 0, len(job.Steps))
+func buildJobRunTimelineData(job *gather.JobData) (*timelineData, error) {
+	var (
+		items        = make([]timelineItem, 0, len(job.Steps))
+		skippedItems = []string{}
+	)
+
 	for _, step := range job.Steps {
-		startTime := step.GetStartedAt().Time
-		duration := step.GetCompletedAt().Sub(startTime)
-		newTask := ganttItem{
+		var (
+			startTime = step.GetStartedAt().Time
+			duration  = step.GetCompletedAt().Sub(startTime)
+		)
+
+		if step.GetConclusion() == "skipped" || duration.Seconds() == 0 {
+			skippedItems = append(skippedItems, step.GetName())
+			continue
+		}
+
+		newItem := timelineItem{
 			Name:       step.GetName(),
+			ID:         step.GetName(),
 			StartTime:  step.GetStartedAt().Time,
-			Conclusion: conclusionToGanntStatus(step.GetConclusion()),
+			Conclusion: conclusionToGanttStatus(step.GetConclusion()),
 			Duration:   duration,
 		}
-		if step.GetConclusion() == "skipped" {
-			newTask.Name = fmt.Sprintf("%s (skipped)", step.GetName())
+		if step.GetConclusion() == "cancelled" {
+			newItem.Name = fmt.Sprintf("%s (cancelled)", step.GetName())
 		}
-		tasks = append(tasks, newTask)
+		items = append(items, newItem)
 	}
 
-	return &ganttData{
-		ID:       fmt.Sprint(job.GetID()),
-		Name:     fmt.Sprintf("Job Run %s, ID: %d", job.GetName(), job.GetID()),
-		Link:     job.GetHTMLURL(),
-		Items:    tasks,
-		Owner:    owner,
-		Repo:     repo,
-		Cost:     job.GetCost(),
-		DataType: "job_run",
+	return &timelineData{
+		Items:        items,
+		SkippedItems: skippedItems,
 	}, nil
-}
-
-// jobRunLink returns the link to a specific job run's rendering.
-// You need to add on the extension (.html, .md) to this path.
-func jobRunLink(owner, repo string, jobRunID int64) string {
-	return filepath.Join("/", owner, repo, jobRunOutputDir, fmt.Sprint(jobRunID))
 }

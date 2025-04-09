@@ -8,7 +8,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-const logTimeFormat = "2006-01-02T15:04:05.000"
+const TimeLayout = "2006-01-02T15:04:05.000"
 
 type options struct {
 	disableConsoleLog bool
@@ -74,7 +74,7 @@ func New(options ...Option) (zerolog.Logger, error) {
 
 	writers := []io.Writer{lumberLogger}
 	if !disableConsoleLog {
-		writers = append(writers, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: logTimeFormat})
+		writers = append(writers, zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: TimeLayout})
 	}
 
 	logLevel, err := zerolog.ParseLevel(logLevelInput)
@@ -82,7 +82,7 @@ func New(options ...Option) (zerolog.Logger, error) {
 		return zerolog.Logger{}, err
 	}
 
-	zerolog.TimeFieldFormat = logTimeFormat
+	zerolog.TimeFieldFormat = TimeLayout
 	multiWriter := zerolog.MultiLevelWriter(writers...)
 	return zerolog.New(multiWriter).Level(logLevel).With().Timestamp().Logger(), nil
 }

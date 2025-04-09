@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"time"
 
-	"github.com/kalverra/octometrics/gather"
 	"github.com/spf13/cobra"
+
+	"github.com/kalverra/octometrics/gather"
 )
 
 var (
@@ -24,11 +27,21 @@ var gatherCmd = &cobra.Command{
 			return errors.New("repo must be provided")
 		}
 
-		if workflowRunID == 0 && pullRequestNumber == 0 {
-			return errors.New("either workflow run ID or pull request ID must be provided")
+		setCount := 0
+		if commitSHA != "" {
+			setCount++
 		}
-		if workflowRunID != 0 && pullRequestNumber != 0 {
-			return errors.New("only one of workflow run ID or pull request ID must be provided")
+		if workflowRunID != 0 {
+			setCount++
+		}
+		if pullRequestNumber != 0 {
+			setCount++
+		}
+		if setCount > 1 {
+			return errors.New("only one of commit SHA, workflow run ID or pull request number can be provided")
+		}
+		if setCount == 0 {
+			return errors.New("one of commit SHA, workflow run ID or pull request number must be provided")
 		}
 
 		return nil
@@ -73,6 +86,22 @@ var gatherCmd = &cobra.Command{
 
 func init() {
 	gatherCmd.Flags().BoolVarP(&forceUpdate, "force-update", "u", false, "Force update of existing data")
+	gatherCmd.Flags().StringVarP(&owner, "owner", "o", "", "Repository owner")
+	gatherCmd.Flags().StringVarP(&repo, "repo", "r", "", "Repository name")
+	gatherCmd.Flags().StringVarP(&commitSHA, "commit-sha", "c", "", "Commit SHA")
+	gatherCmd.Flags().Int64VarP(&workflowRunID, "workflow-run-id", "w", 0, "Workflow run ID")
+	gatherCmd.Flags().IntVarP(&pullRequestNumber, "pull-request-number", "p", 0, "Pull request number")
+	gatherCmd.Flags().
+		StringVarP(&githubToken, "github-token", "t", "", fmt.Sprintf("GitHub API token (can also be set via %s)", gather.GitHubTokenEnvVar))
+
+	if err := gatherCmd.MarkFlagRequired("owner"); err != nil {
+		fmt.Printf("ERROR: Failed to mark owner flag as required: %s\n", err.Error())
+		os.Exit(1)
+	}
+	if err := gatherCmd.MarkFlagRequired("repo"); err != nil {
+		fmt.Printf("ERROR: Failed to mark repo flag as required: %s\n", err.Error())
+		os.Exit(1)
+	}
 
 	rootCmd.AddCommand(gatherCmd)
 }

@@ -1,16 +1,13 @@
 package observe
 
 import (
-	"bytes"
 	"fmt"
-	htmlTemplate "html/template"
-	"os"
 	"path/filepath"
-	"text/template"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog"
+
+	"github.com/kalverra/octometrics/gather"
 )
 
 func PullRequest(
@@ -19,7 +16,7 @@ func PullRequest(
 	owner, repo string,
 	pullRequestNumber int,
 	opts ...Option,
-) error {
+) (*Observation, error) {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
@@ -27,37 +24,23 @@ func PullRequest(
 
 	prData, err := gather.PullRequest(log, client, owner, repo, pullRequestNumber, options.gatherOptions...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// TODO: Make markdown too
-	tmpl, err := htmlTemplate.New(fmt.Sprintf("pull_request_%s", "html")).Funcs(template.FuncMap{
-		"commitRunLink": commitRunLink,
-	}).ParseFiles(
-		filepath.Join(templatesDir, fmt.Sprintf("pull_request.%s", "html")),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to parse template: %w", err)
+	observation := &Observation{
+		ID:         fmt.Sprint(pullRequestNumber),
+		Name:       fmt.Sprintf("Pull Request #%d", pullRequestNumber),
+		GitHubLink: prData.GetHTMLURL(),
+		Owner:      owner,
+		Repo:       repo,
+		State:      prData.GetState(),
+		Actor:      prData.GetUser().GetLogin(),
+		CommitData: prData.GetCommitData(),
+		DataType:   "pull_request",
 	}
+	return observation, nil
+}
 
-	var rendered bytes.Buffer
-	err = tmpl.Execute(&rendered, prData)
-	if err != nil {
-		return fmt.Errorf("failed to execute template: %w", err)
-	}
-	outputFile := filepath.Join(
-		htmlOutputDir,
-		owner, repo,
-		gather.PullRequestsDataDir,
-		fmt.Sprintf("%d.html", pullRequestNumber),
-	)
-	err = os.MkdirAll(filepath.Dir(outputFile), 0700)
-	if err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-	err = os.WriteFile(outputFile, rendered.Bytes(), 0600)
-	if err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-	return nil
+func commitRunLink(owner, repo, sha string) string {
+	return filepath.Join("/", owner, repo, gather.CommitsDataDir, sha)
 }
