@@ -1,0 +1,95 @@
+{"level":"info","Output File":"octometrics.monitor.json","Observe Interval":"1s","Monitor CPU":true,"Monitor Memory":true,"Monitor Disk":true,"Monitor Processes":false,"time":"2025-04-04T17:04:30.909","message":"Starting Monitoring"}
+{"level":"info","CPU Num":0,"Model":"Apple M3 Max","Vendor":"","Family":"0","CacheSize":0,"Cores":14,"Mhz":4056,"time":"2025-04-04T17:04:30.910","message":"CPU System Info"}
+{"level":"info","Total":38654705664,"Available":15975759872,"Used":22678945792,"Free":1291091968,"UsedPercent":58.670594957139755,"time":"2025-04-04T17:04:30.910","message":"System Memory Info"}
+{"level":"info","Total":994662584320,"Used":240474071040,"Free":754188513280,"UsedPercent":24.17644685050658,"time":"2025-04-04T17:04:30.910","message":"System Disk Info"}
+{"level":"trace","Total":994662584320,"Used":240490496000,"Free":754172088320,"UsedPercent":24.17809816023301,"time":"2025-04-04T17:04:31.911","message":"Observed Disk Usage"}
+{"level":"trace","Available":15972040704,"Used":22682664960,"time":"2025-04-04T17:04:31.912","message":"Observed Memory Usage"}
+{"level":"trace","CPU":0,"Percent":26.085074437509594,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":1,"Percent":21.60362541811875,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":2,"Percent":15.8561724021647,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":3,"Percent":11.800124295625848,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":4,"Percent":4.398211774508569,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":5,"Percent":4.0806723756435215,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":6,"Percent":3.978745676642338,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":7,"Percent":4.104164818721864,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":8,"Percent":3.9964126741262143,"time":"2025-04-04T17:04:31.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":9,"Percent":4.0880230757956655,"time":"2025-04-04T17:04:31.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":10,"Percent":3.955999642880728,"time":"2025-04-04T17:04:31.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":11,"Percent":3.818279744807486,"time":"2025-04-04T17:04:31.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":12,"Percent":3.8166712260910245,"time":"2025-04-04T17:04:31.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":13,"Percent":3.8473872003230567,"time":"2025-04-04T17:04:31.913","message":"Observed CPU Usage"}
+{"level":"trace","BytesSent":382034217,"BytesRecv":149087966,"PacketsSent":839899,"PacketsRecv":400748,"time":"2025-04-04T17:04:31.937","message":"Observed IO Usage"}
+{"level":"debug","Duration":"25.920416ms","time":"2025-04-04T17:04:31.937","message":"Finished observe"}
+{"level":"trace","Total":994662584320,"Used":240490905600,"Free":754171678720,"UsedPercent":24.178139340026682,"time":"2025-04-04T17:04:32.911","message":"Observed Disk Usage"}
+{"level":"trace","CPU":0,"Percent":22.000000000116415,"time":"2025-04-04T17:04:32.912","message":"Observed CPU Usage"}
+{"level":"trace","Available":15964651520,"Used":22690054144,"time":"2025-04-04T17:04:32.912","message":"Observed Memory Usage"}
+{"level":"trace","CPU":1,"Percent":21.428571428571427,"time":"2025-04-04T17:04:32.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":2,"Percent":16.999999999825377,"time":"2025-04-04T17:04:32.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":3,"Percent":13.999999999941792,"time":"2025-04-04T17:04:32.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":4,"Percent":0,"time":"2025-04-04T17:04:32.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":5,"Percent":0,"time":"2025-04-04T17:04:32.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":6,"Percent":0,"time":"2025-04-04T17:04:32.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":7,"Percent":0,"time":"2025-04-04T17:04:32.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":8,"Percent":0,"time":"2025-04-04T17:04:32.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":9,"Percent":0,"time":"2025-04-04T17:04:32.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":10,"Percent":0,"time":"2025-04-04T17:04:32.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":11,"Percent":0,"time":"2025-04-04T17:04:32.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":12,"Percent":0,"time":"2025-04-04T17:04:32.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":13,"Percent":0,"time":"2025-04-04T17:04:32.914","message":"Observed CPU Usage"}
+{"level":"trace","BytesSent":382034217,"BytesRecv":149087966,"PacketsSent":839899,"PacketsRecv":400748,"time":"2025-04-04T17:04:32.923","message":"Observed IO Usage"}
+{"level":"debug","Duration":"12.357125ms","time":"2025-04-04T17:04:32.923","message":"Finished observe"}
+{"level":"trace","Total":994662584320,"Used":240490905600,"Free":754171678720,"UsedPercent":24.178139340026682,"time":"2025-04-04T17:04:33.912","message":"Observed Disk Usage"}
+{"level":"trace","CPU":0,"Percent":26.530612245019174,"time":"2025-04-04T17:04:33.912","message":"Observed CPU Usage"}
+{"level":"trace","Available":16069345280,"Used":22585360384,"time":"2025-04-04T17:04:33.912","message":"Observed Memory Usage"}
+{"level":"trace","CPU":1,"Percent":24.000000000349246,"time":"2025-04-04T17:04:33.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":2,"Percent":16.161616161267247,"time":"2025-04-04T17:04:33.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":3,"Percent":15.00000000014552,"time":"2025-04-04T17:04:33.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":4,"Percent":1.0000000002037268,"time":"2025-04-04T17:04:33.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":5,"Percent":5.000000000291038,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":6,"Percent":1.9999999996798579,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":7,"Percent":0,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":8,"Percent":3.9603960396824194,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":9,"Percent":0,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":10,"Percent":0,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":11,"Percent":0,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":12,"Percent":0,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":13,"Percent":0,"time":"2025-04-04T17:04:33.914","message":"Observed CPU Usage"}
+{"level":"trace","BytesSent":382034303,"BytesRecv":149087966,"PacketsSent":839900,"PacketsRecv":400748,"time":"2025-04-04T17:04:33.924","message":"Observed IO Usage"}
+{"level":"debug","Duration":"12.966791ms","time":"2025-04-04T17:04:33.924","message":"Finished observe"}
+{"level":"trace","Total":994662584320,"Used":240490856448,"Free":754171727872,"UsedPercent":24.17813439845144,"time":"2025-04-04T17:04:34.911","message":"Observed Disk Usage"}
+{"level":"trace","CPU":0,"Percent":48.45360824748454,"time":"2025-04-04T17:04:34.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":1,"Percent":43.29896907193296,"time":"2025-04-04T17:04:34.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":2,"Percent":38.77551020443013,"time":"2025-04-04T17:04:34.912","message":"Observed CPU Usage"}
+{"level":"trace","Available":16088596480,"Used":22566109184,"time":"2025-04-04T17:04:34.911","message":"Observed Memory Usage"}
+{"level":"trace","CPU":3,"Percent":30.303030302651695,"time":"2025-04-04T17:04:34.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":4,"Percent":2.0202020198828015,"time":"2025-04-04T17:04:34.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":5,"Percent":2.9999999998835847,"time":"2025-04-04T17:04:34.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":6,"Percent":3.9603960396824194,"time":"2025-04-04T17:04:34.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":7,"Percent":3.9603960389905573,"time":"2025-04-04T17:04:34.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":8,"Percent":2.9999999999054126,"time":"2025-04-04T17:04:34.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":9,"Percent":1.0000000002037268,"time":"2025-04-04T17:04:34.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":10,"Percent":1.0000000002037268,"time":"2025-04-04T17:04:34.915","message":"Observed CPU Usage"}
+{"level":"trace","CPU":11,"Percent":2.0202020198828015,"time":"2025-04-04T17:04:34.915","message":"Observed CPU Usage"}
+{"level":"trace","CPU":12,"Percent":2.0000000004074536,"time":"2025-04-04T17:04:34.915","message":"Observed CPU Usage"}
+{"level":"trace","CPU":13,"Percent":2.0000000004074536,"time":"2025-04-04T17:04:34.915","message":"Observed CPU Usage"}
+{"level":"trace","BytesSent":382036327,"BytesRecv":149088795,"PacketsSent":839918,"PacketsRecv":400753,"time":"2025-04-04T17:04:34.927","message":"Observed IO Usage"}
+{"level":"debug","Duration":"16.034208ms","time":"2025-04-04T17:04:34.927","message":"Finished observe"}
+{"level":"trace","Total":994662584320,"Used":240490864640,"Free":754171719680,"UsedPercent":24.178135222047313,"time":"2025-04-04T17:04:35.911","message":"Observed Disk Usage"}
+{"level":"trace","CPU":0,"Percent":25.999999999665306,"time":"2025-04-04T17:04:35.912","message":"Observed CPU Usage"}
+{"level":"trace","Available":16090316800,"Used":22564388864,"time":"2025-04-04T17:04:35.912","message":"Observed Memory Usage"}
+{"level":"trace","CPU":1,"Percent":19.99999999985448,"time":"2025-04-04T17:04:35.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":2,"Percent":16.83168316823124,"time":"2025-04-04T17:04:35.912","message":"Observed CPU Usage"}
+{"level":"trace","CPU":3,"Percent":11.111111111192772,"time":"2025-04-04T17:04:35.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":4,"Percent":0.9900990101007028,"time":"2025-04-04T17:04:35.913","message":"Observed CPU Usage"}
+{"level":"trace","CPU":5,"Percent":1.9801980202014056,"time":"2025-04-04T17:04:35.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":6,"Percent":0,"time":"2025-04-04T17:04:35.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":7,"Percent":0,"time":"2025-04-04T17:04:35.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":8,"Percent":1.0000000001964509,"time":"2025-04-04T17:04:35.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":9,"Percent":0,"time":"2025-04-04T17:04:35.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":10,"Percent":0,"time":"2025-04-04T17:04:35.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":11,"Percent":0,"time":"2025-04-04T17:04:35.914","message":"Observed CPU Usage"}
+{"level":"trace","CPU":12,"Percent":0,"time":"2025-04-04T17:04:35.915","message":"Observed CPU Usage"}
+{"level":"trace","CPU":13,"Percent":0,"time":"2025-04-04T17:04:35.915","message":"Observed CPU Usage"}
+{"level":"trace","BytesSent":382036327,"BytesRecv":149088795,"PacketsSent":839918,"PacketsRecv":400753,"time":"2025-04-04T17:04:35.924","message":"Observed IO Usage"}
+{"level":"debug","Duration":"13.19125ms","time":"2025-04-04T17:04:35.924","message":"Finished observe"}
+{"level":"info","time":"2025-04-04T17:04:36.413","message":"Stopping Monitoring"}

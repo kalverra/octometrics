@@ -1,12 +1,12 @@
 package observe
 
 import (
-	"path/filepath"
-	"time"
+	"fmt"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog"
+
+	"github.com/kalverra/octometrics/gather"
 )
 
 func Commit(
@@ -15,7 +15,7 @@ func Commit(
 	owner, repo string,
 	commitSHA string,
 	opts ...Option,
-) error {
+) (*Observation, error) {
 	options := defaultOptions()
 	for _, opt := range opts {
 		opt(options)
@@ -23,67 +23,73 @@ func Commit(
 
 	commit, err := gather.Commit(log, client, owner, repo, commitSHA, options.gatherOptions...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	startTime := time.Now()
+	var (
+		workflowRuns = make([]*gather.WorkflowRunData, 0, len(commit.WorkflowRunIDs))
+		observation  = &Observation{
+			ID:         commitSHA,
+			Name:       "Commit " + commitSHA,
+			Owner:      owner,
+			Repo:       repo,
+			GitHubLink: commit.GetHTMLURL(),
+			DataType:   "commit",
+			State:      commit.GetConclusion(),
+			Actor:      commit.GetAuthor().GetLogin(),
+			Cost:       commit.GetCost(),
+		}
+	)
 
-	workflowRuns := make([]*gather.WorkflowRunData, 0, len(commit.WorkflowRunIDs))
 	for _, workflowRunID := range commit.WorkflowRunIDs {
 		workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		workflowRuns = append(workflowRuns, workflowRun)
 	}
 
-	commitTemplateData := buildCommitGanttData(commit, workflowRuns)
-	err = renderGantt(commitTemplateData, options.outputTypes)
-	if err != nil {
-		return err
-	}
+	observation.TimelineData = buildCommitTimelineData(commit, workflowRuns)
 
-	log.Debug().
-		Str("commit_sha", commitSHA).
-		Str("duration", startTime.String()).
-		Msg("Observed commit")
-	return nil
+	return observation, nil
 
 }
 
-func buildCommitGanttData(commitData *gather.CommitData, workflowRuns []*gather.WorkflowRunData) *ganttData {
-	tasks := make([]ganttItem, 0, len(workflowRuns))
-	commitSHA := commitData.GetSHA()
-	owner := commitData.GetOwner()
-	repo := commitData.GetRepo()
+func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gather.WorkflowRunData) *timelineData {
+	var (
+		items        = make([]timelineItem, 0, len(workflowRuns))
+		skippedItems = []string{}
+		owner        = commitData.GetOwner()
+		repo         = commitData.GetRepo()
+	)
+
 	for _, workflowRun := range workflowRuns {
+		var (
+			startTime = workflowRun.GetRunStartedAt().Time
+			duration  = workflowRun.GetRunCompletedAt().Sub(startTime)
+		)
 
-		startedAt := workflowRun.GetRunStartedAt().Time
-		duration := workflowRun.GetRunCompletedAt().Sub(startedAt)
+		if workflowRun.GetConclusion() == "skipped" || duration.Seconds() == 0 {
+			skippedItems = append(skippedItems, workflowRun.GetName())
+			continue
+		}
 
-		workflowName := workflowRun.GetName()
-		// Colons in names break mermaid rendering https://github.com/mermaid-js/mermaid/issues/742
-		tasks = append(tasks, ganttItem{
-			Name:       workflowName,
-			StartTime:  startedAt,
-			Conclusion: conclusionToGanntStatus(workflowRun.GetConclusion()),
+		newItem := timelineItem{
+			Name:       workflowRun.GetName(),
+			ID:         fmt.Sprint(workflowRun.GetID()),
+			StartTime:  workflowRun.GetRunStartedAt().Time,
+			Conclusion: conclusionToGanttStatus(workflowRun.GetConclusion()),
 			Duration:   duration,
 			Link:       workflowRunLink(owner, repo, workflowRun.GetID()) + ".html",
-		})
+		}
+		if workflowRun.GetConclusion() == "cancelled" {
+			newItem.Name = fmt.Sprintf("%s (cancelled)", workflowRun.GetName())
+		}
+		items = append(items, newItem)
 	}
 
-	return &ganttData{
-		ID:       commitSHA,
-		Owner:    owner,
-		Repo:     repo,
-		Name:     "Commit " + commitSHA,
-		Link:     commitData.GetHTMLURL(),
-		DataType: "commit",
-		Cost:     commitData.GetCost(),
-		Items:    tasks,
+	return &timelineData{
+		Items:        items,
+		SkippedItems: skippedItems,
 	}
-}
-
-func commitRunLink(owner, repo, sha string) string {
-	return filepath.Join("/", owner, repo, gather.CommitsDataDir, sha)
 }

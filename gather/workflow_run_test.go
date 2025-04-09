@@ -7,6 +7,8 @@ import (
 	"github.com/google/go-github/v70/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kalverra/octometrics/internal/testhelpers"
 )
 
 func TestGatherWorkflowRun(t *testing.T) {
@@ -34,10 +36,11 @@ func TestGatherWorkflowRun(t *testing.T) {
 		),
 	)
 
-	log, testDataDir, client := testSetup(t, mockedHTTPClient)
+	log, testDataDir := testhelpers.Setup(t)
+	client := github.NewClient(mockedHTTPClient)
 
 	workflowRun, targetFile, err := WorkflowRun(
-		log, client, gatherOwner, gatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
+		log, client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
 	)
 	require.NoError(t, err, "error getting workflow run info")
 	require.NotNil(t, workflowRun, "workflow run should not be nil")
@@ -45,7 +48,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 
 	// Check if the file is written correctly
 	readData, readFile, err := WorkflowRun(
-		log, client, gatherOwner, gatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
+		log, client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
 	)
 	require.NoError(t, err, "error reading workflow run info from file")
 	require.NotNil(t, readData, "read workflow run data should not be nil")

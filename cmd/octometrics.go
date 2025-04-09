@@ -3,13 +3,15 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/octometrics/gather"
-	"github.com/kalverra/octometrics/logging"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+
+	"github.com/kalverra/octometrics/gather"
+	"github.com/kalverra/octometrics/logging"
 )
 
 // These variables are set at build time and describe the version and build of the application
@@ -18,6 +20,7 @@ var (
 	commit    = "dev"
 	buildTime = time.Now().Format("2006-01-02T15:04:05.000")
 	builtBy   = "local"
+	builtWith = runtime.Version()
 )
 
 // Persistent base command flags
@@ -25,13 +28,18 @@ var (
 	logFileName       string
 	logLevelInput     string
 	disableConsoleLog bool
-	owner             string
-	repo              string
-	workflowRunID     int64
-	pullRequestNumber int
 
 	githubClient *github.Client
 	logger       zerolog.Logger
+)
+
+// Flag values shared between other commands
+var (
+	owner             string
+	repo              string
+	commitSHA         string
+	workflowRunID     int64
+	pullRequestNumber int
 )
 
 var rootCmd = &cobra.Command{
@@ -66,6 +74,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			Str("commit", commit).
 			Str("build_time", buildTime).
 			Str("built_by", builtBy).
+			Str("built_with", builtWith).
 			Msg("octometrics version info")
 		logger.Debug().
 			Str("owner", owner).
@@ -89,13 +98,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&logFileName, "log-file", "f", "octometrics.log.json", "Log file name")
 	rootCmd.PersistentFlags().StringVarP(&logLevelInput, "log-level", "l", "info", "Log level")
-	rootCmd.PersistentFlags().BoolVarP(&disableConsoleLog, "silent", "s", false, "Disables console logs. Still logs to file")
-
-	rootCmd.PersistentFlags().StringVarP(&owner, "owner", "o", "", "Repository owner")
-	rootCmd.PersistentFlags().StringVarP(&repo, "repo", "r", "", "Repository name")
-	rootCmd.PersistentFlags().Int64VarP(&workflowRunID, "workflow-run-id", "w", 0, "Workflow run ID")
-	rootCmd.PersistentFlags().IntVarP(&pullRequestNumber, "pull-request-number", "p", 0, "Pull request number")
-	rootCmd.PersistentFlags().StringVarP(&githubToken, "github-token", "t", "", fmt.Sprintf("GitHub API token (can also be set via %s)", gather.GitHubTokenEnvVar))
+	rootCmd.PersistentFlags().
+		BoolVarP(&disableConsoleLog, "silent", "s", false, "Disables console logs. Still logs to file")
 }
 
 func Execute() {

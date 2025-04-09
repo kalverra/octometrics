@@ -1,0 +1,11 @@
+{{- /* Go Template file */ -}}
+
+{{ define "plotly_html" }}
+
+<div id="{{ .GraphID }}"></div>
+<script>
+    data = JSON.parse(atob('{{ .B64Content }}'))
+    Plotly.newPlot('{{ .GraphID }}', data);
+</script>
+
+{{ end }}

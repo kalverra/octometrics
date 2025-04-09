@@ -7,6 +7,8 @@ import (
 	"github.com/google/go-github/v70/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kalverra/octometrics/internal/testhelpers"
 )
 
 func TestGatherCommit(t *testing.T) {
@@ -31,9 +33,18 @@ func TestGatherCommit(t *testing.T) {
 		),
 	)
 
-	log, testDataDir, client := testSetup(t, mockedHTTPClient)
+	log, testDataDir := testhelpers.Setup(t)
+	client := github.NewClient(mockedHTTPClient)
 
-	commit, err := Commit(log, client, gatherOwner, gatherRepo, mockedSha, ForceUpdate(), CustomDataFolder(testDataDir))
+	commit, err := Commit(
+		log,
+		client,
+		testGatherOwner,
+		testGatherRepo,
+		mockedSha,
+		ForceUpdate(),
+		CustomDataFolder(testDataDir),
+	)
 	require.NoError(t, err, "error getting commit info")
 	require.NotNil(t, commit, "commit should not be nil")
 }

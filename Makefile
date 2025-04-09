@@ -4,4 +4,7 @@ test:
 	go test -json -v ./... -cover 2>&1 | tee /tmp/gotest.log | gotestfmt
 
 lint:
-	golangci-lint run --fix --timeout 5m
+	golangci-lint run --fix
+
+bench:
+	go test -bench=. -benchmem -run=^$$ ./...

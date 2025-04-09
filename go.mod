@@ -1,8 +1,9 @@
 module github.com/kalverra/octometrics
 
-go 1.24.1
+go 1.24.2
 
 require (
+	github.com/MetalBlueberry/go-plotly v0.7.0
 	github.com/gofri/go-github-ratelimit v1.1.1
 	github.com/google/go-github/v70 v70.0.0
 	github.com/migueleliasweb/go-github-mock v1.1.0

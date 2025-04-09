@@ -1,6 +1,7 @@
 package observe
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,11 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/octometrics/gather"
 	"github.com/rs/zerolog"
+
+	"github.com/kalverra/octometrics/gather"
 )
 
 const (
@@ -25,13 +28,39 @@ const (
 	templatesDir      = "observe/templates"
 )
 
+var (
+	// htmlTemplate is the cached template for HTML rendering
+	htmlTemplate *template.Template
+	// mdTemplate is the cached template for Markdown rendering
+	mdTemplate *template.Template
+)
+
+func init() {
+	var err error
+	// Initialize HTML template
+	htmlTemplate, err = template.New("observation_html").Funcs(template.FuncMap{
+		"sanitizeMermaidName": sanitizeMermaidName,
+		"commitRunLink":       commitRunLink,
+	}).ParseGlob(filepath.Join(templatesDir, "*.html"))
+	if err != nil {
+		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
+	}
+
+	// Initialize Markdown template
+	mdTemplate, err = template.New("observation_md").Funcs(template.FuncMap{
+		"sanitizeMermaidName": sanitizeMermaidName,
+	}).ParseGlob(filepath.Join(templatesDir, "*.md"))
+	if err != nil {
+		panic(fmt.Errorf("failed to parse Markdown templates: %w", err))
+	}
+}
+
 // Option manipulates how the observe command works
 type Option func(*options)
 
 // options contains the options for the observe command
 type options struct {
 	outputDir     string
-	outputTypes   []string
 	gatherOptions []gather.Option
 }
 
@@ -39,7 +68,6 @@ func defaultOptions() *options {
 	return &options{
 		gatherOptions: []gather.Option{},
 		outputDir:     OutputDir,
-		outputTypes:   []string{"html", "md"},
 	}
 }
 
@@ -59,17 +87,124 @@ func WithGatherOptions(opts ...gather.Option) Option {
 	}
 }
 
-// WithOutputTypes sets the output types for the observe command.
-func WithOutputTypes(outputTypes []string) Option {
-	return func(o *options) {
-		o.outputTypes = outputTypes
-	}
+// Observation represents a single observation of a PR, commit, or workflow run, or job.
+// It contains all the data used to render the observation in the different formats.
+type Observation struct {
+	ID         string
+	Name       string
+	GitHubLink string
+	Owner      string
+	Repo       string
+	DataType   string
+	State      string
+	Actor      string
+	Cost       int64 // Cost in tenths of a cent
+
+	// Data used to show job, workflow, and commit runs
+	TimelineData   *timelineData
+	MonitoringData *monitoringData
+
+	// Data used to render a Pull Request with multiple commits
+	CommitData []*gather.CommitData
 }
 
-// All generates all downloaded data in HTML and serves it on a local server.
-func All(log zerolog.Logger, client *github.Client) error {
+func (o *Observation) Render(log zerolog.Logger, outputType string) (observationFile string, err error) {
+	var baseDir string
+	switch outputType {
+	case "html":
+		baseDir = htmlOutputDir
+	case "md":
+		baseDir = markdownOutputDir
+	}
+
+	observationFile = filepath.Join(
+		baseDir,
+		o.Owner,
+		o.Repo,
+		o.DataType+"s",
+		fmt.Sprintf("%s.%s", o.ID, outputType),
+	)
+	log = log.With().
+		Str("observation_id", o.ID).
+		Str("observation_name", o.Name).
+		Str("observation_github_link", o.GitHubLink).
+		Str("observation_owner", o.Owner).
+		Str("observation_repo", o.Repo).
+		Str("observation_data_type", o.DataType).
+		Str("output_type", outputType).
+		Str("observation_file", observationFile).
+		Logger()
+
+	if _, err := os.Stat(observationFile); err == nil {
+		log.Trace().
+			Msg("Observation file already exists")
+		return observationFile, nil
+	}
+
+	var (
+		start = time.Now()
+		buf   bytes.Buffer
+	)
+
+	if o.TimelineData != nil {
+		if err := o.TimelineData.process(); err != nil {
+			return "", fmt.Errorf("failed to process timeline data: %w", err)
+		}
+	}
+
+	switch outputType {
+	case "html":
+		buf, err = o.renderHTML()
+	case "md":
+		buf, err = o.renderMarkdown()
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to render observation to %s: %w", outputType, err)
+	}
+
+	err = os.MkdirAll(filepath.Dir(observationFile), 0750)
+	if err != nil {
+		return "", fmt.Errorf("failed to create observation file directory: %w", err)
+	}
+	err = os.WriteFile(observationFile, buf.Bytes(), 0600)
+	if err != nil {
+		return "", fmt.Errorf("failed to write observation file: %w", err)
+	}
+	log.Trace().
+		Str("duration", time.Since(start).String()).
+		Msg("Rendered observation")
+	return observationFile, nil
+}
+
+// renderHTML renders the observation to an HTML format
+func (o *Observation) renderHTML() (bytes.Buffer, error) {
+	var buf bytes.Buffer
+
+	err := htmlTemplate.ExecuteTemplate(&buf, "observation_html", o)
+	if err != nil {
+		return buf, err
+	}
+	return buf, nil
+}
+
+// renderMarkdown renders the observation to a Markdown format
+func (o *Observation) renderMarkdown() (bytes.Buffer, error) {
+	var buf bytes.Buffer
+
+	err := mdTemplate.ExecuteTemplate(&buf, "observation_md", o)
+	if err != nil {
+		return buf, err
+	}
+	if buf.Len() == 0 {
+		return buf, fmt.Errorf("no data to render")
+	}
+	return buf, nil
+}
+
+// Interactive generates all downloaded data in HTML and serves it on a local server.
+func Interactive(log zerolog.Logger, client *github.Client) error {
 	startTime := time.Now()
-	err := generateAllHTMLObserveData(log, client)
+	err := All(log, client, []string{"html"})
 	if err != nil {
 		return fmt.Errorf("failed to generate all HTML observe data: %w", err)
 	}
@@ -126,7 +261,11 @@ func openBrowser(url string) error {
 	return exec.Command(cmd, args...).Run()
 }
 
-func generateAllHTMLObserveData(log zerolog.Logger, client *github.Client) error {
+func All(log zerolog.Logger, client *github.Client, outputTypes []string) error {
+	return generateAllObserveData(log, client, outputTypes)
+}
+
+func generateAllObserveData(log zerolog.Logger, client *github.Client, outputTypes []string) error {
 	return filepath.WalkDir(gather.DataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -144,12 +283,15 @@ func generateAllHTMLObserveData(log zerolog.Logger, client *github.Client) error
 		if len(pathComponents) != 5 {
 			return fmt.Errorf("unexpected path format: %s", path)
 		}
-		owner := pathComponents[1]
-		repo := pathComponents[2]
-		dataDir := pathComponents[3]
-		dataName := strings.TrimSuffix(pathComponents[4], ".json")
+		var (
+			owner        = pathComponents[1]
+			repo         = pathComponents[2]
+			dataDir      = pathComponents[3]
+			dataName     = strings.TrimSuffix(pathComponents[4], ".json")
+			observation  *Observation
+			observations []*Observation
+		)
 
-		outputOpt := WithOutputTypes([]string{"html"})
 		switch dataDir {
 		case gather.WorkflowRunsDataDir:
 			var workflowRunID int64
@@ -157,22 +299,42 @@ func generateAllHTMLObserveData(log zerolog.Logger, client *github.Client) error
 			if err != nil {
 				return fmt.Errorf("failed to parse workflow run ID: %w", err)
 			}
-			err = WorkflowRun(log, client, owner, repo, workflowRunID, outputOpt)
+			observation, err = WorkflowRun(log, client, owner, repo, workflowRunID)
+			observations = append(observations, observation)
+			if err != nil {
+				return fmt.Errorf("failed to generate workflow run observation: %w", err)
+			}
+			jobRuns, err := JobRuns(log, client, owner, repo, workflowRunID)
+			if err != nil {
+				return fmt.Errorf("failed to generate job runs: %w", err)
+			}
+			observations = append(observations, jobRuns...)
 		case gather.PullRequestsDataDir:
 			var pullRequestNumber int64
 			pullRequestNumber, err = strconv.ParseInt(dataName, 10, 64)
 			if err != nil {
 				return fmt.Errorf("failed to parse pull request number: %w", err)
 			}
-			err = PullRequest(log, client, owner, repo, int(pullRequestNumber), outputOpt)
+			observation, err = PullRequest(log, client, owner, repo, int(pullRequestNumber))
+			observations = append(observations, observation)
 		case gather.CommitsDataDir:
 			var commitSHA string
 			commitSHA = dataName
-			err = Commit(log, client, owner, repo, commitSHA, outputOpt)
+			observation, err = Commit(log, client, owner, repo, commitSHA)
+			observations = append(observations, observation)
 		}
 
 		if err != nil {
-			return fmt.Errorf("failed to generate HTML observe data: %w", err)
+			return fmt.Errorf("failed to generate observe data: %w", err)
+		}
+
+		for _, outputType := range outputTypes {
+			for _, observation := range observations {
+				_, err = observation.Render(log, outputType)
+				if err != nil {
+					return err
+				}
+			}
 		}
 
 		return nil

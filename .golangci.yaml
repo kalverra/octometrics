@@ -1,4 +1,7 @@
 version: "2"
+run:
+  timeout: 5m
+  allow-parallel-runners: true
 linters:
   default: standard
   enable:
@@ -21,3 +24,18 @@ linters:
       keywords:
       - "DEBUG"
       - "TODO"
+    gosec:
+      confidence: medium
+      excludes:
+        - G304 # Potential file inclusion via variable
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - golines
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/kalverra/octometrics
+    golines:
+      max-len: 120

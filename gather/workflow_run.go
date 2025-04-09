@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/go-github/v70/github"
-	"github.com/kalverra/octometrics/monitor"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -68,11 +67,10 @@ func (j *JobData) GetCost() int64 {
 // to help with data visualization and cost calculation
 type WorkflowRunData struct {
 	*github.WorkflowRun
-	Jobs                []*JobData               `json:"jobs"`
-	Cost                int64                    `json:"cost"`
-	RunCompletedAt      time.Time                `json:"completed_at"`
-	MonitorObservations *monitor.Observations    `json:"monitor_observations,omitempty"`
-	Usage               *github.WorkflowRunUsage `json:"usage,omitempty"`
+	Jobs           []*JobData               `json:"jobs"`
+	Cost           int64                    `json:"cost"`
+	RunCompletedAt time.Time                `json:"completed_at"`
+	Usage          *github.WorkflowRunUsage `json:"usage,omitempty"`
 }
 
 // GetJobs returns the list of jobs for the workflow run
@@ -142,11 +140,10 @@ func WorkflowRun(
 
 	startTime := time.Now()
 
-	log.Debug().Msg("Gathering workflow run data")
-
 	if !opts.ForceUpdate && fileExists {
-		log.Debug().Msg("Reading workflow run data from file")
-		//nolint:gosec // I don't care
+		log = log.With().
+			Str("source", "local file").
+			Logger()
 		workflowFileBytes, err := os.ReadFile(targetFile)
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to open workflow run file: %w", err)
@@ -157,6 +154,10 @@ func WorkflowRun(
 			Msg("Gathered workflow run data")
 		return workflowRunData, targetFile, err
 	}
+
+	log = log.With().
+		Str("source", "GitHub API").
+		Logger()
 
 	if client == nil {
 		return nil, "", fmt.Errorf("GitHub client is nil")
@@ -203,7 +204,11 @@ func WorkflowRun(
 	})
 
 	if err := eg.Wait(); err != nil {
-		return nil, "", fmt.Errorf("failed to collect job and/or billing data for workflow run '%d': %w", workflowRunID, err)
+		return nil, "", fmt.Errorf(
+			"failed to collect job and/or billing data for workflow run '%d': %w",
+			workflowRunID,
+			err,
+		)
 	}
 	workflowRunData.Usage = workflowBillingData
 
@@ -229,11 +234,19 @@ func WorkflowRun(
 
 	data, err := json.Marshal(workflowRunData)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to marshal workflow run data to json for workflow run '%d': %w", workflowRunID, err)
+		return nil, "", fmt.Errorf(
+			"failed to marshal workflow run data to json for workflow run '%d': %w",
+			workflowRunID,
+			err,
+		)
 	}
 	err = os.WriteFile(targetFile, data, 0600)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to write workflow run data to file for workflow run '%d': %w", workflowRunID, err)
+		return nil, "", fmt.Errorf(
+			"failed to write workflow run data to file for workflow run '%d': %w",
+			workflowRunID,
+			err,
+		)
 	}
 
 	log.Debug().
@@ -309,7 +322,10 @@ func billingData(
 }
 
 // calculateJobRunBilling calculates the cost of a job run based on the billing data
-func calculateJobRunBilling(jobID int64, billingData *github.WorkflowRunUsage) (runner string, costInTenthsOfCents int64, err error) {
+func calculateJobRunBilling(
+	jobID int64,
+	billingData *github.WorkflowRunUsage,
+) (runner string, costInTenthsOfCents int64, err error) {
 	if billingData == nil || billingData.GetBillable() == nil {
 		return "", 0, fmt.Errorf("no billing data available")
 	}

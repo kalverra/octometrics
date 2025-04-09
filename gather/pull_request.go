@@ -56,12 +56,16 @@ func PullRequest(
 		fileExists = true
 	}
 
+	log = log.With().
+		Int("pull_request_number", pullRequestNumber).
+		Logger()
+
 	startTime := time.Now()
 
-	log.Debug().Int("pull_request_number", pullRequestNumber).Msg("Gathering pull request data")
-
 	if !forceUpdate && fileExists {
-		//nolint:gosec // I don't care
+		log = log.With().
+			Str("source", "local file").
+			Logger()
 		prFileBytes, err := os.ReadFile(targetFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
@@ -69,16 +73,17 @@ func PullRequest(
 		err = json.Unmarshal(prFileBytes, &pullRequestData)
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).
-			Int("pull_request_number", pullRequestNumber).
 			Msg("Gathered pull request data")
 		return pullRequestData, err
 	}
 
+	log = log.With().
+		Str("source", "GitHub API").
+		Logger()
+
 	if client == nil {
 		return nil, fmt.Errorf("GitHub client is nil")
 	}
-
-	log.Debug().Msg("Gathering pull request data from GitHub")
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
 	pr, resp, err := client.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
@@ -107,15 +112,22 @@ func PullRequest(
 
 	data, err := json.Marshal(pullRequestData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal pull request data to json for pull request %d: %w", pullRequestNumber, err)
+		return nil, fmt.Errorf(
+			"failed to marshal pull request data to json for pull request %d: %w",
+			pullRequestNumber,
+			err,
+		)
 	}
 	err = os.WriteFile(targetFile, data, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("failed to write pull request data to file for pull request %d: %w", pullRequestNumber, err)
+		return nil, fmt.Errorf(
+			"failed to write pull request data to file for pull request %d: %w",
+			pullRequestNumber,
+			err,
+		)
 	}
 	log.Debug().
 		Str("duration", time.Since(startTime).String()).
-		Int("pull_request_number", pullRequestNumber).
 		Msg("Gathered pull request data")
 	return pullRequestData, nil
 }

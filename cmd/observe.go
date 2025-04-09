@@ -3,8 +3,9 @@ package cmd
 import (
 	"os"
 
-	"github.com/kalverra/octometrics/observe"
 	"github.com/spf13/cobra"
+
+	"github.com/kalverra/octometrics/observe"
 )
 
 var (
@@ -36,7 +37,7 @@ var observeCmd = &cobra.Command{
 		// 	}
 		// }
 
-		return observe.All(logger, githubClient)
+		return observe.Interactive(logger, githubClient)
 	},
 }
 

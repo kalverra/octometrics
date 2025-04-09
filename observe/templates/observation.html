@@ -1,0 +1,51 @@
+{{- /* Go Template file */ -}}
+
+{{ define "observation_html" }}
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+    <meta charset="utf">
+    <title>{{ .Name }}</title>
+    {{ if .MonitoringData }}
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
+    {{ end }}
+    {{ if .TimelineData }}
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+    {{ end }}
+</head>
+
+<body>
+
+    <h1>
+        <a target="_blank" href="{{ .GitHubLink }}">{{ .Name }}</a>
+    </h1>
+
+    <p>State: {{ .State }}</p>
+    <p>Actor: {{ .Actor }}</p>
+
+    {{ if .TimelineData }}
+    <h2>Timeline</h2>
+    {{ template "timeline_html" .TimelineData }}
+    {{ end }}
+
+    {{ if .MonitoringData }}
+    <h2>Analysis</h2>
+    {{ range .MonitoringData.PlotlyData }}
+    {{ template "plotly_html" . }}
+    {{ end }}
+    {{ end }}
+
+    {{ if .CommitData }}
+    <h2>Commits</h2>
+    {{ template "pull_request_html" .CommitData }}
+    {{ end }}
+
+</body>
+
+</html>
+{{ end }}
