@@ -2,6 +2,7 @@ package observe
 
 import (
 	"bytes"
+	"embed"
 	"fmt"
 	"net/http"
 	"os"
@@ -21,11 +22,13 @@ import (
 	"github.com/kalverra/octometrics/gather"
 )
 
+//go:embed templates/*.html templates/*.md
+var templateFS embed.FS
+
 const (
 	OutputDir         = "observe_output"
 	htmlOutputDir     = "observe_output/html"
 	markdownOutputDir = "observe_output/md"
-	templatesDir      = "observe/templates"
 )
 
 var (
@@ -41,7 +44,7 @@ func init() {
 	htmlTemplate, err = template.New("observation_html").Funcs(template.FuncMap{
 		"sanitizeMermaidName": sanitizeMermaidName,
 		"commitRunLink":       commitRunLink,
-	}).ParseGlob(filepath.Join(templatesDir, "*.html"))
+	}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
 	}
@@ -49,7 +52,7 @@ func init() {
 	// Initialize Markdown template
 	mdTemplate, err = template.New("observation_md").Funcs(template.FuncMap{
 		"sanitizeMermaidName": sanitizeMermaidName,
-	}).ParseGlob(filepath.Join(templatesDir, "*.md"))
+	}).ParseFS(templateFS, "templates/*.md")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse Markdown templates: %w", err))
 	}
