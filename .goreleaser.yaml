@@ -11,13 +11,17 @@ builds:
     goos:
       - linux
       - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
     ldflags:
       - -s -w
       - -X github.com/kalverra/octometrics/cmd.version={{.Version}}
       - -X github.com/kalverra/octometrics/cmd.commit={{.Commit}}
       - -X github.com/kalverra/octometrics/cmd.buildTime={{.Date}}
       - -X github.com/kalverra/octometrics/cmd.builtBy=goreleaser
-      - -X github.com/kalverra/octometrics/cmd.builtWith={{.GoVersion}}
+    binary: octometrics
 
 archives:
   - formats: [tar.gz]

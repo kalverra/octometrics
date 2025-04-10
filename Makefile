@@ -1,15 +1,13 @@
 build:
-	goreleaser build --clean --snapshot
+	goreleaser release --clean --snapshot
 
 test:
-	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
-	set -euo pipefail
-	go test -json -v ./... -silence-test-logs -cover 2>&1 | tee /tmp/gotest.log | gotestfmt
+	go install gotest.tools/gotestsum@latest
+	gotestsum -- -coverprofile=cover.out ./... -silence-test-logs
 
 test-verbose:
-	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
-	set -euo pipefail
-	go test -json -v ./... -cover 2>&1 | tee /tmp/gotest.log | gotestfmt
+	go install gotest.tools/gotestsum@latest
+	gotestsum -- -coverprofile=cover.out ./...
 
 lint:
 	golangci-lint run --fix
