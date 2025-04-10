@@ -1,3 +1,6 @@
+build:
+	goreleaser build --clean --snapshot
+
 test:
 	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
 	set -euo pipefail

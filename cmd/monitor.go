@@ -55,7 +55,8 @@ func init() {
 	monitorCmd.Flags().BoolVar(&skipMemory, "skip-memory", false, "Skip memory monitoring")
 	monitorCmd.Flags().BoolVar(&skipDisk, "skip-disk", false, "Skip disk monitoring")
 	monitorCmd.Flags().BoolVar(&skipIO, "skip-io", false, "Skip IO monitoring")
-	monitorCmd.Flags().DurationVar(&duration, "duration", 0, "Duration to monitor, defaults to indefinite")
-	monitorCmd.Flags().DurationVar(&interval, "interval", 1*time.Second, "At what interval to observe metrics")
-	monitorCmd.Flags().StringVar(&outputFile, "output", "octometrics.monitor.json", "Output file")
+	monitorCmd.Flags().DurationVarP(&duration, "duration", "d", 0, "Duration to monitor, defaults to indefinite")
+	monitorCmd.Flags().DurationVarP(&interval, "interval", "i", 1*time.Second, "At what interval to observe metrics")
+	monitorCmd.Flags().
+		StringVarP(&outputFile, "output-file", "o", "octometrics.monitor.json", "Output file for the monitor data")
 }
