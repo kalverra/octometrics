@@ -11,6 +11,16 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Analysis is the processed results of monitoring data.
+type Analysis struct {
+	SystemInfo *SystemInfo `json:"system_info"`
+	// CPUMeasurements is a map of CPU number to its measurements.
+	CPUMeasurements    map[int][]*CPUMeasurement `json:"cpu_measurements"`
+	MemoryMeasurements []*MemoryMeasurement      `json:"memory_measurements"`
+	DiskMeasurements   []*DiskMeasurement        `json:"disk_measurements"`
+	IOMeasurements     []*IOMeasurement          `json:"io_measurements"`
+}
+
 // SystemInfo contains system-level information about CPU, memory, and disk.
 type SystemInfo struct {
 	CPU    []*SystemCPUInfo `json:"cpu"`
@@ -18,6 +28,7 @@ type SystemInfo struct {
 	Disk   *SystemDiskInfo  `json:"disk"`
 }
 
+// SystemCPUInfo details information about the CPU on the system.
 type SystemCPUInfo struct {
 	Num       int     `json:"num"`
 	Model     string  `json:"model"`
@@ -28,26 +39,31 @@ type SystemCPUInfo struct {
 	Mhz       float64 `json:"mhz"`
 }
 
+// SytemMemoryInfo details information about the memory on the system.
 type SytemMemoryInfo struct {
 	Total uint64 `json:"total"`
 }
 
+// SystemDiskInfo details information about the disk on the system.
 type SystemDiskInfo struct {
 	Total uint64 `json:"total"`
 }
 
+// CPUMeasurement details information about the CPU usage on the system.
 type CPUMeasurement struct {
 	Time        time.Time `json:"time"`
 	Num         int       `json:"num"`
 	UsedPercent float64   `json:"used_percent"`
 }
 
+// MemoryMeasurement details information about the memory usage on the system.
 type MemoryMeasurement struct {
 	Time      time.Time `json:"time"`
 	Available uint64    `json:"available"`
 	Used      uint64    `json:"used"`
 }
 
+// DiskMeasurement details information about the disk usage on the system.
 type DiskMeasurement struct {
 	Time        time.Time `json:"time"`
 	Used        uint64    `json:"used"`
@@ -55,22 +71,13 @@ type DiskMeasurement struct {
 	UsedPercent float64   `json:"used_percent"`
 }
 
+// IOMeasurement details information about the I/O usage on the system.
 type IOMeasurement struct {
 	Time        time.Time `json:"time"`
 	BytesSent   uint64    `json:"bytes_sent"`
 	BytesRecv   uint64    `json:"bytes_recv"`
 	PacketsSent uint64    `json:"packets_sent"`
 	PacketsRecv uint64    `json:"packets_recv"`
-}
-
-// Analysis is the processed results of monitoring data.
-type Analysis struct {
-	SystemInfo *SystemInfo `json:"system_info"`
-	// CPUMeasurements is a map of CPU number to its measurements.
-	CPUMeasurements    map[int][]*CPUMeasurement `json:"cpu_measurements"`
-	MemoryMeasurements []*MemoryMeasurement      `json:"memory_measurements"`
-	DiskMeasurements   []*DiskMeasurement        `json:"disk_measurements"`
-	IOMeasurements     []*IOMeasurement          `json:"io_measurements"`
 }
 
 // Analyze reads the monitor data from a file and processes each entry.

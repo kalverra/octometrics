@@ -44,80 +44,6 @@ var (
 	ErrMonitorProcesses = errors.New("error monitoring Processes")
 )
 
-// Option mutates how monitoring is done
-type Option func(*options)
-
-// WithOutputFile sets a custom output file for monitoring data
-func WithOutputFile(outputFile string) Option {
-	return func(opts *options) {
-		opts.OutputFile = outputFile
-	}
-}
-
-// WithObserveInterval sets the interval at which to observe system resources
-func WithObserveInterval(interval time.Duration) Option {
-	return func(opts *options) {
-		opts.ObserveInterval = interval
-	}
-}
-
-// DisableCPU disables CPU monitoring
-func DisableCPU() Option {
-	return func(opts *options) {
-		opts.MonitorCPU = false
-	}
-}
-
-// DisableMemory disables memory monitoring
-func DisableMemory() Option {
-	return func(opts *options) {
-		opts.MonitorMemory = false
-	}
-}
-
-// DisableDisk disables disk monitoring
-func DisableDisk() Option {
-	return func(opts *options) {
-		opts.MonitorDisk = false
-	}
-}
-
-// DisableIO disables IO monitoring
-func DisableIO() Option {
-	return func(opts *options) {
-		opts.MonitorIO = false
-	}
-}
-
-// DisableProcesses disables process monitoring
-func DisableProcesses() Option {
-	return func(opts *options) {
-		opts.MonitorProcesses = false
-	}
-}
-
-type options struct {
-	OutputFile       string
-	ObserveInterval  time.Duration
-	MonitorCPU       bool
-	MonitorMemory    bool
-	MonitorDisk      bool
-	MonitorIO        bool
-	MonitorProcesses bool
-}
-
-func defaultOptions() *options {
-	return &options{
-		OutputFile:       DataFile,
-		ObserveInterval:  time.Second,
-		MonitorCPU:       true,
-		MonitorMemory:    true,
-		MonitorDisk:      true,
-		MonitorIO:        true,
-		MonitorProcesses: false,
-	}
-}
-
 // Start begins monitoring system resources and writes the data to a file.
 // It will stop when the context is cancelled or an interrupt is received.
 func Start(ctx context.Context, options ...Option) error {
@@ -139,12 +65,12 @@ func Start(ctx context.Context, options ...Option) error {
 	signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
 
 	log.Info().
-		Str("Output File", opts.OutputFile).
-		Str("Observe Interval", opts.ObserveInterval.String()).
-		Bool("Monitor CPU", opts.MonitorCPU).
-		Bool("Monitor Memory", opts.MonitorMemory).
-		Bool("Monitor Disk", opts.MonitorDisk).
-		Bool("Monitor Processes", opts.MonitorProcesses).
+		Str("output_file", opts.OutputFile).
+		Str("observe_interval", opts.ObserveInterval.String()).
+		Bool("monitor_cpu", opts.MonitorCPU).
+		Bool("monitor_memory", opts.MonitorMemory).
+		Bool("monitor_disk", opts.MonitorDisk).
+		Bool("monitor_processes", opts.MonitorProcesses).
 		Msg("Starting Monitoring")
 
 	if err := systemInfo(log); err != nil {
@@ -189,13 +115,13 @@ func systemInfo(log zerolog.Logger) error {
 	}
 	for _, cpu := range cpus {
 		log.Info().
-			Int32("Num", cpu.CPU).
-			Str("Model", cpu.ModelName).
-			Str("Vendor", cpu.VendorID).
-			Str("Family", cpu.Family).
-			Int32("Cache Size", cpu.CacheSize).
-			Int32("Cores", cpu.Cores).
-			Float64("Mhz", cpu.Mhz).
+			Int32("num", cpu.CPU).
+			Str("model", cpu.ModelName).
+			Str("vendor", cpu.VendorID).
+			Str("family", cpu.Family).
+			Int32("cache_size", cpu.CacheSize).
+			Int32("cores", cpu.Cores).
+			Float64("mhz", cpu.Mhz).
 			Msg(CPUSystemInfoMsg)
 	}
 
@@ -204,7 +130,7 @@ func systemInfo(log zerolog.Logger) error {
 		return err
 	}
 	log.Info().
-		Uint64("Total", memStat.Total).
+		Uint64("total", memStat.Total).
 		Msg(MemSystemInfoMsg)
 
 	diskStat, err := disk.Usage("/")
@@ -212,7 +138,7 @@ func systemInfo(log zerolog.Logger) error {
 		return err
 	}
 	log.Info().
-		Uint64("Total", diskStat.Total).
+		Uint64("total", diskStat.Total).
 		Msg(DiskSystemInfoMsg)
 
 	return nil
@@ -274,8 +200,8 @@ func observeCPU(log zerolog.Logger) error {
 
 	for i, percent := range cpuPercents {
 		log.Trace().
-			Int("CPU", i).
-			Float64("Percent", percent).
+			Int("cpu", i).
+			Float64("percent", percent).
 			Msg(ObservedCPUMsg)
 	}
 	return nil
@@ -287,8 +213,8 @@ func observeMemory(log zerolog.Logger) error {
 		return fmt.Errorf("%w: %w", ErrMonitorMemory, err)
 	}
 	log.Trace().
-		Uint64("Available", v.Available).
-		Uint64("Used", v.Used).
+		Uint64("available", v.Available).
+		Uint64("used", v.Used).
 		Msg(ObservedMemMsg)
 	return nil
 }
@@ -299,9 +225,9 @@ func observeDisk(log zerolog.Logger) error {
 		return fmt.Errorf("%w: %w", ErrMonitorDisk, err)
 	}
 	log.Trace().
-		Uint64("Used", usageStat.Used).
-		Uint64("Available", usageStat.Free).
-		Float64("Used Percent", usageStat.UsedPercent).
+		Uint64("used", usageStat.Used).
+		Uint64("available", usageStat.Free).
+		Float64("used_percent", usageStat.UsedPercent).
 		Msg(ObservedDiskMsg)
 	return nil
 }
@@ -313,10 +239,10 @@ func observeIO(log zerolog.Logger) error {
 	}
 	for _, stat := range ioStats {
 		log.Trace().
-			Uint64("Bytes Sent", stat.BytesSent).
-			Uint64("Bytes Recv", stat.BytesRecv).
-			Uint64("Packets Sent", stat.PacketsSent).
-			Uint64("Packets Recv", stat.PacketsRecv).
+			Uint64("bytes_sent", stat.BytesSent).
+			Uint64("bytes_recv", stat.BytesRecv).
+			Uint64("packets_sent", stat.PacketsSent).
+			Uint64("packets_recv", stat.PacketsRecv).
 			Msg(ObservedIOMsg)
 	}
 	return nil

@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,9 +12,10 @@ import (
 func TestAnalyze(t *testing.T) {
 	t.Parallel()
 
+	monitorLogFile := filepath.Join(testDataDir, "octometrics.monitor.testdata.json")
 	log, _ := testhelpers.Setup(t)
-	require.FileExists(t, "testdata/monitor.log.json", "monitor log file does not exist")
-	analysis, err := Analyze(log, "testdata/monitor.log.json")
+	require.FileExists(t, monitorLogFile, "monitor log file does not exist")
+	analysis, err := Analyze(log, monitorLogFile)
 	require.NoError(t, err, "error analyzing monitor log")
 	require.NotNil(t, analysis, "analysis should not be nil")
 
@@ -25,6 +27,4 @@ func TestAnalyze(t *testing.T) {
 		require.NotNil(t, measurements, "measurements should not be nil")
 		require.NotEmpty(t, measurements, "measurements should not be empty")
 	}
-
-	// TODO: Add more tests and better assertions on exact data expected
 }

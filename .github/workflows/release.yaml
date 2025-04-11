@@ -8,10 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  IMAGE_PREFIX: ghcr.io/kalverra
-  DOCKER_USERNAME: kalverra
-
 jobs:
   goreleaser:
     runs-on: ubuntu-latest

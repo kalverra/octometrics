@@ -3,12 +3,15 @@ package logging
 import (
 	"io"
 	"os"
+	"sync"
 
 	"github.com/rs/zerolog"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 const TimeLayout = "2006-01-02T15:04:05.000"
+
+var once sync.Once
 
 type options struct {
 	disableConsoleLog bool
@@ -82,7 +85,9 @@ func New(options ...Option) (zerolog.Logger, error) {
 		return zerolog.Logger{}, err
 	}
 
-	zerolog.TimeFieldFormat = TimeLayout
+	once.Do(func() {
+		zerolog.TimeFieldFormat = TimeLayout
+	})
 	multiWriter := zerolog.MultiLevelWriter(writers...)
 	return zerolog.New(multiWriter).Level(logLevel).With().Timestamp().Logger(), nil
 }

@@ -7,6 +7,80 @@ import (
 	"github.com/kalverra/octometrics/logging"
 )
 
+// Option mutates how monitoring is done
+type Option func(*options)
+
+// WithOutputFile sets a custom output file for monitoring data
+func WithOutputFile(outputFile string) Option {
+	return func(opts *options) {
+		opts.OutputFile = outputFile
+	}
+}
+
+// WithObserveInterval sets the interval at which to observe system resources
+func WithObserveInterval(interval time.Duration) Option {
+	return func(opts *options) {
+		opts.ObserveInterval = interval
+	}
+}
+
+// DisableCPU disables CPU monitoring
+func DisableCPU() Option {
+	return func(opts *options) {
+		opts.MonitorCPU = false
+	}
+}
+
+// DisableMemory disables memory monitoring
+func DisableMemory() Option {
+	return func(opts *options) {
+		opts.MonitorMemory = false
+	}
+}
+
+// DisableDisk disables disk monitoring
+func DisableDisk() Option {
+	return func(opts *options) {
+		opts.MonitorDisk = false
+	}
+}
+
+// DisableIO disables IO monitoring
+func DisableIO() Option {
+	return func(opts *options) {
+		opts.MonitorIO = false
+	}
+}
+
+// DisableProcesses disables process monitoring
+func DisableProcesses() Option {
+	return func(opts *options) {
+		opts.MonitorProcesses = false
+	}
+}
+
+type options struct {
+	OutputFile       string
+	ObserveInterval  time.Duration
+	MonitorCPU       bool
+	MonitorMemory    bool
+	MonitorDisk      bool
+	MonitorIO        bool
+	MonitorProcesses bool
+}
+
+func defaultOptions() *options {
+	return &options{
+		OutputFile:       DataFile,
+		ObserveInterval:  time.Second,
+		MonitorCPU:       true,
+		MonitorMemory:    true,
+		MonitorDisk:      true,
+		MonitorIO:        true,
+		MonitorProcesses: false,
+	}
+}
+
 // monitorEntry represents a single entry in the monitor data file,
 // a zerolog log entry with additional fields for system monitoring data.
 type monitorEntry struct {
@@ -33,11 +107,21 @@ type monitorEntry struct {
 	BytesRecv   *uint64 `json:"bytes_recv,omitempty"`
 	PacketsSent *uint64 `json:"packets_sent,omitempty"`
 	PacketsRecv *uint64 `json:"packets_recv,omitempty"`
+
+	// GitHub Actions Environment Variables
+	GitHubActions *githubActions `json:"github_actions,omitempty"`
 }
 
 // logTime is a custom time type for parsing log timestamps.
 type logTime struct {
 	time.Time
+}
+
+type githubActions struct {
+	RunID             *string `json:"run_id,omitempty"`
+	RunNumber         *string `json:"run_number,omitempty"`
+	WorkflowRunID     *string `json:"workflow_run_id,omitempty"`
+	WorkflowRunNumber *string `json:"workflow_run_number,omitempty"`
 }
 
 // UnmarshalJSON parses the custom time format from the log entry.
