@@ -13,6 +13,10 @@ import (
 	"github.com/kalverra/octometrics/internal/testhelpers"
 )
 
+const (
+	testDataDir = "testdata"
+)
+
 func TestMonitorIntegration(t *testing.T) {
 	t.Parallel()
 
@@ -20,6 +24,8 @@ func TestMonitorIntegration(t *testing.T) {
 		t.Skip("skipping integration test in short mode")
 	}
 
+	// Activate cleanup
+	testhelpers.Setup(t)
 	defaultObserverInterval := 250 * time.Millisecond
 
 	tests := []struct {
@@ -80,31 +86,23 @@ func TestMonitorIntegration(t *testing.T) {
 			t.Parallel()
 
 			var (
-				_, testDir  = testhelpers.Setup(t)
-				outputFile  = filepath.Join(testDir, "monitor.json")
-				ctx, cancel = context.WithTimeout(context.Background(), tt.monitorTime)
-				err         error
+				_, testDir        = testhelpers.Setup(t)
+				outputFile        = filepath.Join(testDir, "monitor.json")
+				ctx, cancel       = context.WithTimeout(context.Background(), tt.monitorTime)
+				monitoringErrChan = make(chan error, 1)
 			)
 
 			t.Cleanup(cancel)
 
-			startTime := time.Now()
 			// Start monitoring in a goroutine
 			go func() {
-				err = Start(ctx, append(tt.opts, WithOutputFile(outputFile))...)
+				monitoringErrChan <- Start(ctx, append(tt.opts, WithOutputFile(outputFile))...)
 			}()
 
 			// Wait for the context to timeout
 			<-ctx.Done()
 
-			elapsedSeconds := time.Since(startTime).Truncate(time.Second).Seconds()
-			require.LessOrEqual(
-				t,
-				elapsedSeconds,
-				tt.monitorTime.Seconds(),
-				"monitor should have finished before or at the same time as the context timeout",
-			)
-			require.NoError(t, err, "error while monitoring")
+			require.NoError(t, <-monitoringErrChan, "error while monitoring")
 
 			// Verify the output file exists and has content
 			require.FileExists(t, outputFile, "monitor output file should exist")
@@ -129,7 +127,6 @@ func TestMonitorIntegration(t *testing.T) {
 
 			// Only assert metrics that are enabled
 			if opts.MonitorCPU {
-
 				assert.Contains(t, content, ObservedCPUMsg, "should contain CPU observations")
 			} else {
 				assert.NotContains(t, content, ObservedCPUMsg, "should not contain CPU observations")

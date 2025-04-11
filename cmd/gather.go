@@ -74,6 +74,8 @@ var gatherCmd = &cobra.Command{
 			_, _, err = gather.WorkflowRun(logger, githubClient, owner, repo, workflowRunID, opts...)
 		} else if pullRequestNumber != 0 {
 			_, err = gather.PullRequest(logger, githubClient, owner, repo, pullRequestNumber, opts...)
+		} else if commitSHA != "" {
+			_, err = gather.Commit(logger, githubClient, owner, repo, commitSHA, opts...)
 		}
 		if err != nil {
 			return err

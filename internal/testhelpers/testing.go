@@ -12,6 +12,10 @@ import (
 	"github.com/kalverra/octometrics/logging"
 )
 
+const (
+	testLogFile = "test.log.json"
+)
+
 var (
 	silenceTestLogs = flag.Bool("silence-test-logs", false, "Disable test logging to console")
 )
@@ -57,10 +61,10 @@ func Setup(tb testing.TB, options ...Option) (log zerolog.Logger, testDir string
 	err = os.MkdirAll(testDir, 0700)
 	require.NoError(tb, err, "error creating test_results dir")
 
-	logFile := filepath.Join(testDir, "test.log.json")
+	logFile := filepath.Join(testDir, testLogFile)
 	loggingOpts := []logging.Option{
 		logging.WithFileName(logFile),
-		logging.WithLevel("debug"),
+		logging.WithLevel("trace"),
 	}
 	if silent {
 		loggingOpts = append(loggingOpts, logging.DisableConsoleLog())

@@ -1,6 +1,8 @@
 package gather
 
 import (
+	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,10 +16,47 @@ import (
 func TestGatherWorkflowRun(t *testing.T) {
 	t.Parallel()
 
+	var (
+		mockGitHubDownloadPath = "/mock/artifact/download"
+		mockGitHubDownloadURL  = "http://api.github.com" + mockGitHubDownloadPath
+		mockZipFile            = filepath.Join(testDataDir, "octometrics.monitor.json.zip")
+	)
+	require.FileExists(t, mockZipFile, "test zip file should exist")
+	require.NotEmpty(t, mockZipFile, "test zip file should not be empty")
+
 	mockedHTTPClient := mock.NewMockedHTTPClient(
 		mock.WithRequestMatch(
 			mock.GetReposActionsRunsByOwnerByRepoByRunId,
 			mockWorkflowRun,
+		),
+		mock.WithRequestMatchPages(
+			mock.GetReposActionsRunsArtifactsByOwnerByRepoByRunId,
+			&github.ArtifactList{
+				TotalCount: github.Ptr(int64(len(mockArtifacts))),
+				Artifacts:  mockArtifacts[:2],
+			},
+			&github.ArtifactList{
+				TotalCount: github.Ptr(int64(len(mockArtifacts))),
+				Artifacts:  mockArtifacts[2:],
+			},
+		),
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsArtifactsByOwnerByRepoByArtifactIdByArchiveFormat,
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Location", mockGitHubDownloadURL)
+				w.WriteHeader(http.StatusFound)
+			}),
+		),
+		mock.WithRequestMatchHandler(
+			mock.EndpointPattern{
+				Method:  "GET",
+				Pattern: mockGitHubDownloadPath,
+			},
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/zip")
+				w.Header().Set("Content-Disposition", "attachment; filename=octometrics.monitor.json.zip")
+				http.ServeFile(w, r, mockZipFile)
+			}),
 		),
 		mock.WithRequestMatchPages(
 			mock.GetReposActionsRunsJobsByOwnerByRepoByRunId,
@@ -46,10 +85,11 @@ func TestGatherWorkflowRun(t *testing.T) {
 	require.NotNil(t, workflowRun, "workflow run should not be nil")
 	require.FileExists(t, targetFile, "workflow run file should exist")
 
-	// Check if the file is written correctly
 	readData, readFile, err := WorkflowRun(
 		log, client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
 	)
+
+	// Check if the file is written correctly
 	require.NoError(t, err, "error reading workflow run info from file")
 	require.NotNil(t, readData, "read workflow run data should not be nil")
 	require.Equal(t, targetFile, readFile, "read workflow run file should match original written file")
@@ -287,6 +327,28 @@ var (
 					},
 				},
 			},
+		},
+	}
+	mockArtifacts = []*github.Artifact{
+		{
+			ID:          github.Ptr(int64(1)),
+			Name:        github.Ptr("octometrics.monitor.json"),
+			SizeInBytes: github.Ptr(int64(1000)),
+		},
+		{
+			ID:          github.Ptr(int64(2)),
+			Name:        github.Ptr("bad-artifact-1"),
+			SizeInBytes: github.Ptr(int64(200)),
+		},
+		{
+			ID:          github.Ptr(int64(3)),
+			Name:        github.Ptr("bad-artifact-2"),
+			SizeInBytes: github.Ptr(int64(300)),
+		},
+		{
+			ID:          github.Ptr(int64(4)),
+			Name:        github.Ptr("bad-artifact-3"),
+			SizeInBytes: github.Ptr(int64(400)),
 		},
 	}
 )
