@@ -1,7 +1,6 @@
 package testhelpers
 
 import (
-	"flag"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,17 +12,14 @@ import (
 )
 
 const (
-	testLogFile = "test.log.json"
-)
-
-var (
-	silenceTestLogs = flag.Bool("silence-test-logs", false, "Disable test logging to console")
+	testLogFile        = "test.log.json"
+	testLogLevelEnvVar = "OCTOMETRICS_TEST_LOG_LEVEL"
 )
 
 type Option func(*options)
 
 type options struct {
-	silent bool
+	logLevel string
 }
 
 // Silent disables tests logging to console.
@@ -31,13 +27,19 @@ type options struct {
 // This option takes precedence over the -silence-test-logs flag.
 func Silent() Option {
 	return func(o *options) {
-		o.silent = true
+		o.logLevel = "disabled"
+	}
+}
+
+func LogLevel(level string) Option {
+	return func(o *options) {
+		o.logLevel = level
 	}
 }
 
 func defaultOptions() *options {
 	return &options{
-		silent: false,
+		logLevel: "debug",
 	}
 }
 
@@ -46,14 +48,14 @@ func defaultOptions() *options {
 func Setup(tb testing.TB, options ...Option) (log zerolog.Logger, testDir string) {
 	tb.Helper()
 
-	silent := *silenceTestLogs
-
 	opts := defaultOptions()
+	envLogLevel := os.Getenv(testLogLevelEnvVar)
+	if envLogLevel != "" {
+		opts.logLevel = envLogLevel
+	}
 	for _, opt := range options {
 		opt(opts)
 	}
-
-	silent = silent || opts.silent
 
 	testDir = filepath.Join("test_results", tb.Name())
 	err := os.RemoveAll(testDir)
@@ -64,10 +66,7 @@ func Setup(tb testing.TB, options ...Option) (log zerolog.Logger, testDir string
 	logFile := filepath.Join(testDir, testLogFile)
 	loggingOpts := []logging.Option{
 		logging.WithFileName(logFile),
-		logging.WithLevel("trace"),
-	}
-	if silent {
-		loggingOpts = append(loggingOpts, logging.DisableConsoleLog())
+		logging.WithLevel(opts.logLevel),
 	}
 	log, err = logging.New(loggingOpts...)
 	log = log.With().Str("test_name", tb.Name()).Logger()
