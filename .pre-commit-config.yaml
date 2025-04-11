@@ -20,7 +20,7 @@ repos:
     hooks:
     - id: go-unit-tests
       name: go unit tests
-      entry: go test ./... -silence-test-logs
+      entry: OCTOMETRICS_TEST_LOG_LEVEL=disabled gotestsum -- -cover ./...
       pass_filenames: false
       types: [go]
       language: golang
