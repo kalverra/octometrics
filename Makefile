@@ -2,16 +2,13 @@ goreleaser:
 	goreleaser release --clean --snapshot
 
 test:
-	go install gotest.tools/gotestsum@latest
-	gotestsum -- -coverprofile=cover.out ./... -silence-test-logs
+	OCTOMETRICS_TEST_LOG_LEVEL=disabled gotestsum -- -cover ./...
 
 test-race:
-	go install gotest.tools/gotestsum@latest
-	gotestsum -- -race ./... -silence-test-logs
+	OCTOMETRICS_TEST_LOG_LEVEL=disabled gotestsum -- -cover -race ./...
 
 test-verbose:
-	go install gotest.tools/gotestsum@latest
-	gotestsum -- -coverprofile=cover.out ./...
+	gotestsum -- -cover ./...
 
 lint:
 	golangci-lint run --fix
