@@ -120,7 +120,7 @@ func (w *WorkflowRunData) GetAnalysis() *monitor.Analysis {
 // WorkflowRun gathers all metrics for a completed workflow run
 func WorkflowRun(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 	options ...Option,
@@ -179,7 +179,7 @@ func WorkflowRun(
 	log.Debug().Msg("Fetching workflow run data from GitHub")
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	workflowRun, resp, err := client.Actions.GetWorkflowRunByID(ctx, owner, repo, workflowRunID)
+	workflowRun, resp, err := client.Rest.Actions.GetWorkflowRunByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
 		return nil, "", err
@@ -276,7 +276,7 @@ func WorkflowRun(
 
 // jobsData fetches all jobs for a workflow run from GitHub
 func jobsData(
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 ) ([]*github.WorkflowJob, error) {
@@ -298,7 +298,7 @@ func jobsData(
 		)
 
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-		jobs, resp, err = client.Actions.ListWorkflowJobs(ctx, owner, repo, workflowRunID, listOpts)
+		jobs, resp, err = client.Rest.Actions.ListWorkflowJobs(ctx, owner, repo, workflowRunID, listOpts)
 		cancel()
 		if err != nil {
 			return nil, err
@@ -322,12 +322,12 @@ func jobsData(
 // billingData fetches the billing data for a workflow run from GitHub
 func billingData(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 ) (*github.WorkflowRunUsage, error) {
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	usage, resp, err := client.Actions.GetWorkflowRunUsageByID(ctx, owner, repo, workflowRunID)
+	usage, resp, err := client.Rest.Actions.GetWorkflowRunUsageByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get billing data for workflow run '%d': %w", workflowRunID, err)
@@ -365,7 +365,7 @@ func calculateJobRunBilling(
 
 func monitoringData(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 	targetDir string,
@@ -380,7 +380,7 @@ func monitoringData(
 
 	for {
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-		artifacts, resp, err := client.Actions.ListWorkflowRunArtifacts(
+		artifacts, resp, err := client.Rest.Actions.ListWorkflowRunArtifacts(
 			ctx,
 			owner,
 			repo,
@@ -409,7 +409,7 @@ func monitoringData(
 
 	if artifactID != 0 {
 		// Get URL to download the artifact
-		artifactURL, resp, err := client.Actions.DownloadArtifact(ghCtx, owner, repo, artifactID, 5)
+		artifactURL, resp, err := client.Rest.Actions.DownloadArtifact(ghCtx, owner, repo, artifactID, 5)
 		if err != nil {
 			return nil, fmt.Errorf("failed to download artifact: %w", err)
 		}
@@ -432,7 +432,7 @@ func monitoringData(
 			}
 		}()
 
-		downloadResp, err := client.Client().Get(artifactURL.String())
+		downloadResp, err := client.Rest.Client().Get(artifactURL.String())
 		if err != nil {
 			return nil, fmt.Errorf("failed to download monitor data artifact: %w", err)
 		}

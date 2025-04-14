@@ -3,7 +3,6 @@ package observe
 import (
 	"fmt"
 
-	"github.com/google/go-github/v70/github"
 	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/gather"
@@ -11,7 +10,7 @@ import (
 
 func Commit(
 	log zerolog.Logger,
-	client *github.Client,
+	client *gather.GitHubClient,
 	owner, repo string,
 	commitSHA string,
 	opts ...Option,

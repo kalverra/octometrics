@@ -28,7 +28,7 @@ func (p *PullRequestData) GetCommitData() []*CommitData {
 
 func PullRequest(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	pullRequestNumber int,
 	opts ...Option,
@@ -86,7 +86,7 @@ func PullRequest(
 	}
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	pr, resp, err := client.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
+	pr, resp, err := client.Rest.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
 	cancel()
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func PullRequest(
 }
 
 func prCommits(
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	pullRequestNumber int,
 ) ([]*github.RepositoryCommit, error) {
@@ -146,7 +146,7 @@ func prCommits(
 
 	for {
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-		commitsPage, resp, err := client.PullRequests.ListCommits(ctx, owner, repo, pullRequestNumber, listOpts)
+		commitsPage, resp, err := client.Rest.PullRequests.ListCommits(ctx, owner, repo, pullRequestNumber, listOpts)
 		cancel()
 		if err != nil {
 			return nil, err
@@ -168,7 +168,7 @@ func prCommits(
 
 func prCommitData(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	prCommits []*github.RepositoryCommit,
 	opts ...Option,
@@ -179,6 +179,12 @@ func prCommitData(
 		eg             errgroup.Group
 	)
 
+	// TODO: Add Merge queue commits
+	// Can find them by looking for MergeCommitSHA() in the PR data
+	// This gets you the actual merge commit, but if you've been kicked out of the queue
+	// there's no easy way to get that info from API.
+	// The GraphQL API seems like it might have it: https://docs.github.com/en/graphql/reference/objects#addedtomergequeueevent
+	// Package for it: https://github.com/shurcooL/githubv4
 	for _, commit := range prCommits {
 		eg.Go(func() error {
 			data, err := Commit(log, client, owner, repo, commit.GetSHA(), opts...)

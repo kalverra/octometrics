@@ -29,11 +29,12 @@ const (
 	DiskSystemInfoMsg = "System Disk Info"
 
 	// Log messages used to indicate the status of monitoring
-	ObservedCPUMsg  = "Observed CPU Usage"
-	ObservedMemMsg  = "Observed Memory Usage"
-	ObservedDiskMsg = "Observed Disk Usage"
-	ObservedProcMsg = "Observed Process Usage"
-	ObservedIOMsg   = "Observed IO Usage"
+	ObservedCPUMsg                  = "Observed CPU Usage"
+	ObservedMemMsg                  = "Observed Memory Usage"
+	ObservedDiskMsg                 = "Observed Disk Usage"
+	ObservedProcMsg                 = "Observed Process Usage"
+	ObservedIOMsg                   = "Observed IO Usage"
+	ObservedGitHubActionsEnvVarsMsg = "Observed GitHub Actions Environment Variables"
 )
 
 var (
@@ -150,6 +151,12 @@ func observe(log zerolog.Logger, opts *options) error {
 		startTime = time.Now()
 	)
 
+	if opts.MonitorGitHubActionsEnvVars {
+		eg.Go(func() error {
+			return observeGitHubActionsEnvVars(log)
+		})
+	}
+
 	if opts.MonitorCPU {
 		eg.Go(func() error {
 			return observeCPU(log)
@@ -245,5 +252,19 @@ func observeIO(log zerolog.Logger) error {
 			Uint64("packets_recv", stat.PacketsRecv).
 			Msg(ObservedIOMsg)
 	}
+	return nil
+}
+
+func observeGitHubActionsEnvVars(log zerolog.Logger) error {
+	envVars, err := collectGitHubActionsEnvVars()
+	if err != nil {
+		return fmt.Errorf("error collecting GitHub Actions environment variables: %w", err)
+	}
+	if envVars == nil {
+		return nil
+	}
+	log.Trace().
+		Interface("env_vars", envVars).
+		Msg(ObservedGitHubActionsEnvVarsMsg)
 	return nil
 }

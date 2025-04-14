@@ -77,7 +77,7 @@ func (c *CommitData) GetCost() int64 {
 // Commit gathers commit data for a given commit SHA and enhances matches it with workflows that ran on that commit.
 func Commit(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo,
 	sha string,
 	opts ...Option,
@@ -142,7 +142,7 @@ func Commit(
 	}
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	commit, resp, err := client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
+	commit, resp, err := client.Rest.Repositories.GetCommit(ctx, owner, repo, sha, nil)
 	cancel()
 	if err != nil {
 		return nil, err
@@ -177,7 +177,7 @@ func Commit(
 }
 
 func checkRunsForCommit(
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	sha string,
 ) ([]*github.CheckRun, error) {
@@ -196,7 +196,7 @@ func checkRunsForCommit(
 	for {
 		var checkRuns *github.ListCheckRunsResults
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-		checkRuns, resp, err = client.Checks.ListCheckRunsForRef(ctx, owner, repo, sha, listOpts)
+		checkRuns, resp, err = client.Rest.Checks.ListCheckRunsForRef(ctx, owner, repo, sha, listOpts)
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("failed to gather check runs from GitHub for commit '%s': %w", sha, err)
@@ -219,7 +219,7 @@ func checkRunsForCommit(
 // and sets the workflow run IDs in the commit data.
 func setWorkflowRunsForCommit(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	checkRuns []*github.CheckRun,
 	commitData *CommitData,

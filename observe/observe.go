@@ -16,7 +16,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/google/go-github/v70/github"
 	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/gather"
@@ -205,7 +204,7 @@ func (o *Observation) renderMarkdown() (bytes.Buffer, error) {
 }
 
 // Interactive generates all downloaded data in HTML and serves it on a local server.
-func Interactive(log zerolog.Logger, client *github.Client) error {
+func Interactive(log zerolog.Logger, client *gather.GitHubClient) error {
 	startTime := time.Now()
 	err := All(log, client, []string{"html"})
 	if err != nil {
@@ -264,11 +263,11 @@ func openBrowser(url string) error {
 	return exec.Command(cmd, args...).Run()
 }
 
-func All(log zerolog.Logger, client *github.Client, outputTypes []string) error {
+func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) error {
 	return generateAllObserveData(log, client, outputTypes)
 }
 
-func generateAllObserveData(log zerolog.Logger, client *github.Client, outputTypes []string) error {
+func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) error {
 	return filepath.WalkDir(gather.DataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err

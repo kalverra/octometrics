@@ -3,7 +3,6 @@ package observe
 import (
 	"fmt"
 
-	"github.com/google/go-github/v70/github"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
@@ -15,7 +14,7 @@ const jobRunOutputDir = "job_runs"
 // JobRuns observes all job runs for a given workflow run.
 func JobRuns(
 	log zerolog.Logger,
-	client *github.Client,
+	client *gather.GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 	opts ...Option,

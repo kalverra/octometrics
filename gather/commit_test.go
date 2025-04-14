@@ -34,7 +34,8 @@ func TestGatherCommit(t *testing.T) {
 	)
 
 	log, testDataDir := testhelpers.Setup(t)
-	client := github.NewClient(mockedHTTPClient)
+	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
+	require.NoError(t, err, "error creating GitHub client")
 
 	commit, err := Commit(
 		log,

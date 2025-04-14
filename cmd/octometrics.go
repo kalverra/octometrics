@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/google/go-github/v70/github"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
@@ -29,7 +28,7 @@ var (
 	logLevelInput     string
 	disableConsoleLog bool
 
-	githubClient *github.Client
+	githubClient *gather.GitHubClient
 	logger       zerolog.Logger
 )
 
@@ -64,7 +63,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
 
-		githubClient, err = gather.GitHubClient(logger, githubToken, nil)
+		githubClient, err = gather.NewGitHubClient(logger, githubToken, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create GitHub client: %w", err)
 		}
@@ -84,7 +83,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			Str("log_file", logFileName).
 			Str("log_level", logLevelInput).
 			Bool("disable_console_log", disableConsoleLog).
-			Msg("octometrcis flags")
+			Msg("octometrics flags")
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
