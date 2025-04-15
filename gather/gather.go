@@ -119,7 +119,7 @@ func NewGitHubClient(
 	}
 
 	baseClient, err := github_ratelimit.NewRateLimitWaiterClient(
-		gitHubClientRoundTripper("API", logger, next),
+		gitHubClientRoundTripper("REST", logger, next),
 		github_ratelimit.WithLimitDetectedCallback(onRateLimitHit),
 	)
 	if err != nil {

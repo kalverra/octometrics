@@ -275,6 +275,12 @@ func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, out
 		if d.IsDir() {
 			return nil
 		}
+		if d.Name() == ".DS_Store" {
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("failed to remove .DS_Store file: %w", err)
+			}
+			return nil
+		}
 
 		if filepath.Ext(path) != ".json" {
 			return fmt.Errorf("file %s is not a JSON file", path)
