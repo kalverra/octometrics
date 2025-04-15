@@ -9,8 +9,23 @@
         ({{
         .GetCommit.GetAuthor.GetDate.Time.Format
         "2006-01-0215:04:05"
-        }})</li>
+        }})
+        {{ if .GetMergeQueueEvents }}
+        <ul>
+            {{ range .GetMergeQueueEvents }}
+            <li> Added to Merge Queue at {{ .AddedTime.Format "2006-01-0215:04:05" }} by {{ .AddedActor }}
+            </li>
+            {{ if .RemovedTime }}
+            <li> Removed from Merge Queue at {{ .RemovedTime.Format "2006-01-0215:04:05" }} by {{ .RemovedActor }}
+                because of
+                {{ .RemovedReason }}
+            </li>
+            {{ end }}
+        </ul>
+        {{ end }}
+    </li>
     {{ end }}
 </ul>
+{{ end }}
 
 {{ end }}

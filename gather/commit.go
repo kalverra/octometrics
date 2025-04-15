@@ -26,6 +26,7 @@ type CommitData struct {
 	Owner            string             `json:"owner"`
 	Repo             string             `json:"repo"`
 	CheckRuns        []*github.CheckRun `json:"check_runs"`
+	MergeQueueEvents []*MergeQueueEvent `json:"merge_queue_events"`
 	WorkflowRunIDs   []int64            `json:"workflow_run_ids"`
 	StartActionsTime time.Time          `json:"start_actions_time"`
 	EndActionsTime   time.Time          `json:"end_actions_time"`
@@ -36,48 +37,97 @@ type CommitData struct {
 
 // GetOwner returns the owner of the repository for the commit.
 func (c *CommitData) GetOwner() string {
+	if c == nil {
+		return ""
+	}
 	return c.Owner
 }
 
 // GetRepo returns the repository name for the commit.
 func (c *CommitData) GetRepo() string {
+	if c == nil {
+		return ""
+	}
 	return c.Repo
+}
+
+// GetMergeQueueEvents returns any merge queue events associated with the commit.
+func (c *CommitData) GetMergeQueueEvents() []*MergeQueueEvent {
+	if c == nil {
+		return []*MergeQueueEvent{}
+	}
+	return c.MergeQueueEvents
 }
 
 // GetCheckRuns returns the check runs associated with the commit.
 func (c *CommitData) GetCheckRuns() []*github.CheckRun {
+	if c == nil {
+		return []*github.CheckRun{}
+	}
 	return c.CheckRuns
 }
 
 // GetWorkflowRunIDs returns the workflow run IDs associated with the commit.
 func (c *CommitData) GetWorkflowRunIDs() []int64 {
+	if c == nil {
+		return []int64{}
+	}
 	return c.WorkflowRunIDs
 }
 
 // GetStartActionsTime returns the earliest start time of all actions that ran for the commit.
 func (c *CommitData) GetStartActionsTime() time.Time {
+	if c == nil {
+		return time.Time{}
+	}
 	return c.StartActionsTime
 }
 
 // GetEndActionsTime returns the latest end time of all actions that ran for the commit.
 func (c *CommitData) GetEndActionsTime() time.Time {
+	if c == nil {
+		return time.Time{}
+	}
 	return c.EndActionsTime
 }
 
 // GetConclusion returns the overall conclusion of all actions that ran for the commit.
 func (c *CommitData) GetConclusion() string {
+	if c == nil {
+		return ""
+	}
 	return c.Conclusion
 }
 
 // GetCost returns the total cost of all actions that ran for the commit in tenths of a cent.
 func (c *CommitData) GetCost() int64 {
+	if c == nil {
+		return 0
+	}
 	return c.Cost
+}
+
+// MergeQueueEvent details a commit being added or removed from the merge queue.
+type MergeQueueEvent struct {
+	// Info from removed event
+	Commit          string
+	RemovedTime     time.Time
+	RemovedActor    string
+	RemovedReason   string
+	RemovedEnqueuer string
+	RemovedID       string
+
+	// Info from added event
+	AddedTime     time.Time
+	AddedActor    string
+	AddedEnqueuer string
+	AddedID       string
 }
 
 // Commit gathers commit data for a given commit SHA and enhances matches it with workflows that ran on that commit.
 func Commit(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo,
 	sha string,
 	opts ...Option,
@@ -142,7 +192,7 @@ func Commit(
 	}
 
 	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-	commit, resp, err := client.Repositories.GetCommit(ctx, owner, repo, sha, nil)
+	commit, resp, err := client.Rest.Repositories.GetCommit(ctx, owner, repo, sha, nil)
 	cancel()
 	if err != nil {
 		return nil, err
@@ -177,7 +227,7 @@ func Commit(
 }
 
 func checkRunsForCommit(
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	sha string,
 ) ([]*github.CheckRun, error) {
@@ -196,7 +246,7 @@ func checkRunsForCommit(
 	for {
 		var checkRuns *github.ListCheckRunsResults
 		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
-		checkRuns, resp, err = client.Checks.ListCheckRunsForRef(ctx, owner, repo, sha, listOpts)
+		checkRuns, resp, err = client.Rest.Checks.ListCheckRunsForRef(ctx, owner, repo, sha, listOpts)
 		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("failed to gather check runs from GitHub for commit '%s': %w", sha, err)
@@ -219,7 +269,7 @@ func checkRunsForCommit(
 // and sets the workflow run IDs in the commit data.
 func setWorkflowRunsForCommit(
 	log zerolog.Logger,
-	client *github.Client,
+	client *GitHubClient,
 	owner, repo string,
 	checkRuns []*github.CheckRun,
 	commitData *CommitData,

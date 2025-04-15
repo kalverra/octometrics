@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/google/go-github/v70/github"
 	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/gather"
@@ -12,7 +11,7 @@ import (
 
 func PullRequest(
 	log zerolog.Logger,
-	client *github.Client,
+	client *gather.GitHubClient,
 	owner, repo string,
 	pullRequestNumber int,
 	opts ...Option,

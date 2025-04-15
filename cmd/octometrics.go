@@ -3,24 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"runtime"
-	"time"
 
-	"github.com/google/go-github/v70/github"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
 	"github.com/kalverra/octometrics/gather"
 	"github.com/kalverra/octometrics/logging"
-)
-
-// These variables are set at build time and describe the version and build of the application
-var (
-	version   = "dev"
-	commit    = "dev"
-	buildTime = time.Now().Format("2006-01-02T15:04:05.000")
-	builtBy   = "local"
-	builtWith = runtime.Version()
 )
 
 // Persistent base command flags
@@ -29,7 +17,7 @@ var (
 	logLevelInput     string
 	disableConsoleLog bool
 
-	githubClient *github.Client
+	githubClient *gather.GitHubClient
 	logger       zerolog.Logger
 )
 
@@ -64,7 +52,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
 
-		githubClient, err = gather.GitHubClient(logger, githubToken, nil)
+		githubClient, err = gather.NewGitHubClient(logger, githubToken, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create GitHub client: %w", err)
 		}
@@ -84,7 +72,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			Str("log_file", logFileName).
 			Str("log_level", logLevelInput).
 			Bool("disable_console_log", disableConsoleLog).
-			Msg("octometrcis flags")
+			Msg("octometrics flags")
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {

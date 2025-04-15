@@ -14,4 +14,4 @@ lint:
 	golangci-lint run --fix
 
 bench:
-	go test -bench=. -benchmem -run=^$$ ./...
+	go test -bench=. -benchmem -run=^$$ ./... -cpu=2,4,8

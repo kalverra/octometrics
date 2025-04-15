@@ -13,6 +13,8 @@ import (
 	"github.com/gofri/go-github-ratelimit/github_ratelimit"
 	"github.com/google/go-github/v70/github"
 	"github.com/rs/zerolog"
+	"github.com/shurcooL/githubv4"
+	"golang.org/x/oauth2"
 )
 
 const (
@@ -67,12 +69,18 @@ func CustomDataFolder(folder string) Option {
 	}
 }
 
-// GitHubClient creates a new GitHub client with the provided token and logger.
-func GitHubClient(
+type GitHubClient struct {
+	Rest    *github.Client
+	GraphQL *githubv4.Client
+}
+
+// NewGitHubClient creates a new GitHub API and GraphQL client with the provided token and logger.
+// If optionalCustomClient is provided, it will be used as the base client for both REST and GraphQL.
+func NewGitHubClient(
 	logger zerolog.Logger,
 	githubToken string,
-	optionalCustomClient *http.Client,
-) (*github.Client, error) {
+	optionalNext http.RoundTripper,
+) (*GitHubClient, error) {
 	switch {
 	case githubToken != "":
 		logger.Debug().Msg("Using GitHub token from flag")
@@ -84,12 +92,13 @@ func GitHubClient(
 	}
 
 	var (
-		err  error
-		next http.RoundTripper
+		err    error
+		next   http.RoundTripper
+		client = &GitHubClient{}
 	)
 
-	if optionalCustomClient != nil {
-		next = optionalCustomClient.Transport
+	if optionalNext != nil {
+		next = optionalNext
 	}
 
 	onRateLimitHit := func(ctx *github_ratelimit.CallbackContext) {
@@ -110,36 +119,46 @@ func GitHubClient(
 	}
 
 	baseClient, err := github_ratelimit.NewRateLimitWaiterClient(
-		gitHubClientRoundTripper(logger, next),
+		gitHubClientRoundTripper("REST", logger, next),
 		github_ratelimit.WithLimitDetectedCallback(onRateLimitHit),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	client := github.NewClient(baseClient)
+	client.Rest = github.NewClient(baseClient)
 	if githubToken != "" {
-		client = client.WithAuthToken(githubToken)
+		client.Rest = client.Rest.WithAuthToken(githubToken)
 	}
+
+	src := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: githubToken},
+	)
+	graphqlClient := oauth2.NewClient(context.Background(), src)
+	graphqlClient.Transport = gitHubClientRoundTripper("GraphQL", logger, graphqlClient.Transport)
+	client.GraphQL = githubv4.NewClient(graphqlClient)
+
 	return client, nil
 }
 
 // gitHubClientRoundTripper returns a RoundTripper that logs requests and responses to the GitHub API.
 // You can pass a custom RoundTripper to use a different transport, or nil to use the default transport.
-func gitHubClientRoundTripper(logger zerolog.Logger, next http.RoundTripper) http.RoundTripper {
+func gitHubClientRoundTripper(clientType string, logger zerolog.Logger, next http.RoundTripper) http.RoundTripper {
 	if next == nil {
 		next = http.DefaultTransport
 	}
 
 	return &loggingTransport{
-		transport: next,
-		logger:    logger,
+		transport:  next,
+		logger:     logger,
+		clientType: clientType,
 	}
 }
 
 type loggingTransport struct {
-	transport http.RoundTripper
-	logger    zerolog.Logger
+	transport  http.RoundTripper
+	logger     zerolog.Logger
+	clientType string
 }
 
 // RoundTrip logs the request and response details.
@@ -147,6 +166,7 @@ func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	start := time.Now()
 
 	logger := lt.logger.With().
+		Str("client_type", lt.clientType).
 		Str("method", req.Method).
 		Str("request_url", req.URL.String()).
 		Str("user_agent", req.Header.Get("User-Agent")).

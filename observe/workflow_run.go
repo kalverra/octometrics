@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/google/go-github/v70/github"
 	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/gather"
@@ -13,7 +12,7 @@ import (
 // WorkflowRun gathers and processes a workflow run into an observation to be rendered.
 func WorkflowRun(
 	log zerolog.Logger,
-	client *github.Client,
+	client *gather.GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 	opts ...Option,
