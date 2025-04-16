@@ -142,6 +142,17 @@ func systemInfo(log zerolog.Logger) error {
 		Uint64("total", diskStat.Total).
 		Msg(DiskSystemInfoMsg)
 
+	envVars, err := collectGitHubActionsEnvVars()
+	if err != nil {
+		return fmt.Errorf("error collecting GitHub Actions environment variables: %w", err)
+	}
+	if envVars == nil {
+		return nil
+	}
+	log.Trace().
+		Interface("github_actions_env_vars", envVars).
+		Msg(ObservedGitHubActionsEnvVarsMsg)
+
 	return nil
 }
 
@@ -150,12 +161,6 @@ func observe(log zerolog.Logger, opts *options) error {
 		eg        errgroup.Group
 		startTime = time.Now()
 	)
-
-	if opts.MonitorGitHubActionsEnvVars {
-		eg.Go(func() error {
-			return observeGitHubActionsEnvVars(log)
-		})
-	}
 
 	if opts.MonitorCPU {
 		eg.Go(func() error {
@@ -252,19 +257,5 @@ func observeIO(log zerolog.Logger) error {
 			Uint64("packets_recv", stat.PacketsRecv).
 			Msg(ObservedIOMsg)
 	}
-	return nil
-}
-
-func observeGitHubActionsEnvVars(log zerolog.Logger) error {
-	envVars, err := collectGitHubActionsEnvVars()
-	if err != nil {
-		return fmt.Errorf("error collecting GitHub Actions environment variables: %w", err)
-	}
-	if envVars == nil {
-		return nil
-	}
-	log.Trace().
-		Interface("env_vars", envVars).
-		Msg(ObservedGitHubActionsEnvVarsMsg)
 	return nil
 }

@@ -2,16 +2,16 @@ goreleaser:
 	goreleaser release --clean --snapshot
 
 test:
-	OCTOMETRICS_TEST_LOG_LEVEL=disabled gotestsum -- -cover ./...
+	OCTOMETRICS_TEST_LOG_LEVEL=disabled go tool gotestsum -- -cover ./...
 
 test-race:
-	OCTOMETRICS_TEST_LOG_LEVEL=disabled gotestsum -- -cover -race ./...
+	OCTOMETRICS_TEST_LOG_LEVEL=disabled go tool gotestsum -- -cover -race ./...
 
 test-verbose:
-	gotestsum -- -cover ./...
+	OCTOMETRICS_TEST_LOG_LEVEL=debug go tool gotestsum -- -cover ./...
 
 lint:
 	golangci-lint run --fix
 
 bench:
-	go test -bench=. -benchmem -run=^$$ ./... -cpu=2,4,8
+	OCTOMETRICS_TEST_LOG_LEVEL=disabled go test -bench=. -benchmem -run=^$$ ./... -cpu=2,4,8

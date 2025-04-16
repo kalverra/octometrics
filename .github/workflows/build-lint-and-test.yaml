@@ -43,7 +43,7 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            uses: kalverra/octometrics-action@v0.0.2
+            uses: kalverra/octometrics-action@v0.0.3
             with:
               version: ./octometrics-binary
             env:
@@ -80,7 +80,7 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            uses: kalverra/octometrics-action@v0.0.2
+            uses: kalverra/octometrics-action@v0.0.3
             with:
               version: ./octometrics-binary
             env:
@@ -107,7 +107,7 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            uses: kalverra/octometrics-action@v0.0.2
+            uses: kalverra/octometrics-action@v0.0.3
             with:
               version: ./octometrics-binary
             env:
