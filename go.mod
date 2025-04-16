@@ -48,9 +48,7 @@ require (
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gotest.tools/gotestsum v1.12.1 // indirect
 )
-
-// Tool dependencies
-require gotest.tools/gotestsum v1.12.1 // indirect
 
 tool gotest.tools/gotestsum
