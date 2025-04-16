@@ -48,8 +48,12 @@ jobs:
                 version: ./octometrics
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            - name: Install gotestsum
-              run: go install gotest.tools/gotestsum@latest
+            - name: Setup Go
+              uses: actions/setup-go@v5
+              with:
+                go-version: stable
+            - name: Install Dependencies
+              run: go mod download
             - name: Run tests
               run: OCTOMETRICS_TEST_LOG_LEVEL=trace gotestsum --junitfile junit.xml -- -coverprofile=cover.out ./...
             - name: Upload coverage reports to Codecov
@@ -79,8 +83,12 @@ jobs:
                 version: ./octometrics
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            - name: Install gotestsum
-              run: go install gotest.tools/gotestsum@latest
+            - name: Setup Go
+              uses: actions/setup-go@v5
+              with:
+                go-version: stable
+            - name: Install Dependencies
+              run: go mod download
             - name: Run tests with race detector
               run: OCTOMETRICS_TEST_LOG_LEVEL=trace gotestsum -- -cover -race ./...
 
