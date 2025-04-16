@@ -4,26 +4,20 @@ on:
         branches:
           - main
         tags:
-          - 'v*.*.*'
+          - '*'
     pull_request:
         branches:
           - main
 
 jobs:
-    monitor:
-        name: Monitor
+    test:
+        name: Test
         runs-on: ubuntu-latest
         steps:
-            - name: Test Octometrics Action
+            - name: Monitor
               uses: kalverra/octometrics-action@main
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    test:
-        name: Test
-        needs: monitor
-        runs-on: ubuntu-latest
-        steps:
             - name: Checkout code
               uses: actions/checkout@v4
             - name: Set up Go
@@ -49,9 +43,12 @@ jobs:
 
     test-race:
         name: Test (Race)
-        needs: monitor
         runs-on: ubuntu-latest
         steps:
+            - name: Monitor
+              uses: kalverra/octometrics-action@main
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             - name: Checkout code
               uses: actions/checkout@v4
             - name: Set up Go
@@ -67,9 +64,12 @@ jobs:
 
     lint:
         name: Lint
-        needs: monitor
         runs-on: ubuntu-latest
         steps:
+            - name: Monitor
+              uses: kalverra/octometrics-action@main
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
             - name: Checkout code
               uses: actions/checkout@v4
             - name: Set up Go
