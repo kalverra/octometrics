@@ -35,6 +35,8 @@ observe_output/
 test_results/
 junit.xml
 cover.out
+# binary
+octometrics
 
 # Added by goreleaser init:
 dist/
