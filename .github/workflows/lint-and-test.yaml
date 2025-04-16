@@ -15,101 +15,112 @@ jobs:
         name: Build
         runs-on: ubuntu-latest
         steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                go-version: stable
-            - name: Install Dependencies
-              run: go mod download
-            - name: Build Octometrics
-              run: go build -o octometrics .
-            - name: Upload binary
-              uses: actions/upload-artifact@v4
-              with:
-                name: octometrics
-                path: octometrics
-                retention-days: 1
+          - name: Checkout code
+            uses: actions/checkout@v4
+          - name: Set up Go
+            uses: actions/setup-go@v5
+            with:
+              go-version: stable
+          - name: Install Dependencies
+            run: go mod download
+          - name: Build Octometrics
+            run: go build -o octometrics .
+          - name: Upload binary
+            uses: actions/upload-artifact@v4
+            with:
+              name: octometrics
+              path: octometrics
+              retention-days: 1
 
     test:
         name: Test
         needs: build
         runs-on: ubuntu-latest
         steps:
-            - name: Download Built Binary
-              uses: actions/download-artifact@v4
-              with:
-                name: octometrics
-                path: .
-            - name: Monitor
-              uses: kalverra/octometrics-action@customBinary
-              with:
-                version: ./octometrics
-              env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            - name: Checkout code
-              uses: actions/checkout@v4
-            - name: Setup Go
-              uses: actions/setup-go@v5
-              with:
-                go-version: stable
-            - name: Install Dependencies
-              run: go mod download
-            - name: Run tests
-              run: OCTOMETRICS_TEST_LOG_LEVEL=trace gotestsum --junitfile junit.xml -- -coverprofile=cover.out ./...
-            - name: Upload coverage reports to Codecov
-              uses: codecov/codecov-action@v5
-              with:
-                token: ${{ secrets.CODECOV_TOKEN }}
-                files: cover.out
-            - name: Upload test results to Codecov
-              if: ${{ !cancelled() }}
-              uses: codecov/test-results-action@v1
-              with:
-                token: ${{ secrets.CODECOV_TOKEN }}
+          - name: Download Built Binary
+            uses: actions/download-artifact@v4
+            with:
+              name: octometrics
+              path: .
+          - name: Monitor
+            uses: kalverra/octometrics-action@customBinary
+            with:
+              version: ./octometrics
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          - name: Checkout code
+            uses: actions/checkout@v4
+          - name: Setup Go
+            uses: actions/setup-go@v5
+            with:
+              go-version: stable
+          - name: Install Dependencies
+            run: go mod download
+          - name: Run tests
+            run: OCTOMETRICS_TEST_LOG_LEVEL=trace go tool gotestsum --junitfile junit.xml -- -coverprofile=cover.out ./...
+          - name: Upload coverage reports to Codecov
+            uses: codecov/codecov-action@v5
+            with:
+              token: ${{ secrets.CODECOV_TOKEN }}
+              files: cover.out
+          - name: Upload test results to Codecov
+            if: ${{ !cancelled() }}
+            uses: codecov/test-results-action@v1
+            with:
+              token: ${{ secrets.CODECOV_TOKEN }}
 
     test-race:
         name: Test (Race)
         needs: build
         runs-on: ubuntu-latest
         steps:
-            - name: Download Built Binary
-              uses: actions/download-artifact@v4
-              with:
-                name: octometrics
-                path: .
-            - name: Monitor
-              uses: kalverra/octometrics-action@customBinary
-              with:
-                version: ./octometrics
-              env:
-                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            - name: Checkout code
-              uses: actions/checkout@v4
-            - name: Setup Go
-              uses: actions/setup-go@v5
-              with:
-                go-version: stable
-            - name: Install Dependencies
-              run: go mod download
-            - name: Run tests with race detector
-              run: OCTOMETRICS_TEST_LOG_LEVEL=trace gotestsum -- -cover -race ./...
+          - name: Download Built Binary
+            uses: actions/download-artifact@v4
+            with:
+              name: octometrics
+              path: .
+          - name: Monitor
+            uses: kalverra/octometrics-action@customBinary
+            with:
+              version: ./octometrics
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          - name: Checkout code
+            uses: actions/checkout@v4
+          - name: Setup Go
+            uses: actions/setup-go@v5
+            with:
+              go-version: stable
+          - name: Install Dependencies
+            run: go mod download
+          - name: Run tests with race detector
+            run: OCTOMETRICS_TEST_LOG_LEVEL=trace go tool gotestsum -- -cover -race ./...
 
     lint:
         name: Lint
         needs: build
         runs-on: ubuntu-latest
         steps:
-            - name: Checkout code
-              uses: actions/checkout@v4
-            - name: Set up Go
-              uses: actions/setup-go@v5
-              with:
-                go-version: stable
-            - name: Install Dependencies
-              run: go mod download
-            - name: golangci-lint
-              uses: golangci/golangci-lint-action@v7
-              with:
-                version: v2.0
+          - name: Download Built Binary
+            uses: actions/download-artifact@v4
+            with:
+              name: octometrics
+              path: .
+          - name: Monitor
+            uses: kalverra/octometrics-action@customBinary
+            with:
+              version: ./octometrics
+            env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          - name: Checkout code
+            uses: actions/checkout@v4
+          - name: Set up Go
+            uses: actions/setup-go@v5
+            with:
+              go-version: stable
+          - name: Install Dependencies
+            run: go mod download
+          - name: golangci-lint
+            uses: golangci/golangci-lint-action@v7
+            with:
+              version: v2.0
