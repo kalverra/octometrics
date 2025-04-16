@@ -10,7 +10,6 @@ on:
           - main
 
 jobs:
-
     build:
         name: Build
         runs-on: ubuntu-latest
@@ -24,13 +23,14 @@ jobs:
           - name: Install Dependencies
             run: go mod download
           - name: Build Octometrics
-            run: go build -o octometrics .
+            run: go build -o octometrics-binary .
           - name: Upload binary
             uses: actions/upload-artifact@v4
             with:
               name: octometrics-binary
-              path: octometrics
+              path: octometrics-binary
               retention-days: 1
+              if-no-files-found: error
 
     test:
         name: Test
@@ -94,7 +94,7 @@ jobs:
           - name: Install Dependencies
             run: go mod download
           - name: Run tests with race detector
-            run: OCTOMETRICS_TEST_LOG_LEVEL=trace go tool gotestsum -- -cover -race ./...
+            run: OCTOMETRICS_TEST_LOG_LEVEL=trace go tool gotestsum -- -count=1 -cover -race ./...
 
     lint:
         name: Lint
