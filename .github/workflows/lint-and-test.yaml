@@ -48,6 +48,8 @@ jobs:
                 version: ./octometrics
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Checkout code
+              uses: actions/checkout@v4
             - name: Setup Go
               uses: actions/setup-go@v5
               with:
@@ -83,6 +85,8 @@ jobs:
                 version: ./octometrics
               env:
                 GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Checkout code
+              uses: actions/checkout@v4
             - name: Setup Go
               uses: actions/setup-go@v5
               with:
