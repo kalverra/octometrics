@@ -28,7 +28,7 @@ jobs:
           - name: Upload binary
             uses: actions/upload-artifact@v4
             with:
-              name: octometrics
+              name: octometrics-binary
               path: octometrics
               retention-days: 1
 
@@ -40,12 +40,12 @@ jobs:
           - name: Download Built Binary
             uses: actions/download-artifact@v4
             with:
-              name: octometrics
+              name: octometrics-binary
               path: .
           - name: Monitor
             uses: kalverra/octometrics-action@customBinary
             with:
-              version: ./octometrics
+              version: ./octometrics-binary
             env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           - name: Checkout code
@@ -77,12 +77,12 @@ jobs:
           - name: Download Built Binary
             uses: actions/download-artifact@v4
             with:
-              name: octometrics
+              name: octometrics-binary
               path: .
           - name: Monitor
             uses: kalverra/octometrics-action@customBinary
             with:
-              version: ./octometrics
+              version: ./octometrics-binary
             env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           - name: Checkout code
@@ -104,12 +104,12 @@ jobs:
           - name: Download Built Binary
             uses: actions/download-artifact@v4
             with:
-              name: octometrics
+              name: octometrics-binary
               path: .
           - name: Monitor
             uses: kalverra/octometrics-action@customBinary
             with:
-              version: ./octometrics
+              version: ./octometrics-binary
             env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           - name: Checkout code
