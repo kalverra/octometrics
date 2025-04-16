@@ -25,3 +25,4 @@ repos:
       types: [go]
       language: golang
       stages: [pre-push]
+default_install_hook_types: [pre-commit, pre-push]
