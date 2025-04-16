@@ -10,8 +10,18 @@ on:
           - main
 
 jobs:
+    monitor:
+        name: Monitor
+        runs-on: ubuntu-latest
+        steps:
+            - name: Test Octometrics Action
+              uses: kalverra/octometrics-action@main
+              env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     test:
         name: Test
+        needs: monitor
         runs-on: ubuntu-latest
         steps:
             - name: Checkout code
@@ -25,7 +35,7 @@ jobs:
             - name: Install gotestsum
               run: go install gotest.tools/gotestsum@latest
             - name: Run tests
-              run: OCTOMETRICS_TEST_LOG_LEVEL=trace gotestsum -- -coverprofile=cover.out --junitfile junit.xml ./...
+              run: OCTOMETRICS_TEST_LOG_LEVEL=trace gotestsum --junitfile junit.xml -- -coverprofile=cover.out ./...
             - name: Upload coverage reports to Codecov
               uses: codecov/codecov-action@v5
               with:
@@ -39,6 +49,7 @@ jobs:
 
     test-race:
         name: Test (Race)
+        needs: monitor
         runs-on: ubuntu-latest
         steps:
             - name: Checkout code
@@ -56,6 +67,7 @@ jobs:
 
     lint:
         name: Lint
+        needs: monitor
         runs-on: ubuntu-latest
         steps:
             - name: Checkout code

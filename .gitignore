@@ -33,6 +33,8 @@ octometrics.monitor.json
 data/
 observe_output/
 test_results/
+junit.xml
+cover.out
 
 # Added by goreleaser init:
 dist/
