@@ -254,15 +254,16 @@ func WorkflowRun(
 		})
 	}
 
-	// TODO: Add monitoring analysis data to each job that has it
-nextJobLoop:
-	for _, job := range workflowRunData.Jobs {
-		for _, analysis := range analyses {
+	// Match monitoring data to jobs
+nextAnalysisLoop:
+	for _, analysis := range analyses {
+		for _, job := range workflowRunData.Jobs {
 			if analysis.JobName == job.GetName() {
 				job.Analysis = analysis
-				continue nextJobLoop
+				continue nextAnalysisLoop
 			}
 		}
+		log.Warn().Str("monitoring_data_job_name", analysis.JobName).Msg("Found monitoring data for job but found no job name matches")
 	}
 
 	data, err := json.Marshal(workflowRunData)

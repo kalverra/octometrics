@@ -43,8 +43,7 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            # TODO: Use official version once merged
-            uses: kalverra/octometrics-action@findJobID
+            uses: kalverra/octometrics-action@v0.0.5
             with:
               job_name: Test
               version: ./octometrics-binary
@@ -82,8 +81,7 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            # TODO: Use official version once merged
-            uses: kalverra/octometrics-action@findJobID
+            uses: kalverra/octometrics-action@v0.0.5
             with:
               job_name: Test (Race)
               version: ./octometrics-binary
@@ -111,8 +109,7 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            # TODO: Use official version once merged
-            uses: kalverra/octometrics-action@findJobID
+            uses: kalverra/octometrics-action@v0.0.5
             with:
               job_name: Lint
               version: ./octometrics-binary

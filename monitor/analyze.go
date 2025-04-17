@@ -168,7 +168,6 @@ func processEntry(analysis *Analysis, entry *monitorEntry) error {
 		}
 	case GitHubActionsEnvVarsMsg:
 		analysis.SystemInfo.GitHubActionsEnvVars = entry.GitHubActionsEnvVars
-		// TODO: Set the Job ID from the GitHub Actions environment variables
 		analysis.JobName = analysis.SystemInfo.GitHubActionsEnvVars.JobName
 	case ObservedCPUMsg:
 		cpuNum := entry.GetNum()
