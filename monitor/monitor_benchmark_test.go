@@ -56,12 +56,11 @@ func BenchmarkObserveIO(b *testing.B) {
 	}
 }
 
-func BenchmarkGitHubActionsEnvVars(b *testing.B) {
+func BenchmarkSystemInfo(b *testing.B) {
 	log, _ := testhelpers.Setup(b, testhelpers.Silent())
-	b.Setenv("GITHUB_ACTIONS", "true")
 
 	for b.Loop() {
-		if err := observeGitHubActionsEnvVars(log); err != nil {
+		if err := systemInfo(log); err != nil {
 			b.Fatal(err)
 		}
 	}

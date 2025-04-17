@@ -43,8 +43,9 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            uses: kalverra/octometrics-action@v0.0.2
+            uses: kalverra/octometrics-action@v0.0.5
             with:
+              job_name: Test
               version: ./octometrics-binary
             env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,8 +81,9 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            uses: kalverra/octometrics-action@v0.0.2
+            uses: kalverra/octometrics-action@v0.0.5
             with:
+              job_name: Test (Race)
               version: ./octometrics-binary
             env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,8 +109,9 @@ jobs:
               name: octometrics-binary
               path: .
           - name: Monitor
-            uses: kalverra/octometrics-action@v0.0.2
+            uses: kalverra/octometrics-action@v0.0.5
             with:
+              job_name: Lint
               version: ./octometrics-binary
             env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

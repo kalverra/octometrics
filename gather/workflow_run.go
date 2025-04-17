@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v70/github"
@@ -51,6 +52,8 @@ type JobData struct {
 	Runner string `json:"runner"`
 	// Cost is the cost of the job run in tenths of a cent
 	Cost int64 `json:"cost"`
+	// Analysis is monitoring analysis data for the job run
+	Analysis *monitor.Analysis `json:"analysis,omitempty"`
 }
 
 func (j *JobData) GetRunner() string {
@@ -67,6 +70,13 @@ func (j *JobData) GetCost() int64 {
 	return j.Cost
 }
 
+func (j *JobData) GetAnalysis() *monitor.Analysis {
+	if j == nil || j.Analysis == nil {
+		return nil
+	}
+	return j.Analysis
+}
+
 // WorkflowRunData wraps standard GitHub WorkflowRun data with additional fields
 // to help with data visualization and cost calculation
 type WorkflowRunData struct {
@@ -75,7 +85,6 @@ type WorkflowRunData struct {
 	Cost           int64                    `json:"cost"`
 	RunCompletedAt time.Time                `json:"completed_at"`
 	Usage          *github.WorkflowRunUsage `json:"usage,omitempty"`
-	Analysis       *monitor.Analysis        `json:"analysis,omitempty"`
 }
 
 // GetJobs returns the list of jobs for the workflow run
@@ -108,13 +117,6 @@ func (w *WorkflowRunData) GetUsage() *github.WorkflowRunUsage {
 		return nil
 	}
 	return w.Usage
-}
-
-func (w *WorkflowRunData) GetAnalysis() *monitor.Analysis {
-	if w == nil || w.Analysis == nil {
-		return nil
-	}
-	return w.Analysis
 }
 
 // WorkflowRun gathers all metrics for a completed workflow run
@@ -200,12 +202,12 @@ func WorkflowRun(
 		eg                  errgroup.Group
 		workflowRunJobs     []*github.WorkflowJob
 		workflowBillingData *github.WorkflowRunUsage
-		analysis            *monitor.Analysis
+		analyses            []*monitor.Analysis
 	)
 
 	eg.Go(func() error {
 		var analysisErr error
-		analysis, analysisErr = monitoringData(log, client, owner, repo, workflowRunID, targetDir)
+		analyses, analysisErr = monitoringData(log, client, owner, repo, workflowRunID, targetDir)
 		return analysisErr
 	})
 
@@ -217,22 +219,23 @@ func WorkflowRun(
 
 	eg.Go(func() error {
 		var billingErr error
-		workflowBillingData, billingErr = billingData(log, client, owner, repo, workflowRunID)
+		workflowBillingData, billingErr = billingData(client, owner, repo, workflowRunID)
 		return billingErr
 	})
 
 	if err := eg.Wait(); err != nil {
 		return nil, "", fmt.Errorf(
-			"failed to collect job and/or billing data for workflow run '%d': %w",
+			"failed to collect job, billing, and/or monitoring data for workflow run '%d': %w",
 			workflowRunID,
 			err,
 		)
 	}
 	workflowRunData.Usage = workflowBillingData
-	workflowRunData.Analysis = analysis
 
+	// Calculate job cost data and add to workflow run data
 	for _, job := range workflowRunJobs {
 		// Calculate completed at for the workflow. GitHub API only gives "UpdatedAt" for workflows
+		// which can be misleading.
 		if workflowRunData.RunCompletedAt.IsZero() {
 			workflowRunData.RunCompletedAt = job.GetCompletedAt().Time
 		} else if job.GetCompletedAt().After(workflowRunData.RunCompletedAt) {
@@ -249,6 +252,18 @@ func WorkflowRun(
 			Runner:      runner,
 			Cost:        cost,
 		})
+	}
+
+	// Match monitoring data to jobs
+nextAnalysisLoop:
+	for _, analysis := range analyses {
+		for _, job := range workflowRunData.Jobs {
+			if analysis.JobName == job.GetName() {
+				job.Analysis = analysis
+				continue nextAnalysisLoop
+			}
+		}
+		log.Warn().Str("monitoring_data_job_name", analysis.JobName).Msg("Found monitoring data for job but found no job name matches")
 	}
 
 	data, err := json.Marshal(workflowRunData)
@@ -321,7 +336,6 @@ func jobsData(
 
 // billingData fetches the billing data for a workflow run from GitHub
 func billingData(
-	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
@@ -369,13 +383,13 @@ func monitoringData(
 	owner, repo string,
 	workflowRunID int64,
 	targetDir string,
-) (*monitor.Analysis, error) {
+) ([]*monitor.Analysis, error) {
 	var (
 		listOpts = &github.ListOptions{
 			PerPage: 100,
 		}
-		analysis   *monitor.Analysis
-		artifactID int64
+		artifactsToDownload = []*github.Artifact{}
+		analyses            []*monitor.Analysis
 	)
 
 	for {
@@ -395,9 +409,8 @@ func monitoringData(
 			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 		}
 		for _, artifact := range artifacts.Artifacts {
-			if artifact.GetName() == "octometrics.monitor.json" {
-				artifactID = artifact.GetID()
-				break
+			if strings.HasSuffix(artifact.GetName(), "octometrics.monitor.log") {
+				artifactsToDownload = append(artifactsToDownload, artifact)
 			}
 		}
 
@@ -407,9 +420,11 @@ func monitoringData(
 		listOpts.Page = resp.NextPage
 	}
 
-	if artifactID != 0 {
+	for _, artifact := range artifactsToDownload {
 		// Get URL to download the artifact
-		artifactURL, resp, err := client.Rest.Actions.DownloadArtifact(ghCtx, owner, repo, artifactID, 5)
+		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+		artifactURL, resp, err := client.Rest.Actions.DownloadArtifact(ctx, owner, repo, artifact.GetID(), 5)
+		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("failed to download artifact: %w", err)
 		}
@@ -417,12 +432,13 @@ func monitoringData(
 			return nil, fmt.Errorf("expected status code %d, got status code %d", http.StatusFound, resp.StatusCode)
 		}
 		log.Trace().
-			Int64("id", artifactID).
+			Str("name", artifact.GetName()).
+			Int64("id", artifact.GetID()).
 			Str("url", artifactURL.String()).
 			Msg("Downloading octometrics monitoring data")
 
 		// Download the artifact to a temp file
-		zippedArtifact, err := os.CreateTemp(targetDir, fmt.Sprintf("octometrics-%d-*.monitor.json.zip", workflowRunID))
+		zippedArtifact, err := os.Create(filepath.Join(targetDir, fmt.Sprintf("%s.zip", artifact.GetName())))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create monitor data artifact file: %w", err)
 		}
@@ -430,9 +446,12 @@ func monitoringData(
 			if err := zippedArtifact.Close(); err != nil {
 				log.Error().Err(err).Msg("failed to close monitor data artifact file")
 			}
+			if err := os.Remove(zippedArtifact.Name()); err != nil {
+				log.Error().Err(err).Msg("failed to remove monitor data artifact file")
+			}
 		}()
 
-		downloadResp, err := client.Rest.Client().Get(artifactURL.String())
+		downloadResp, err := http.Get(artifactURL.String())
 		if err != nil {
 			return nil, fmt.Errorf("failed to download monitor data artifact: %w", err)
 		}
@@ -441,6 +460,23 @@ func monitoringData(
 				log.Error().Err(err).Msg("failed to close monitor data artifact download response")
 			}
 		}()
+		if downloadResp.StatusCode != http.StatusOK {
+			bodyBytes, err := io.ReadAll(downloadResp.Body)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"got unexpected status code %d downloading monitoring data artifact %d, and failed to read response body: %w",
+					downloadResp.StatusCode,
+					artifact.GetID(),
+					err,
+				)
+			}
+			return nil, fmt.Errorf(
+				"got unexpected status code %d downloading monitoring data artifact %d, body: %s",
+				downloadResp.StatusCode,
+				artifact.GetID(),
+				string(bodyBytes),
+			)
+		}
 
 		_, err = io.Copy(zippedArtifact, downloadResp.Body)
 		if err != nil {
@@ -460,7 +496,7 @@ func monitoringData(
 
 		var monitorFile *os.File
 		for _, file := range zipReader.File {
-			if file.Name == "octometrics.monitor.json" {
+			if strings.HasSuffix(file.Name, "octometrics.monitor.log") {
 				// Open the target file inside the zip
 				rc, err := file.Open()
 				if err != nil {
@@ -473,13 +509,16 @@ func monitoringData(
 				}()
 
 				// Copy it out to a temp file
-				monitorFile, err = os.CreateTemp(targetDir, fmt.Sprintf("octometrics-%d-*.monitor.json", workflowRunID))
+				monitorFile, err = os.CreateTemp(targetDir, fmt.Sprintf("*-%s", artifact.GetName()))
 				if err != nil {
-					log.Error().Err(err).Msg("Failed to create temp file")
+					return nil, fmt.Errorf("failed to create temp file to extract monitoring data to: %w", err)
 				}
 				defer func() {
 					if err := monitorFile.Close(); err != nil {
 						log.Error().Err(err).Msg("Failed to close temp file")
+					}
+					if err := os.Remove(monitorFile.Name()); err != nil {
+						log.Error().Err(err).Msg("failed to remove monitor data file")
 					}
 				}()
 
@@ -494,21 +533,12 @@ func monitoringData(
 		}
 
 		// Analyze the extracted file
-		analysis, err = monitor.Analyze(log, monitorFile.Name())
+		analysis, err := monitor.Analyze(log, monitorFile.Name())
 		if err != nil {
 			return nil, fmt.Errorf("failed to analyze octometrics file %s: %w", monitorFile.Name(), err)
 		}
-
-		// Remove down here in case of error to leave you with debugging data
-		defer func() {
-			if err := os.Remove(zippedArtifact.Name()); err != nil {
-				log.Error().Err(err).Msg("failed to remove monitor data artifact file")
-			}
-			if err := os.Remove(monitorFile.Name()); err != nil {
-				log.Error().Err(err).Msg("failed to remove monitor data file")
-			}
-		}()
+		analyses = append(analyses, analysis)
 	}
 
-	return analysis, nil
+	return analyses, nil
 }

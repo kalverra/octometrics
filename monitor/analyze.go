@@ -13,6 +13,11 @@ import (
 
 // Analysis is the processed results of monitoring data.
 type Analysis struct {
+	// JobName is the name of the job that was monitored.
+	// This is set by octometrics-action and describes the name of the job on the runner so we can match it with the API.
+	// There is currently no native way to do this in GitHub Actions.
+	// https://github.com/actions/toolkit/issues/550
+	JobName    string      `json:"job_name"`
 	SystemInfo *SystemInfo `json:"system_info"`
 	// CPUMeasurements is a map of CPU number to its measurements.
 	CPUMeasurements    map[int][]*CPUMeasurement `json:"cpu_measurements"`
@@ -21,11 +26,12 @@ type Analysis struct {
 	IOMeasurements     []*IOMeasurement          `json:"io_measurements"`
 }
 
-// SystemInfo contains system-level information about CPU, memory, and disk.
+// SystemInfo contains system-level information about CPU, memory, disk, and GitHub Actions environment variables.
 type SystemInfo struct {
-	CPU    []*SystemCPUInfo `json:"cpu"`
-	Memory *SytemMemoryInfo `json:"memory"`
-	Disk   *SystemDiskInfo  `json:"disk"`
+	CPU                  []*SystemCPUInfo      `json:"cpu"`
+	Memory               *SystemMemoryInfo     `json:"memory"`
+	Disk                 *SystemDiskInfo       `json:"disk"`
+	GitHubActionsEnvVars *githubActionsEnvVars `json:"github_actions_env_vars"`
 }
 
 // SystemCPUInfo details information about the CPU on the system.
@@ -39,8 +45,8 @@ type SystemCPUInfo struct {
 	Mhz       float64 `json:"mhz"`
 }
 
-// SytemMemoryInfo details information about the memory on the system.
-type SytemMemoryInfo struct {
+// SystemMemoryInfo details information about the memory on the system.
+type SystemMemoryInfo struct {
 	Total uint64 `json:"total"`
 }
 
@@ -153,13 +159,16 @@ func processEntry(analysis *Analysis, entry *monitorEntry) error {
 			Mhz:       entry.GetMhz(),
 		})
 	case MemSystemInfoMsg:
-		analysis.SystemInfo.Memory = &SytemMemoryInfo{
+		analysis.SystemInfo.Memory = &SystemMemoryInfo{
 			Total: entry.GetTotal(),
 		}
 	case DiskSystemInfoMsg:
 		analysis.SystemInfo.Disk = &SystemDiskInfo{
 			Total: entry.GetTotal(),
 		}
+	case GitHubActionsEnvVarsMsg:
+		analysis.SystemInfo.GitHubActionsEnvVars = entry.GitHubActionsEnvVars
+		analysis.JobName = analysis.SystemInfo.GitHubActionsEnvVars.JobName
 	case ObservedCPUMsg:
 		cpuNum := entry.GetNum()
 		if _, ok := analysis.CPUMeasurements[cpuNum]; !ok {
