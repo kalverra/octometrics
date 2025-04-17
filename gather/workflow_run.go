@@ -225,7 +225,7 @@ func WorkflowRun(
 
 	if err := eg.Wait(); err != nil {
 		return nil, "", fmt.Errorf(
-			"failed to collect job and/or billing data for workflow run '%d': %w",
+			"failed to collect job, billing, and/or monitoring data for workflow run '%d': %w",
 			workflowRunID,
 			err,
 		)
@@ -254,11 +254,13 @@ func WorkflowRun(
 		})
 	}
 
-	// Add monitoring analysis data to each job that has it
-	for _, analysis := range analyses {
-		for _, job := range workflowRunData.Jobs {
-			if job.GetName() == analysis.JobName {
+	// TODO: Add monitoring analysis data to each job that has it
+nextJobLoop:
+	for _, job := range workflowRunData.Jobs {
+		for _, analysis := range analyses {
+			if analysis.JobName == job.GetName() {
 				job.Analysis = analysis
+				continue nextJobLoop
 			}
 		}
 	}
@@ -419,7 +421,9 @@ func monitoringData(
 
 	for _, artifact := range artifactsToDownload {
 		// Get URL to download the artifact
-		artifactURL, resp, err := client.Rest.Actions.DownloadArtifact(ghCtx, owner, repo, artifact.GetID(), 5)
+		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+		artifactURL, resp, err := client.Rest.Actions.DownloadArtifact(ctx, owner, repo, artifact.GetID(), 5)
+		cancel()
 		if err != nil {
 			return nil, fmt.Errorf("failed to download artifact: %w", err)
 		}
@@ -433,7 +437,7 @@ func monitoringData(
 			Msg("Downloading octometrics monitoring data")
 
 		// Download the artifact to a temp file
-		zippedArtifact, err := os.CreateTemp(targetDir, fmt.Sprintf("%s.zip", artifact.GetName()))
+		zippedArtifact, err := os.Create(filepath.Join(targetDir, fmt.Sprintf("%s.zip", artifact.GetName())))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create monitor data artifact file: %w", err)
 		}
@@ -441,9 +445,12 @@ func monitoringData(
 			if err := zippedArtifact.Close(); err != nil {
 				log.Error().Err(err).Msg("failed to close monitor data artifact file")
 			}
+			if err := os.Remove(zippedArtifact.Name()); err != nil {
+				log.Error().Err(err).Msg("failed to remove monitor data artifact file")
+			}
 		}()
 
-		downloadResp, err := client.Rest.Client().Get(artifactURL.String())
+		downloadResp, err := http.Get(artifactURL.String())
 		if err != nil {
 			return nil, fmt.Errorf("failed to download monitor data artifact: %w", err)
 		}
@@ -452,6 +459,23 @@ func monitoringData(
 				log.Error().Err(err).Msg("failed to close monitor data artifact download response")
 			}
 		}()
+		if downloadResp.StatusCode != http.StatusOK {
+			bodyBytes, err := io.ReadAll(downloadResp.Body)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"got unexpected status code %d downloading monitoring data artifact %d, and failed to read response body: %w",
+					downloadResp.StatusCode,
+					artifact.GetID(),
+					err,
+				)
+			}
+			return nil, fmt.Errorf(
+				"got unexpected status code %d downloading monitoring data artifact %d, body: %s",
+				downloadResp.StatusCode,
+				artifact.GetID(),
+				string(bodyBytes),
+			)
+		}
 
 		_, err = io.Copy(zippedArtifact, downloadResp.Body)
 		if err != nil {
@@ -484,13 +508,16 @@ func monitoringData(
 				}()
 
 				// Copy it out to a temp file
-				monitorFile, err = os.CreateTemp(targetDir, artifact.GetName())
+				monitorFile, err = os.CreateTemp(targetDir, fmt.Sprintf("*-%s", artifact.GetName()))
 				if err != nil {
-					log.Error().Err(err).Msg("Failed to create temp file")
+					return nil, fmt.Errorf("failed to create temp file to extract monitoring data to: %w", err)
 				}
 				defer func() {
 					if err := monitorFile.Close(); err != nil {
 						log.Error().Err(err).Msg("Failed to close temp file")
+					}
+					if err := os.Remove(monitorFile.Name()); err != nil {
+						log.Error().Err(err).Msg("failed to remove monitor data file")
 					}
 				}()
 
@@ -510,15 +537,6 @@ func monitoringData(
 			return nil, fmt.Errorf("failed to analyze octometrics file %s: %w", monitorFile.Name(), err)
 		}
 		analyses = append(analyses, analysis)
-		// Remove down here in case of error to leave you with debugging data
-		defer func() {
-			if err := os.Remove(zippedArtifact.Name()); err != nil {
-				log.Error().Err(err).Msg("failed to remove monitor data artifact file")
-			}
-			if err := os.Remove(monitorFile.Name()); err != nil {
-				log.Error().Err(err).Msg("failed to remove monitor data file")
-			}
-		}()
 	}
 
 	return analyses, nil

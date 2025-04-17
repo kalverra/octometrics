@@ -24,17 +24,17 @@ const (
 	DataFile = "octometrics.monitor.json"
 
 	// Log messages used to indicate the system info
-	CPUSystemInfoMsg  = "CPU System Info"
-	MemSystemInfoMsg  = "System Memory Info"
-	DiskSystemInfoMsg = "System Disk Info"
+	CPUSystemInfoMsg        = "CPU System Info"
+	MemSystemInfoMsg        = "System Memory Info"
+	DiskSystemInfoMsg       = "System Disk Info"
+	GitHubActionsEnvVarsMsg = "GitHub Actions Environment Variables"
 
 	// Log messages used to indicate the status of monitoring
-	ObservedCPUMsg                  = "Observed CPU Usage"
-	ObservedMemMsg                  = "Observed Memory Usage"
-	ObservedDiskMsg                 = "Observed Disk Usage"
-	ObservedProcMsg                 = "Observed Process Usage"
-	ObservedIOMsg                   = "Observed IO Usage"
-	ObservedGitHubActionsEnvVarsMsg = "Observed GitHub Actions Environment Variables"
+	ObservedCPUMsg  = "Observed CPU Usage"
+	ObservedMemMsg  = "Observed Memory Usage"
+	ObservedDiskMsg = "Observed Disk Usage"
+	ObservedProcMsg = "Observed Process Usage"
+	ObservedIOMsg   = "Observed IO Usage"
 )
 
 var (
@@ -149,9 +149,9 @@ func systemInfo(log zerolog.Logger) error {
 	if envVars == nil {
 		return nil
 	}
-	log.Trace().
+	log.Debug().
 		Interface("github_actions_env_vars", envVars).
-		Msg(ObservedGitHubActionsEnvVarsMsg)
+		Msg(GitHubActionsEnvVarsMsg)
 
 	return nil
 }
@@ -194,7 +194,7 @@ func observe(log zerolog.Logger, opts *options) error {
 		return fmt.Errorf("error while monitoring: %w", err)
 	}
 
-	log.Trace().
+	log.Debug().
 		Str("Duration", time.Since(startTime).String()).
 		Msg("Finished observation")
 	return nil
@@ -211,7 +211,7 @@ func observeCPU(log zerolog.Logger) error {
 	}
 
 	for i, percent := range cpuPercents {
-		log.Trace().
+		log.Debug().
 			Int("cpu", i).
 			Float64("percent", percent).
 			Msg(ObservedCPUMsg)
@@ -224,7 +224,7 @@ func observeMemory(log zerolog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrMonitorMemory, err)
 	}
-	log.Trace().
+	log.Debug().
 		Uint64("available", v.Available).
 		Uint64("used", v.Used).
 		Msg(ObservedMemMsg)
@@ -236,7 +236,7 @@ func observeDisk(log zerolog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrMonitorDisk, err)
 	}
-	log.Trace().
+	log.Debug().
 		Uint64("used", usageStat.Used).
 		Uint64("available", usageStat.Free).
 		Float64("used_percent", usageStat.UsedPercent).
@@ -250,7 +250,7 @@ func observeIO(log zerolog.Logger) error {
 		return fmt.Errorf("%w: %w", ErrMonitorIO, err)
 	}
 	for _, stat := range ioStats {
-		log.Trace().
+		log.Debug().
 			Uint64("bytes_sent", stat.BytesSent).
 			Uint64("bytes_recv", stat.BytesRecv).
 			Uint64("packets_sent", stat.PacketsSent).

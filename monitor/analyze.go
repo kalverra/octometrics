@@ -13,6 +13,10 @@ import (
 
 // Analysis is the processed results of monitoring data.
 type Analysis struct {
+	// JobName is the name of the job that was monitored.
+	// This is set by octometrics-action and describes the name of the job on the runner so we can match it with the API.
+	// There is currently no native way to do this in GitHub Actions.
+	// https://github.com/actions/toolkit/issues/550
 	JobName    string      `json:"job_name"`
 	SystemInfo *SystemInfo `json:"system_info"`
 	// CPUMeasurements is a map of CPU number to its measurements.
@@ -162,9 +166,10 @@ func processEntry(analysis *Analysis, entry *monitorEntry) error {
 		analysis.SystemInfo.Disk = &SystemDiskInfo{
 			Total: entry.GetTotal(),
 		}
-	case ObservedGitHubActionsEnvVarsMsg:
+	case GitHubActionsEnvVarsMsg:
 		analysis.SystemInfo.GitHubActionsEnvVars = entry.GitHubActionsEnvVars
-		analysis.JobName = entry.GitHubActionsEnvVars.Job
+		// TODO: Set the Job ID from the GitHub Actions environment variables
+		analysis.JobName = analysis.SystemInfo.GitHubActionsEnvVars.JobName
 	case ObservedCPUMsg:
 		cpuNum := entry.GetNum()
 		if _, ok := analysis.CPUMeasurements[cpuNum]; !ok {
