@@ -41,18 +41,23 @@ func JobRuns(
 			if err != nil {
 				return fmt.Errorf("failed to build timeline for job '%d': %w", job.GetID(), err)
 			}
+			jobRunMonitoringData, err := Monitoring(log, job.Analysis)
+			if err != nil {
+				return fmt.Errorf("failed to build monitoring data for job '%d': %w", job.GetID(), err)
+			}
 
 			observationsChan <- &Observation{
-				ID:           fmt.Sprint(job.GetID()),
-				Name:         job.GetName(),
-				GitHubLink:   job.GetHTMLURL(),
-				TimelineData: jobRunTemplateData,
-				Owner:        owner,
-				Repo:         repo,
-				DataType:     "job_run",
-				State:        job.GetConclusion(),
-				Actor:        workflowRun.GetActor().GetLogin(),
-				Cost:         job.GetCost(),
+				ID:             fmt.Sprint(job.GetID()),
+				Name:           job.GetName(),
+				GitHubLink:     job.GetHTMLURL(),
+				TimelineData:   jobRunTemplateData,
+				Owner:          owner,
+				Repo:           repo,
+				DataType:       "job_run",
+				State:          job.GetConclusion(),
+				Actor:          workflowRun.GetActor().GetLogin(),
+				MonitoringData: jobRunMonitoringData,
+				Cost:           job.GetCost(),
 			}
 			return nil
 		})

@@ -25,10 +25,9 @@ type plotlyData struct {
 func Monitoring(
 	log zerolog.Logger,
 	analysis *monitor.Analysis,
-	outputTypes []string,
 ) (*monitoringData, error) {
 	if analysis == nil {
-		return nil, fmt.Errorf("analysis is nil")
+		return nil, nil
 	}
 
 	plotlyData := []*plotlyData{}
