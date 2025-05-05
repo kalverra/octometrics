@@ -9,7 +9,7 @@ require (
 	github.com/google/go-github/v70 v70.0.0
 	github.com/migueleliasweb/go-github-mock v1.1.0
 	github.com/rs/zerolog v1.34.0
-	github.com/shirou/gopsutil/v4 v4.25.3
+	github.com/shirou/gopsutil/v4 v4.25.4
 	github.com/shurcooL/githubv4 v0.0.0-20240727222349-48295856cce7
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
