@@ -29,7 +29,6 @@
     <p>Actor: {{ .Actor }}</p>
 
     {{ if .TimelineData }}
-    <h2>Timeline</h2>
     {{ template "timeline_html" .TimelineData }}
     {{ end }}
 

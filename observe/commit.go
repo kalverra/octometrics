@@ -8,6 +8,7 @@ import (
 	"github.com/kalverra/octometrics/gather"
 )
 
+// Commit generates an observation for workflow runs triggered by a commit.
 func Commit(
 	log zerolog.Logger,
 	client *gather.GitHubClient,
