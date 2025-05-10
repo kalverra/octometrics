@@ -118,6 +118,10 @@ func (o *Observation) Render(log zerolog.Logger, outputType string) (observation
 	case "md":
 		baseDir = markdownOutputDir
 	}
+	if o.ID == "" {
+		log.Warn().Msg("Observation ID is empty, skipping rendering")
+		return "", nil
+	}
 
 	observationFile = filepath.Join(
 		baseDir,
@@ -338,6 +342,9 @@ func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, out
 
 		for _, outputType := range outputTypes {
 			for _, observation := range observations {
+				if observation == nil {
+					return fmt.Errorf("found a nil observation, this should never happen")
+				}
 				_, err = observation.Render(log, outputType)
 				if err != nil {
 					return err

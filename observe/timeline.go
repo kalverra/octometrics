@@ -59,7 +59,7 @@ func (g *timelineData) process() error {
 	g.StartTime = startTime
 	g.EndTime = endTime
 
-	// Adjust the start time of each item so that you start at 0
+	// Adjust the start time of each item so that the full timeline starts at 0
 	newStartTime := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, startTime.Location())
 	startTimeDiff := newStartTime.Sub(startTime)
 	for i := range g.Items {
