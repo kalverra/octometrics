@@ -23,16 +23,18 @@ const CommitsDataDir = "commits"
 // It also includes some additional info that makes it easier to map to its associated workflows.
 type CommitData struct {
 	*github.RepositoryCommit
-	Owner            string             `json:"owner"`
-	Repo             string             `json:"repo"`
-	CheckRuns        []*github.CheckRun `json:"check_runs"`
-	MergeQueueEvents []*MergeQueueEvent `json:"merge_queue_events"`
-	WorkflowRunIDs   []int64            `json:"workflow_run_ids"`
-	StartActionsTime time.Time          `json:"start_actions_time"`
-	EndActionsTime   time.Time          `json:"end_actions_time"`
-	Conclusion       string             `json:"conclusion"`
-	Cost             int64              `json:"cost"`
-	comparisonMutex  sync.Mutex         `json:"-"`
+	Owner              string             `json:"owner"`
+	Repo               string             `json:"repo"`
+	CheckRuns          []*github.CheckRun `json:"check_runs"`
+	MergeQueueEvents   []*MergeQueueEvent `json:"merge_queue_events"`
+	WorkflowRunIDs     []int64            `json:"workflow_run_ids"`
+	StartActionsTime   time.Time          `json:"start_actions_time"`
+	EndActionsTime     time.Time          `json:"end_actions_time"`
+	Conclusion         string             `json:"conclusion"`
+	Cost               int64              `json:"cost"`
+	CorrespondingPRNum int                `json:"corresponding_pr_number,omitempty"`
+
+	comparisonMutex sync.Mutex `json:"-"`
 }
 
 // GetOwner returns the owner of the repository for the commit.
@@ -148,6 +150,10 @@ func Commit(
 		targetFile = filepath.Join(targetDir, fmt.Sprintf("%s.json", sha))
 		fileExists = false
 	)
+
+	if options.pullRequestData != nil {
+		commitData.CorrespondingPRNum = options.pullRequestData.GetNumber()
+	}
 
 	log = log.With().
 		Str("target_file", targetFile).
@@ -304,6 +310,8 @@ func setWorkflowRunsForCommit(
 		}
 	}
 
+	// Pass commit data down to the workflow run
+	opts = append(opts, withCommitData(commitData))
 	for workflowRunID := range workflowRunIDsSet {
 		eg.Go(func(workflowRunID int64) func() error {
 			return func() error {

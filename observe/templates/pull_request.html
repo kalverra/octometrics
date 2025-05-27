@@ -8,15 +8,15 @@
     <li><a href="{{ commitRunLink .GetOwner .GetRepo .GetSHA}}.html">{{ .GetSHA }}</a> - {{ .GetCommit.GetMessage }}
         ({{
         .GetCommit.GetAuthor.GetDate.Time.Format
-        "2006-01-0215:04:05"
+        "2006-01-02T15:04:05"
         }})
         {{ if .GetMergeQueueEvents }}
         <ul>
             {{ range .GetMergeQueueEvents }}
-            <li> Added to Merge Queue at {{ .AddedTime.Format "2006-01-0215:04:05" }} by {{ .AddedActor }}
+            <li> Added to Merge Queue at {{ .AddedTime.Format "2006-01-02T15:04:05" }} by {{ .AddedActor }}
             </li>
             {{ if .RemovedTime }}
-            <li> Removed from Merge Queue at {{ .RemovedTime.Format "2006-01-0215:04:05" }} by {{ .RemovedActor }}
+            <li> Removed from Merge Queue at {{ .RemovedTime.Format "2006-01-02T15:04:05" }} by {{ .RemovedActor }}
                 because of
                 {{ .RemovedReason }}
             </li>

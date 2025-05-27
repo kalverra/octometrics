@@ -43,6 +43,10 @@ type Option func(*options)
 type options struct {
 	ForceUpdate bool
 	DataDir     string
+
+	// Optional data params to pass things down the stack so that e.g. a workflow can easily know what PR it belongs to
+	pullRequestData *PullRequestData
+	commitData      *CommitData
 }
 
 func defaultOptions() *options {
@@ -66,6 +70,20 @@ func ForceUpdate() Option {
 func CustomDataFolder(folder string) Option {
 	return func(o *options) {
 		o.DataDir = folder
+	}
+}
+
+// withPullRequestData passes optional prData down the stack of data
+func withPullRequestData(prData *PullRequestData) Option {
+	return func(o *options) {
+		o.pullRequestData = prData
+	}
+}
+
+// withCommitData passes optional commitData down the stack of data
+func withCommitData(commitData *CommitData) Option {
+	return func(o *options) {
+		o.commitData = commitData
 	}
 }
 

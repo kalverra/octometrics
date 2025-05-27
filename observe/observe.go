@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -103,7 +104,7 @@ type Observation struct {
 	Cost       int64 // Cost in tenths of a cent
 
 	// Data used to show job, workflow, and commit runs
-	TimelineData   *timelineData
+	TimelineData   []*timelineData
 	MonitoringData *monitoringData
 
 	// Data used to render a Pull Request with multiple commits
@@ -153,10 +154,16 @@ func (o *Observation) Render(log zerolog.Logger, outputType string) (observation
 	)
 
 	if o.TimelineData != nil {
-		if err := o.TimelineData.process(); err != nil {
-			return "", fmt.Errorf("failed to process timeline data: %w", err)
+		for _, timelineData := range o.TimelineData {
+			if err := timelineData.process(); err != nil {
+				return "", fmt.Errorf("failed to process timeline data: %w", err)
+			}
 		}
 	}
+
+	sort.Slice(o.TimelineData, func(i, j int) bool {
+		return o.TimelineData[i].StartTime.Before(o.TimelineData[j].StartTime)
+	})
 
 	switch outputType {
 	case "html":

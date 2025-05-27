@@ -28,8 +28,17 @@
     <p>State: {{ .State }}</p>
     <p>Actor: {{ .Actor }}</p>
 
-    {{ if .TimelineData }}
-    {{ template "timeline_html" .TimelineData }}
+    {{ range .TimelineData }}
+    <details open style="margin-bottom: 1em;">
+        <summary style="font-size: 1.2em; cursor: pointer;">
+            <strong>{{ .Event }} | {{ .StartTime.Format "2006-01-02T15:04:05" }} to {{ .EndTime.Format
+                "2006-01-02T15:04:05"
+                }} ({{ .Duration }})</strong>
+        </summary>
+        <div style="margin-left: 1em;">
+            {{ template "timeline_html" . }}
+        </div>
+    </details>
     {{ end }}
 
     {{ if .MonitoringData }}
