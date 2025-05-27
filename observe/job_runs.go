@@ -41,6 +41,7 @@ func JobRuns(
 			if err != nil {
 				return fmt.Errorf("failed to build timeline for job '%d': %w", job.GetID(), err)
 			}
+			jobRunTemplateData.Event = workflowRun.GetEvent()
 			jobRunMonitoringData, err := Monitoring(log, job.Analysis)
 			if err != nil {
 				return fmt.Errorf("failed to build monitoring data for job '%d': %w", job.GetID(), err)
@@ -50,7 +51,7 @@ func JobRuns(
 				ID:             fmt.Sprint(job.GetID()),
 				Name:           job.GetName(),
 				GitHubLink:     job.GetHTMLURL(),
-				TimelineData:   jobRunTemplateData,
+				TimelineData:   []*timelineData{jobRunTemplateData},
 				Owner:          owner,
 				Repo:           repo,
 				DataType:       "job_run",

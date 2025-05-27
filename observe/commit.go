@@ -55,41 +55,67 @@ func Commit(
 
 }
 
-func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gather.WorkflowRunData) *timelineData {
-	var (
-		items        = make([]timelineItem, 0, len(workflowRuns))
-		skippedItems = []string{}
-		owner        = commitData.GetOwner()
-		repo         = commitData.GetRepo()
-	)
+func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gather.WorkflowRunData) []*timelineData {
+	owner := commitData.GetOwner()
+	repo := commitData.GetRepo()
 
+	// Group workflow runs by event
+	eventGroups := make(map[string][]*gather.WorkflowRunData)
 	for _, workflowRun := range workflowRuns {
+		event := workflowRun.GetEvent()
+		eventGroups[event] = append(eventGroups[event], workflowRun)
+	}
+
+	// Build a timelineData for each event group
+	var groupedTimelines []*timelineData
+	for event, runs := range eventGroups {
 		var (
-			startTime = workflowRun.GetRunStartedAt().Time
-			duration  = workflowRun.GetRunCompletedAt().Sub(startTime)
+			items             = make([]timelineItem, 0, len(runs))
+			skippedItems      = []string{}
+			postTimelineItems = []postTimelineItem{}
 		)
 
-		if workflowRun.GetConclusion() == "skipped" || duration.Seconds() == 0 {
-			skippedItems = append(skippedItems, workflowRun.GetName())
-			continue
-		}
+		for _, workflowRun := range runs {
+			startTime := workflowRun.GetRunStartedAt().Time
+			duration := workflowRun.GetRunCompletedAt().Sub(startTime)
 
-		newItem := timelineItem{
-			Name:       workflowRun.GetName(),
-			ID:         fmt.Sprint(workflowRun.GetID()),
-			StartTime:  workflowRun.GetRunStartedAt().Time,
-			Conclusion: conclusionToGanttStatus(workflowRun.GetConclusion()),
-			Duration:   duration,
-			Link:       workflowRunLink(owner, repo, workflowRun.GetID()) + ".html",
+			if workflowRun.GetConclusion() == "skipped" || duration.Seconds() == 0 {
+				skippedItems = append(skippedItems, workflowRun.GetName())
+				continue
+			}
+
+			// If there's a PR, catch any post-PR workflows that might have run, like on: [pull_request] activity: closed
+			if workflowRun.GetEvent() == "pull_request" && !workflowRun.CorrespondingPRCloseTime.IsZero() {
+				if startTime.After(workflowRun.CorrespondingPRCloseTime) {
+					postTimelineItems = append(postTimelineItems, postTimelineItem{
+						Name: workflowRun.GetName(),
+						Link: workflowRun.GetHTMLURL(),
+						Time: startTime,
+					})
+					continue
+				}
+			}
+
+			newItem := timelineItem{
+				Name:       workflowRun.GetName(),
+				ID:         fmt.Sprint(workflowRun.GetID()),
+				StartTime:  workflowRun.GetRunStartedAt().Time,
+				Conclusion: conclusionToGanttStatus(workflowRun.GetConclusion()),
+				Duration:   duration,
+				Link:       workflowRunLink(owner, repo, workflowRun.GetID()) + ".html",
+			}
+			if workflowRun.GetConclusion() == "cancelled" {
+				newItem.Name = fmt.Sprintf("%s (cancelled)", workflowRun.GetName())
+			}
+			items = append(items, newItem)
 		}
-		if workflowRun.GetConclusion() == "cancelled" {
-			newItem.Name = fmt.Sprintf("%s (cancelled)", workflowRun.GetName())
-		}
-		items = append(items, newItem)
+		groupedTimelines = append(groupedTimelines, &timelineData{
+			Event:             event,
+			Items:             items,
+			SkippedItems:      skippedItems,
+			PostTimelineItems: postTimelineItems,
+		})
 	}
 
-	return &timelineData{
-		Items:        items,
-		SkippedItems: skippedItems,
-	}
+	return groupedTimelines
 }

@@ -81,10 +81,13 @@ func (j *JobData) GetAnalysis() *monitor.Analysis {
 // to help with data visualization and cost calculation
 type WorkflowRunData struct {
 	*github.WorkflowRun
-	Jobs           []*JobData               `json:"jobs"`
-	Cost           int64                    `json:"cost"`
-	RunCompletedAt time.Time                `json:"completed_at"`
-	Usage          *github.WorkflowRunUsage `json:"usage,omitempty"`
+	Jobs                     []*JobData               `json:"jobs"`
+	Cost                     int64                    `json:"cost"`
+	RunCompletedAt           time.Time                `json:"completed_at"`
+	Usage                    *github.WorkflowRunUsage `json:"usage,omitempty"`
+	CorrespondingPRNum       int                      `json:"corresponding_pr_number,omitempty"`
+	CorrespondingPRCloseTime time.Time                `json:"corresponding_pr_close_time,omitempty"`
+	CorrespondingCommitSHA   string                   `json:"corresponding_commit_sha,omitempty"`
 }
 
 // GetJobs returns the list of jobs for the workflow run
@@ -138,6 +141,15 @@ func WorkflowRun(
 	)
 	workflowRunData = &WorkflowRunData{}
 	targetFile = filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
+
+	if opts.pullRequestData != nil {
+		workflowRunData.CorrespondingPRNum = opts.pullRequestData.GetNumber()
+		workflowRunData.CorrespondingPRCloseTime = opts.pullRequestData.GetClosedAt().Time
+	}
+
+	if opts.commitData != nil {
+		workflowRunData.CorrespondingCommitSHA = opts.commitData.GetSHA()
+	}
 
 	log = log.With().
 		Str("target_file", targetFile).

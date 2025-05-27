@@ -114,7 +114,8 @@ func PullRequest(
 		return nil, fmt.Errorf("failed to gather commits for pull request %d: %w", pullRequestNumber, err)
 	}
 
-	pullRequestData.CommitData, err = prCommitData(log, client, owner, repo, prCommits, mergeQueueEvents)
+	opts = append(opts, withPullRequestData(pullRequestData))
+	pullRequestData.CommitData, err = prCommitData(log, client, owner, repo, prCommits, mergeQueueEvents, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather commit data for pull request %d: %w", pullRequestNumber, err)
 	}

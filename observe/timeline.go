@@ -7,9 +7,19 @@ import (
 	"time"
 )
 
+type postTimelineItem struct {
+	Name string
+	Link string
+	Time time.Time
+}
+
 type timelineData struct {
-	Items        []timelineItem
-	SkippedItems []string
+	// Triggering event
+	Event string
+	// Items that happen after the specified timeline
+	PostTimelineItems []postTimelineItem
+	Items             []timelineItem
+	SkippedItems      []string
 
 	// Set by the renderer
 	StartTime    time.Time

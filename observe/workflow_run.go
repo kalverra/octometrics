@@ -44,17 +44,19 @@ func WorkflowRun(
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate timeline: %w", err)
 	}
-	observationData.TimelineData = workflowRunTimelineData
+	observationData.TimelineData = []*timelineData{workflowRunTimelineData}
 
 	return observationData, nil
 }
 
 func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelineData, error) {
 	var (
-		items        = make([]timelineItem, 0, len(workflowRun.Jobs))
-		skippedItems = []string{}
-		owner        = workflowRun.GetRepository().GetOwner().GetLogin()
-		repo         = workflowRun.GetRepository().GetName()
+		items             = make([]timelineItem, 0, len(workflowRun.Jobs))
+		postTimelineItems = []postTimelineItem{}
+		skippedItems      = []string{}
+
+		owner = workflowRun.GetRepository().GetOwner().GetLogin()
+		repo  = workflowRun.GetRepository().GetName()
 	)
 
 	for _, job := range workflowRun.Jobs {
@@ -63,6 +65,23 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 			duration  = job.GetCompletedAt().Sub(startedAt)
 		)
 
+		if job.GetConclusion() == "skipped" || duration.Seconds() == 0 {
+			skippedItems = append(skippedItems, job.GetName())
+			continue
+		}
+
+		// If there's a PR, catch any post-PR jobs that might have run, like on: [pull_request] activity: closed
+		if workflowRun.GetEvent() == "pull_request" && !workflowRun.CorrespondingPRCloseTime.IsZero() {
+			if startedAt.After(workflowRun.CorrespondingPRCloseTime) {
+				postTimelineItems = append(postTimelineItems, postTimelineItem{
+					Name: job.GetName(),
+					Link: job.GetHTMLURL(),
+					Time: startedAt,
+				})
+				continue
+			}
+		}
+
 		newTask := timelineItem{
 			Name:       job.GetName(),
 			ID:         fmt.Sprint(job.GetID()),
@@ -70,10 +89,6 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 			Conclusion: conclusionToGanttStatus(job.GetConclusion()),
 			Duration:   duration,
 			Link:       jobRunLink(owner, repo, job.GetID()) + ".html",
-		}
-		if job.GetConclusion() == "skipped" || duration.Seconds() == 0 {
-			skippedItems = append(skippedItems, job.GetName())
-			continue
 		}
 		if job.GetConclusion() == "cancelled" {
 			newTask.Name = fmt.Sprintf("%s (cancelled)", job.GetName())
@@ -85,8 +100,10 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 	}
 
 	templateData := &timelineData{
-		Items:        items,
-		SkippedItems: skippedItems,
+		Event:             workflowRun.GetEvent(),
+		Items:             items,
+		SkippedItems:      skippedItems,
+		PostTimelineItems: postTimelineItems,
 	}
 
 	return templateData, nil
