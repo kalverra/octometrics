@@ -1,6 +1,6 @@
 module github.com/kalverra/octometrics
 
-go 1.24.2
+go 1.24.3
 
 require (
 	github.com/MetalBlueberry/go-plotly v0.7.0
