@@ -12,7 +12,7 @@ require (
 	github.com/shirou/gopsutil/v4 v4.25.4
 	github.com/shurcooL/githubv4 v0.0.0-20240727222349-48295856cce7
 	github.com/spf13/cobra v1.9.1
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.0
 	golang.org/x/oauth2 v0.30.0
 	golang.org/x/sync v0.14.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
