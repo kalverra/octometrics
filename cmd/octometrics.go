@@ -11,7 +11,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
-	"github.com/kalverra/octometrics/gather"
 	"github.com/kalverra/octometrics/internal/config"
 	"github.com/kalverra/octometrics/logging"
 )
@@ -20,10 +19,9 @@ const (
 	logFileName = "octometrics.log.json"
 )
 
-// Persistent base command flags
 var (
-	githubClient *gather.GitHubClient
-	logger       zerolog.Logger
+	cfg    *config.Config
+	logger zerolog.Logger
 )
 
 // These variables are set at build time and describe the version and build of the application
@@ -46,15 +44,6 @@ func versionInfo() string {
 	)
 }
 
-// Flag values shared between other commands
-var (
-	owner             string
-	repo              string
-	commitSHA         string
-	workflowRunID     int64
-	pullRequestNumber int
-)
-
 var rootCmd = &cobra.Command{
 	Use:   "octometrics",
 	Short: "See metrics and profiling of your GitHub Actions",
@@ -65,7 +54,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 		var err error
 
-		cfg, err := config.Load(config.WithFlags(cmd.Flags()))
+		cfg, err = config.Load(config.WithFlags(cmd.Flags()))
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
@@ -73,23 +62,12 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 		if err != nil {
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
-
-		githubClient, err = gather.NewGitHubClient(logger, githubToken, nil)
-		if err != nil {
-			return fmt.Errorf("failed to create GitHub client: %w", err)
-		}
 		return nil
-	},
-	Run: func(cmd *cobra.Command, _ []string) {
-		err := cmd.Help()
-		if err != nil {
-			logger.Fatal().Err(err).Msg("Failed to print help message")
-		}
 	},
 }
 
 func init() {
-	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "Log level")
+	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "Level for detailed logging")
 }
 
 // Execute runs the root command for octometrics.

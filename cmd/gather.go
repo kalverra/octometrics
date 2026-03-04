@@ -2,7 +2,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -10,41 +9,28 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kalverra/octometrics/gather"
+	"github.com/kalverra/octometrics/observe"
 )
 
 var (
-	githubToken string
-	forceUpdate bool
+	githubToken  string
+	githubClient *gather.GitHubClient
+	forceUpdate  bool
+	noObserve    bool
 )
 
 var gatherCmd = &cobra.Command{
 	Use:   "gather",
 	Short: "Gather metrics from GitHub",
 	PreRunE: func(_ *cobra.Command, _ []string) error {
-		if owner == "" {
-			return errors.New("owner must be provided")
+		if err := cfg.ValidateGather(); err != nil {
+			return err
 		}
-		if repo == "" {
-			return errors.New("repo must be provided")
+		var err error
+		githubClient, err = gather.NewGitHubClient(logger, githubToken, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create GitHub client: %w", err)
 		}
-
-		setCount := 0
-		if commitSHA != "" {
-			setCount++
-		}
-		if workflowRunID != 0 {
-			setCount++
-		}
-		if pullRequestNumber != 0 {
-			setCount++
-		}
-		if setCount > 1 {
-			return errors.New("only one of commit SHA, workflow run ID or pull request number can be provided")
-		}
-		if setCount == 0 {
-			return errors.New("one of commit SHA, workflow run ID or pull request number must be provided")
-		}
-
 		return nil
 	},
 	RunE: func(_ *cobra.Command, _ []string) error {
@@ -54,15 +40,16 @@ var gatherCmd = &cobra.Command{
 
 		startTime := time.Now()
 
-		logger = logger.With().Str("owner", owner).Str("repo", repo).Logger()
+		logger = logger.With().Str("owner", cfg.Owner).Str("repo", cfg.Repo).Logger()
 
-		if workflowRunID != 0 {
-			logger = logger.With().Int64("workflow_run_id", workflowRunID).Logger()
-		} else if pullRequestNumber != 0 {
-			logger = logger.With().Int("pull_request_number", pullRequestNumber).Logger()
+		if cfg.WorkflowRunID != 0 {
+			logger = logger.With().Int64("workflow_run_id", cfg.WorkflowRunID).Logger()
+		} else if cfg.PullRequestNumber != 0 {
+			logger = logger.With().Int("pull_request_number", cfg.PullRequestNumber).Logger()
 		}
 
 		logger.Info().Msg("Gathering data")
+		fmt.Println("Gathering data...")
 
 		opts := []gather.Option{}
 
@@ -71,40 +58,50 @@ var gatherCmd = &cobra.Command{
 		}
 
 		var err error
-		if workflowRunID != 0 {
-			_, _, err = gather.WorkflowRun(logger, githubClient, owner, repo, workflowRunID, opts...)
-		} else if pullRequestNumber != 0 {
-			_, err = gather.PullRequest(logger, githubClient, owner, repo, pullRequestNumber, opts...)
-		} else if commitSHA != "" {
-			_, err = gather.Commit(logger, githubClient, owner, repo, commitSHA, opts...)
+		if cfg.WorkflowRunID != 0 {
+			_, _, err = gather.WorkflowRun(logger, githubClient, cfg.Owner, cfg.Repo, cfg.WorkflowRunID, opts...)
+		} else if cfg.PullRequestNumber != 0 {
+			_, err = gather.PullRequest(logger, githubClient, cfg.Owner, cfg.Repo, cfg.PullRequestNumber, opts...)
+		} else if cfg.CommitSHA != "" {
+			_, err = gather.Commit(logger, githubClient, cfg.Owner, cfg.Repo, cfg.CommitSHA, opts...)
 		}
 		if err != nil {
 			return err
 		}
 
 		logger.Info().Str("duration", time.Since(startTime).String()).Msg("Gathered data")
-		return nil
+		fmt.Println("Gathered data")
+
+		if noObserve {
+			return nil
+		}
+
+		var pagePath string
+		if cfg.WorkflowRunID != 0 {
+			pagePath = fmt.Sprintf("/%s/%s/workflow_runs/%d.html", cfg.Owner, cfg.Repo, cfg.WorkflowRunID)
+		} else if cfg.PullRequestNumber != 0 {
+			pagePath = fmt.Sprintf("/%s/%s/pull_requests/%d.html", cfg.Owner, cfg.Repo, cfg.PullRequestNumber)
+		} else if cfg.CommitSHA != "" {
+			pagePath = fmt.Sprintf("/%s/%s/commits/%s.html", cfg.Owner, cfg.Repo, cfg.CommitSHA)
+		}
+
+		if err := os.RemoveAll(observe.OutputDir); err != nil {
+			return fmt.Errorf("failed to clean observe output: %w", err)
+		}
+		return observe.Interactive(logger, githubClient, pagePath)
 	},
 }
 
 func init() {
-	gatherCmd.Flags().BoolVarP(&forceUpdate, "force-update", "u", false, "Force update of existing data")
-	gatherCmd.Flags().StringVarP(&owner, "owner", "o", "", "Repository owner")
-	gatherCmd.Flags().StringVarP(&repo, "repo", "r", "", "Repository name")
-	gatherCmd.Flags().StringVarP(&commitSHA, "commit-sha", "c", "", "Commit SHA")
-	gatherCmd.Flags().Int64VarP(&workflowRunID, "workflow-run-id", "w", 0, "Workflow run ID")
-	gatherCmd.Flags().IntVarP(&pullRequestNumber, "pull-request-number", "p", 0, "Pull request number")
 	gatherCmd.Flags().
-		StringVarP(&githubToken, "github-token", "t", "", fmt.Sprintf("GitHub API token (can also be set via %s)", gather.GitHubTokenEnvVar))
-
-	if err := gatherCmd.MarkFlagRequired("owner"); err != nil {
-		fmt.Printf("ERROR: Failed to mark owner flag as required: %s\n", err.Error())
-		os.Exit(1)
-	}
-	if err := gatherCmd.MarkFlagRequired("repo"); err != nil {
-		fmt.Printf("ERROR: Failed to mark repo flag as required: %s\n", err.Error())
-		os.Exit(1)
-	}
+		BoolVar(&noObserve, "no-observe", false, "Skip launching the interactive observer after gathering")
+	gatherCmd.Flags().BoolVarP(&forceUpdate, "force-update", "u", false, "Force update of existing data")
+	gatherCmd.Flags().StringP("owner", "o", "", "Repository owner")
+	gatherCmd.Flags().StringP("repo", "r", "", "Repository name")
+	gatherCmd.Flags().StringP("commit-sha", "c", "", "Commit SHA")
+	gatherCmd.Flags().Int64P("workflow_run_id", "w", 0, "Workflow run ID")
+	gatherCmd.Flags().IntP("pull_request_number", "p", 0, "Pull request number")
+	gatherCmd.Flags().StringP("github_token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")
 
 	rootCmd.AddCommand(gatherCmd)
 }

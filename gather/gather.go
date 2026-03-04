@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,8 +18,6 @@ import (
 
 // GitHub API constants for authentication, timeouts, and data storage.
 const (
-	//nolint:gosec // Env var for getting token
-	GitHubTokenEnvVar = "GITHUB_TOKEN"
 	//nolint:gosec // This is a mock token for testing purposes
 	MockGitHubToken = "mock_github_token"
 	timeoutDur      = 10 * time.Second
@@ -100,16 +97,6 @@ func NewGitHubClient(
 	githubToken string,
 	optionalNext http.RoundTripper,
 ) (*GitHubClient, error) {
-	switch {
-	case githubToken != "":
-		logger.Debug().Msg("Using GitHub token from flag")
-	case os.Getenv(GitHubTokenEnvVar) != "":
-		githubToken = os.Getenv(GitHubTokenEnvVar)
-		logger.Debug().Msg("Using GitHub token from environment variable")
-	default:
-		logger.Warn().Msg("GitHub token not provided, will likely hit rate limits quickly")
-	}
-
 	var (
 		err    error
 		next   http.RoundTripper

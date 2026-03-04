@@ -218,30 +218,33 @@ func (o *Observation) renderMarkdown() (bytes.Buffer, error) {
 }
 
 // Interactive generates all downloaded data in HTML and serves it on a local server.
-func Interactive(log zerolog.Logger, client *gather.GitHubClient) error {
+// If initialPath is non-empty, the browser opens directly to that path (e.g. "/owner/repo/workflow_runs/123.html").
+func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath string) error {
 	startTime := time.Now()
 	err := All(log, client, []string{"html"})
 	if err != nil {
 		return fmt.Errorf("failed to generate all HTML observe data: %w", err)
 	}
 	var (
-		url = "http://localhost:8080"
-		dir = http.Dir(htmlOutputDir)
-		fs  = http.FileServer(dir)
+		baseURL    = "http://localhost:8080"
+		browserURL = baseURL + initialPath
+		dir        = http.Dir(htmlOutputDir)
+		fs         = http.FileServer(dir)
 	)
 	http.Handle("/", fs)
 
 	log.Info().
-		Str("url", url).
+		Str("url", browserURL).
 		Str("built_observations_dur", time.Since(startTime).String()).
 		Str("dir", htmlOutputDir).
 		Msg("Observing data...")
+	fmt.Println("Observe data at http://localhost:8080")
 
 	go func() {
 		interruptChan := make(chan os.Signal, 1)
 		signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
 
-		err := openBrowser(url)
+		err := openBrowser(browserURL)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to open browser")
 		}
