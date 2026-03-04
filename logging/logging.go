@@ -65,6 +65,9 @@ func New(options ...Option) (zerolog.Logger, error) {
 		logLevelInput     = opts.logLevelInput
 		disableConsoleLog = opts.disableConsoleLog
 	)
+	if logLevelInput == "silent" {
+		return zerolog.Nop(), nil
+	}
 
 	err := os.WriteFile(logFileName, []byte{}, 0600)
 	if err != nil {

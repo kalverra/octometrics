@@ -1,25 +1,50 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"runtime"
+	"time"
 
+	"github.com/charmbracelet/fang"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
 	"github.com/kalverra/octometrics/gather"
+	"github.com/kalverra/octometrics/internal/config"
 	"github.com/kalverra/octometrics/logging"
+)
+
+const (
+	logFileName = "octometrics.log.json"
 )
 
 // Persistent base command flags
 var (
-	logFileName       string
-	logLevelInput     string
-	disableConsoleLog bool
-
 	githubClient *gather.GitHubClient
 	logger       zerolog.Logger
 )
+
+// These variables are set at build time and describe the version and build of the application
+var (
+	version   = "dev"
+	commit    = "dev"
+	buildTime = time.Now().Format("2006-01-02T15:04:05.000")
+	builtBy   = "local"
+	builtWith = runtime.Version()
+)
+
+func versionInfo() string {
+	return fmt.Sprintf(
+		"octometrics version %s built with %s from commit %s at %s by %s",
+		version,
+		builtWith,
+		commit,
+		buildTime,
+		builtBy,
+	)
+}
 
 // Flag values shared between other commands
 var (
@@ -37,17 +62,14 @@ var rootCmd = &cobra.Command{
 
 GitHub Actions provides surprisingly little metrics to help you optimize things like runtime and profiling data.
 Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and inefficiencies in your CI/CD pipelines.`,
-	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 		var err error
 
-		loggingOpts := []logging.Option{
-			logging.WithFileName(logFileName),
-			logging.WithLevel(logLevelInput),
+		cfg, err := config.Load(config.WithFlags(cmd.Flags()))
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
 		}
-		if disableConsoleLog {
-			loggingOpts = append(loggingOpts, logging.DisableConsoleLog())
-		}
-		logger, err = logging.New(loggingOpts...)
+		logger, err = logging.New(logging.WithFileName(logFileName), logging.WithLevel(cfg.LogLevel))
 		if err != nil {
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
@@ -56,23 +78,6 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 		if err != nil {
 			return fmt.Errorf("failed to create GitHub client: %w", err)
 		}
-
-		logger.Debug().
-			Str("version", version).
-			Str("commit", commit).
-			Str("build_time", buildTime).
-			Str("built_by", builtBy).
-			Str("built_with", builtWith).
-			Msg("octometrics version info")
-		logger.Debug().
-			Str("owner", owner).
-			Str("repo", repo).
-			Int64("workflow_run_id", workflowRunID).
-			Int("pull_request_number", pullRequestNumber).
-			Str("log_file", logFileName).
-			Str("log_level", logLevelInput).
-			Bool("disable_console_log", disableConsoleLog).
-			Msg("octometrics flags")
 		return nil
 	},
 	Run: func(cmd *cobra.Command, _ []string) {
@@ -84,16 +89,12 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&logFileName, "log-file", "f", "octometrics.log.json", "Log file name")
-	rootCmd.PersistentFlags().StringVarP(&logLevelInput, "log-level", "l", "info", "Log level")
-	rootCmd.PersistentFlags().
-		BoolVarP(&disableConsoleLog, "silent", "s", false, "Disables console logs. Still logs to file")
+	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "Log level")
 }
 
 // Execute runs the root command for octometrics.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		logger.Fatal().Err(err).Msg("Failed to execute command")
+	if err := fang.Execute(context.Background(), rootCmd, fang.WithVersion(versionInfo())); err != nil {
 		os.Exit(1)
 	}
 }

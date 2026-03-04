@@ -13,7 +13,7 @@ type Config struct {
 
 const (
 	// DefaultLogLevel is the default log level.
-	DefaultLogLevel = "info"
+	DefaultLogLevel = "silent"
 )
 
 // LoadOption is a function that can be used to load configuration.
