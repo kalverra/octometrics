@@ -93,7 +93,6 @@ type GitHubClient struct {
 }
 
 // NewGitHubClient creates a new GitHub API and GraphQL client with the provided token and logger.
-// If optionalCustomClient is provided, it will be used as the base client for both REST and GraphQL.
 func NewGitHubClient(
 	logger zerolog.Logger,
 	githubToken string,

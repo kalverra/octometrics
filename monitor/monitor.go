@@ -79,7 +79,7 @@ func Start(ctx context.Context, options ...Option) error {
 	}
 
 	// Observe immediately before starting the ticker
-	if err := observe(log, opts); err != nil {
+	if err := spot(log, opts); err != nil {
 		return fmt.Errorf("error observing system info: %w", err)
 	}
 
@@ -102,7 +102,7 @@ func Start(ctx context.Context, options ...Option) error {
 			log.Info().Str("Reason", "Process interrupted or terminated").Msg("Stopping Monitoring")
 			return nil
 		case <-ticker.C:
-			if err := observe(log, opts); err != nil {
+			if err := spot(log, opts); err != nil {
 				return fmt.Errorf("error observing system info: %w", err)
 			}
 		}
@@ -156,7 +156,7 @@ func systemInfo(log zerolog.Logger) error {
 	return nil
 }
 
-func observe(log zerolog.Logger, opts *options) error {
+func spot(log zerolog.Logger, opts *options) error {
 	var (
 		eg        errgroup.Group
 		startTime = time.Now()
@@ -164,25 +164,25 @@ func observe(log zerolog.Logger, opts *options) error {
 
 	if opts.MonitorCPU {
 		eg.Go(func() error {
-			return observeCPU(log)
+			return spotCPU(log)
 		})
 	}
 
 	if opts.MonitorMemory {
 		eg.Go(func() error {
-			return observeMemory(log)
+			return spotMemory(log)
 		})
 	}
 
 	if opts.MonitorDisk {
 		eg.Go(func() error {
-			return observeDisk(log)
+			return spotDisk(log)
 		})
 	}
 
 	if opts.MonitorIO {
 		eg.Go(func() error {
-			return observeIO(log)
+			return spotIO(log)
 		})
 	}
 
@@ -200,7 +200,7 @@ func observe(log zerolog.Logger, opts *options) error {
 	return nil
 }
 
-func observeCPU(log zerolog.Logger) error {
+func spotCPU(log zerolog.Logger) error {
 	cpuPercents, err := cpu.Percent(0, true)
 	if err != nil {
 		return fmt.Errorf("error monitoring CPU: %w", err)
@@ -219,7 +219,7 @@ func observeCPU(log zerolog.Logger) error {
 	return nil
 }
 
-func observeMemory(log zerolog.Logger) error {
+func spotMemory(log zerolog.Logger) error {
 	v, err := mem.VirtualMemory()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrMonitorMemory, err)
@@ -231,7 +231,7 @@ func observeMemory(log zerolog.Logger) error {
 	return nil
 }
 
-func observeDisk(log zerolog.Logger) error {
+func spotDisk(log zerolog.Logger) error {
 	usageStat, err := disk.Usage("/")
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrMonitorDisk, err)
@@ -244,7 +244,7 @@ func observeDisk(log zerolog.Logger) error {
 	return nil
 }
 
-func observeIO(log zerolog.Logger) error {
+func spotIO(log zerolog.Logger) error {
 	ioStats, err := net.IOCounters(false)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrMonitorIO, err)
