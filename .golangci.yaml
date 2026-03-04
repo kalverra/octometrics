@@ -19,15 +19,28 @@ linters:
     - paralleltest
     - copyloopvar
     - godox
+    - revive
+    - depguard
+    - modernize
   settings:
     godox:
       keywords:
-      - "DEBUG"
-      - "TODO"
+        - "DEBUG"
+        - "TODO"
     gosec:
       confidence: medium
-      excludes:
-        - G304 # Potential file inclusion via variable
+    depguard:
+      rules:
+        main:
+          list-mode: lax
+          deny:
+            - pkg: github.com/test-go/testify
+              desc: "Use github.com/stretchr/testify instead"
+            - pkg: github.com/testify/testify
+              desc: "Use github.com/stretchr/testify instead"
+            - pkg: gotest.tools/v3/assert
+              desc: "Use github.com/stretchr/testify/assert instead"
+
 formatters:
   enable:
     - gofmt

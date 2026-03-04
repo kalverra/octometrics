@@ -1,4 +1,4 @@
-// package monitor provides a way to monitor system resources like CPU, memory, and disk usage while your workflow runs.
+// Package monitor provides a way to monitor system resources like CPU, memory, and disk usage while your workflow runs.
 package monitor
 
 import (
@@ -20,28 +20,43 @@ import (
 	"github.com/kalverra/octometrics/logging"
 )
 
+// Monitoring data file name and log message constants.
 const (
+	// DataFile is the default file name for monitor output.
 	DataFile = "octometrics.monitor.json"
 
-	// Log messages used to indicate the system info
-	CPUSystemInfoMsg        = "CPU System Info"
-	MemSystemInfoMsg        = "System Memory Info"
-	DiskSystemInfoMsg       = "System Disk Info"
+	// CPUSystemInfoMsg is the log message for CPU system info.
+	CPUSystemInfoMsg = "CPU System Info"
+	// MemSystemInfoMsg is the log message for memory system info.
+	MemSystemInfoMsg = "System Memory Info"
+	// DiskSystemInfoMsg is the log message for disk system info.
+	DiskSystemInfoMsg = "System Disk Info"
+	// GitHubActionsEnvVarsMsg is the log message for GitHub Actions environment variables.
 	GitHubActionsEnvVarsMsg = "GitHub Actions Environment Variables"
 
-	// Log messages used to indicate the status of monitoring
-	ObservedCPUMsg  = "Observed CPU Usage"
-	ObservedMemMsg  = "Observed Memory Usage"
+	// ObservedCPUMsg is the log message for a CPU usage observation.
+	ObservedCPUMsg = "Observed CPU Usage"
+	// ObservedMemMsg is the log message for a memory usage observation.
+	ObservedMemMsg = "Observed Memory Usage"
+	// ObservedDiskMsg is the log message for a disk usage observation.
 	ObservedDiskMsg = "Observed Disk Usage"
+	// ObservedProcMsg is the log message for a process usage observation.
 	ObservedProcMsg = "Observed Process Usage"
-	ObservedIOMsg   = "Observed IO Usage"
+	// ObservedIOMsg is the log message for an IO usage observation.
+	ObservedIOMsg = "Observed IO Usage"
 )
 
+// Sentinel errors for monitoring failures.
 var (
-	ErrMonitorCPU       = errors.New("error monitoring CPU")
-	ErrMonitorMemory    = errors.New("error monitoring Memory")
-	ErrMonitorDisk      = errors.New("error monitoring Disk")
-	ErrMonitorIO        = errors.New("error monitoring IO")
+	// ErrMonitorCPU indicates a CPU monitoring failure.
+	ErrMonitorCPU = errors.New("error monitoring CPU")
+	// ErrMonitorMemory indicates a memory monitoring failure.
+	ErrMonitorMemory = errors.New("error monitoring Memory")
+	// ErrMonitorDisk indicates a disk monitoring failure.
+	ErrMonitorDisk = errors.New("error monitoring Disk")
+	// ErrMonitorIO indicates an IO monitoring failure.
+	ErrMonitorIO = errors.New("error monitoring IO")
+	// ErrMonitorProcesses indicates a process monitoring failure.
 	ErrMonitorProcesses = errors.New("error monitoring Processes")
 )
 

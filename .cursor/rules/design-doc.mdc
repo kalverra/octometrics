@@ -1,0 +1,31 @@
+---
+description: Maintain a design.md file with high-level project design summary and Mermaid diagrams
+alwaysApply: false
+---
+# Design Document Maintenance
+
+Maintain a `design.md` file at the project root that documents the overall design of the project.
+
+## When to Update
+
+Update `design.md` after making substantial code changes — new packages, new commands, significant refactors, new integrations, or architectural shifts. Use your judgment; minor bug fixes or cosmetic changes don't warrant an update.
+
+## File Structure
+
+`design.md` should contain:
+
+1. **Overview** — A 2-3 sentence summary of what the project is and how it's structured.
+2. **Mermaid Diagrams** — Choose diagram types that best represent the current design. Common choices:
+   - Architecture / component diagrams for package relationships
+   - Flowcharts for command execution or build pipelines
+   - Sequence diagrams for multi-step processes
+   - Class diagrams for key struct/interface relationships
+3. **Key Design Decisions** — Brief notes on non-obvious choices (e.g., why a particular library or pattern was chosen).
+
+## Guidelines
+
+- Keep it concise — this is a quick reference, not a spec document.
+- Prefer updating existing diagrams over adding new ones for the same concept.
+- Ensure Mermaid syntax is valid and renders correctly.
+- If the project has grown significantly, add new diagrams rather than cramming everything into one.
+- DO NOT include anything about file structure, this is redundant.

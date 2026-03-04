@@ -1,3 +1,4 @@
+// Package testhelpers provides utilities for setting up test environments.
 package testhelpers
 
 import (
@@ -16,6 +17,7 @@ const (
 	testLogLevelEnvVar = "OCTOMETRICS_TEST_LOG_LEVEL"
 )
 
+// Option is a function that can be used to configure the test helpers.
 type Option func(*options)
 
 type options struct {
@@ -31,6 +33,7 @@ func Silent() Option {
 	}
 }
 
+// LogLevel sets the log level for the test logger.
 func LogLevel(level string) Option {
 	return func(o *options) {
 		o.logLevel = level

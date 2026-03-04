@@ -13,13 +13,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v70/github"
+	"github.com/google/go-github/v84/github"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/kalverra/octometrics/monitor"
 )
 
+// WorkflowRunsDataDir is the directory name for storing workflow run data files.
 const WorkflowRunsDataDir = "workflow_runs"
 
 // Mapping of how much a minute for each runner type costs
@@ -56,6 +57,7 @@ type JobData struct {
 	Analysis *monitor.Analysis `json:"analysis,omitempty"`
 }
 
+// GetRunner returns the runner type used for the job.
 func (j *JobData) GetRunner() string {
 	if j == nil || j.WorkflowJob == nil {
 		return ""
@@ -63,6 +65,7 @@ func (j *JobData) GetRunner() string {
 	return j.Runner
 }
 
+// GetCost returns the cost of the job run in tenths of a cent.
 func (j *JobData) GetCost() int64 {
 	if j == nil || j.WorkflowJob == nil {
 		return 0
@@ -70,6 +73,7 @@ func (j *JobData) GetCost() int64 {
 	return j.Cost
 }
 
+// GetAnalysis returns the monitoring analysis data for the job run.
 func (j *JobData) GetAnalysis() *monitor.Analysis {
 	if j == nil || j.Analysis == nil {
 		return nil
@@ -86,7 +90,7 @@ type WorkflowRunData struct {
 	RunCompletedAt           time.Time                `json:"completed_at"`
 	Usage                    *github.WorkflowRunUsage `json:"usage,omitempty"`
 	CorrespondingPRNum       int                      `json:"corresponding_pr_number,omitempty"`
-	CorrespondingPRCloseTime time.Time                `json:"corresponding_pr_close_time,omitempty"`
+	CorrespondingPRCloseTime time.Time                `json:"corresponding_pr_close_time,omitzero"`
 	CorrespondingCommitSHA   string                   `json:"corresponding_commit_sha,omitempty"`
 }
 
@@ -171,7 +175,7 @@ func WorkflowRun(
 		log = log.With().
 			Str("source", "local file").
 			Logger()
-		workflowFileBytes, err := os.ReadFile(targetFile)
+		workflowFileBytes, err := os.ReadFile(filepath.Clean(targetFile))
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to open workflow run file: %w", err)
 		}
@@ -450,6 +454,7 @@ func monitoringData(
 			Msg("Downloading octometrics monitoring data")
 
 		// Download the artifact to a temp file
+		//nolint:gosec // path is constructed from known targetDir and artifact name
 		zippedArtifact, err := os.Create(filepath.Join(targetDir, fmt.Sprintf("%s.zip", artifact.GetName())))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create monitor data artifact file: %w", err)
@@ -458,6 +463,7 @@ func monitoringData(
 			if err := zippedArtifact.Close(); err != nil {
 				log.Error().Err(err).Msg("failed to close monitor data artifact file")
 			}
+			//nolint:gosec // path comes from os.Create, not user input
 			if err := os.Remove(zippedArtifact.Name()); err != nil {
 				log.Error().Err(err).Msg("failed to remove monitor data artifact file")
 			}
@@ -529,6 +535,7 @@ func monitoringData(
 					if err := monitorFile.Close(); err != nil {
 						log.Error().Err(err).Msg("Failed to close temp file")
 					}
+					//nolint:gosec // path comes from os.CreateTemp, not user input
 					if err := os.Remove(monitorFile.Name()); err != nil {
 						log.Error().Err(err).Msg("failed to remove monitor data file")
 					}

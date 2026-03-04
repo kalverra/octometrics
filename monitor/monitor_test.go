@@ -106,7 +106,7 @@ func TestMonitorIntegration(t *testing.T) {
 
 			// Verify the output file exists and has content
 			require.FileExists(t, outputFile, "monitor output file should exist")
-			data, err := os.ReadFile(outputFile)
+			data, err := os.ReadFile(filepath.Clean(outputFile))
 			require.NoError(t, err, "error reading monitor output file")
 			require.NotEmpty(t, data, "monitor output file should not be empty")
 

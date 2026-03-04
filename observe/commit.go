@@ -1,3 +1,4 @@
+// Package observe renders gathered GitHub Actions data into visual observation formats.
 package observe
 
 import (

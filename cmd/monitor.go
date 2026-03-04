@@ -25,7 +25,7 @@ var monitorCmd = &cobra.Command{
 	Use:   "monitor",
 	Short: "Monitor system resources",
 	Long:  "Monitor system resources and save the data to a file for later analysis.",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		var (
 			ctx    context.Context
 			cancel context.CancelFunc

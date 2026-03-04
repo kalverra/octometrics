@@ -20,7 +20,7 @@ var (
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number of Octometrics",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		fmt.Printf(
 			"octometrics version %s built with %s from commit %s at %s by %s\n",
 			version,

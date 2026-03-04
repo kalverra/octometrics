@@ -15,10 +15,10 @@ var (
 var observeCmd = &cobra.Command{
 	Use:   "observe",
 	Short: "Observe metrics from GitHub",
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(_ *cobra.Command, _ []string) error {
 		return os.RemoveAll(observe.OutputDir)
 	},
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		logger.Debug().
 			Strs("output-types", outputTypes).
 			Msg("observe flags")

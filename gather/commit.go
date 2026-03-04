@@ -1,3 +1,5 @@
+// Package gather provides functions for gathering GitHub Actions data
+// including commits, pull requests, and workflow runs.
 package gather
 
 import (
@@ -12,11 +14,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/go-github/v70/github"
+	"github.com/google/go-github/v84/github"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
 
+// CommitsDataDir is the directory name for storing commit data files.
 const CommitsDataDir = "commits"
 
 // CommitData contains the commit data for a given commit SHA.
@@ -175,7 +178,7 @@ func Commit(
 		log = log.With().
 			Str("source", "local file").
 			Logger()
-		commitFileBytes, err := os.ReadFile(targetFile)
+		commitFileBytes, err := os.ReadFile(filepath.Clean(targetFile))
 		if err != nil {
 			return nil, fmt.Errorf("failed to open commit file: %w", err)
 		}
@@ -240,7 +243,7 @@ func checkRunsForCommit(
 	var (
 		allCheckRuns []*github.CheckRun
 		listOpts     = &github.ListCheckRunsOptions{
-			Filter: github.Ptr("all"),
+			Filter: new("all"),
 			ListOptions: github.ListOptions{
 				PerPage: 100,
 			},

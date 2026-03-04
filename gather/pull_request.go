@@ -11,14 +11,16 @@ import (
 	"sort"
 	"time"
 
-	"github.com/google/go-github/v70/github"
+	"github.com/google/go-github/v84/github"
 	"github.com/rs/zerolog"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/sync/errgroup"
 )
 
+// PullRequestsDataDir is the directory name for storing pull request data files.
 const PullRequestsDataDir = "pull_requests"
 
+// PullRequestData wraps a GitHub PullRequest with additional commit data.
 type PullRequestData struct {
 	*github.PullRequest
 	CommitData []*CommitData `json:"commit_data"`
@@ -70,7 +72,7 @@ func PullRequest(
 		log = log.With().
 			Str("source", "local file").
 			Logger()
-		prFileBytes, err := os.ReadFile(targetFile)
+		prFileBytes, err := os.ReadFile(filepath.Clean(targetFile))
 		if err != nil {
 			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
 		}
@@ -416,7 +418,7 @@ func prMergeQueueEvents(
 // establishPRChecksStatus determines the status of the pull request checks
 // based on the status of the individual workflow run conclusions.
 // https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-repository
-func establishPRChecksConclusion(baseStatus, newStatus string) string {
+func establishPRChecksConclusion(_, newStatus string) string {
 	switch newStatus {
 	case "failure", "in_progress", "timed_out":
 		return newStatus

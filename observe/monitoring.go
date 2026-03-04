@@ -8,7 +8,6 @@ import (
 
 	grob "github.com/MetalBlueberry/go-plotly/generated/v2.34.0/graph_objects"
 	"github.com/MetalBlueberry/go-plotly/pkg/types"
-	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/monitor"
 )
@@ -22,8 +21,7 @@ type plotlyData struct {
 	B64Content string
 }
 
-func Monitoring(
-	log zerolog.Logger,
+func monitoring(
 	analysis *monitor.Analysis,
 ) (*monitoringData, error) {
 	if analysis == nil {

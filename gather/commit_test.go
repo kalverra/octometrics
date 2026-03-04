@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v70/github"
+	"github.com/google/go-github/v84/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 	"github.com/stretchr/testify/require"
 
@@ -23,11 +23,11 @@ func TestGatherCommit(t *testing.T) {
 		mock.WithRequestMatchPages(
 			mock.GetReposCommitsCheckRunsByOwnerByRepoByRef,
 			github.ListCheckRunsResults{
-				Total:     github.Ptr(2),
+				Total:     new(2),
 				CheckRuns: mockedCheckRuns[:1],
 			},
 			github.ListCheckRunsResults{
-				Total:     github.Ptr(2),
+				Total:     new(2),
 				CheckRuns: mockedCheckRuns[1:],
 			},
 		),
@@ -53,31 +53,31 @@ func TestGatherCommit(t *testing.T) {
 var (
 	mockedSha    = "mocked-sha"
 	mockedCommit = &github.RepositoryCommit{
-		SHA: github.Ptr(mockedSha),
+		SHA: new(mockedSha),
 		Commit: &github.Commit{
-			SHA: github.Ptr(mockedSha),
+			SHA: new(mockedSha),
 		},
 	}
 	mockedCheckRuns = []*github.CheckRun{
 		{
-			ID:          github.Ptr(int64(1)),
-			Name:        github.Ptr("mocked-check-run-1"),
-			Status:      github.Ptr("completed"),
-			Conclusion:  github.Ptr("success"),
-			StartedAt:   github.Ptr(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
-			CompletedAt: github.Ptr(github.Timestamp{Time: time.Now()}),
-			HTMLURL:     github.Ptr("https://github.com/kalverra/octometrics/actions/runs/1"),
-			HeadSHA:     github.Ptr(mockedSha),
+			ID:          new(int64(1)),
+			Name:        new("mocked-check-run-1"),
+			Status:      new("completed"),
+			Conclusion:  new("success"),
+			StartedAt:   new(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
+			CompletedAt: new(github.Timestamp{Time: time.Now()}),
+			HTMLURL:     new("https://github.com/kalverra/octometrics/actions/runs/1"),
+			HeadSHA:     new(mockedSha),
 		},
 		{
-			ID:          github.Ptr(int64(2)),
-			Name:        github.Ptr("mocked-check-run-2"),
-			Status:      github.Ptr("completed"),
-			Conclusion:  github.Ptr("failure"),
-			StartedAt:   github.Ptr(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
-			CompletedAt: github.Ptr(github.Timestamp{Time: time.Now()}),
-			HTMLURL:     github.Ptr("https://github.com/kalverra/octometrics/actions/runs/2"),
-			HeadSHA:     github.Ptr(mockedSha),
+			ID:          new(int64(2)),
+			Name:        new("mocked-check-run-2"),
+			Status:      new("completed"),
+			Conclusion:  new("failure"),
+			StartedAt:   new(github.Timestamp{Time: time.Now().Add(-time.Hour)}),
+			CompletedAt: new(github.Timestamp{Time: time.Now()}),
+			HTMLURL:     new("https://github.com/kalverra/octometrics/actions/runs/2"),
+			HeadSHA:     new(mockedSha),
 		},
 	}
 )

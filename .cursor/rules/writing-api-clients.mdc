@@ -1,0 +1,20 @@
+---
+description: Writing clients to external APIs
+globs: **/client.go
+alwaysApply: false
+---
+
+# Building clients to external APIs
+
+Follow these general rules when building or editing a client that interacts with another API.
+
+- Package name should be the name of the service we're calling out to (e.g. `slack` or `jira`). The file name for the primary logic should be `client.go`
+- Look for official Go packages or API wrappers to handle client calls where possible. If there are none, use [resty](https://pkg.go.dev/resty.dev/v3). Here are some gotos:
+  - Jira: https://developer.atlassian.com/cloud/jira/platform/rest/v3
+  - Todoist: https://developer.todoist.com/api/v1/
+  - GitHub: Use the latest version of the go-github package: https://github.com/google/go-github
+  - Slack: Use latest version of slack-go package: https://github.com/slack-go/slack
+- Add zerolog logging to log each request and response at the TRACE level.
+- Use interfaces for easy unit testing. Will utilize [mockery](https://github.com/vektra/mockery) to generate the mocks.
+- Write fakes for use in testing.
+- Put structs modelling API call and response objects into a `models.go` file.

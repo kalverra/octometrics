@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -88,7 +89,7 @@ type IOMeasurement struct {
 
 // Analyze reads the monitor data from a file and processes each entry.
 func Analyze(log zerolog.Logger, dataFile string) (*Analysis, error) {
-	file, err := os.Open(dataFile)
+	file, err := os.Open(filepath.Clean(dataFile))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}

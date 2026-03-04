@@ -1,3 +1,4 @@
+// Package cmd implements the CLI commands for octometrics.
 package cmd
 
 import (
@@ -19,7 +20,7 @@ var (
 var gatherCmd = &cobra.Command{
 	Use:   "gather",
 	Short: "Gather metrics from GitHub",
-	PreRunE: func(cmd *cobra.Command, args []string) error {
+	PreRunE: func(_ *cobra.Command, _ []string) error {
 		if owner == "" {
 			return errors.New("owner must be provided")
 		}
@@ -46,7 +47,7 @@ var gatherCmd = &cobra.Command{
 
 		return nil
 	},
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		logger.Debug().
 			Bool("force-update", forceUpdate).
 			Msg("gather flags")

@@ -1,3 +1,4 @@
+// Package logging provides structured logging configuration using zerolog.
 package logging
 
 import (
@@ -9,6 +10,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// TimeLayout is the time format used across all log output.
 const TimeLayout = "2006-01-02T15:04:05.000"
 
 var once sync.Once
@@ -19,6 +21,7 @@ type options struct {
 	logFileName       string
 }
 
+// Option configures the logger.
 type Option func(*options)
 
 // WithFileName sets the log file name.
@@ -35,7 +38,7 @@ func WithLevel(logLevelInput string) Option {
 	}
 }
 
-// WithDisableConsoleLog disables console logging.
+// DisableConsoleLog disables console logging.
 func DisableConsoleLog() Option {
 	return func(o *options) {
 		o.disableConsoleLog = true

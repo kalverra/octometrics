@@ -1,28 +1,54 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
-    - id: check-yaml
-    - id: detect-aws-credentials
-    - id: detect-private-key
-    - id: end-of-file-fixer
-    - id: trailing-whitespace
+      - id: check-yaml
+        exclude: deploy/charts/.*
+      - id: detect-aws-credentials
+      - id: detect-private-key
+        exclude: (testdata/test_key\.pem$|config/definition\.go$|config\.md$)
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
-    - id: codespell
+      - id: codespell
+        exclude: go\.sum$
   - repo: https://github.com/golangci/golangci-lint
-    rev: v2.0.2
+    rev: v2.10.1
     hooks:
-    - id: golangci-lint-config-verify
-    - id: golangci-lint-full
+      - id: golangci-lint-config-verify
+      - id: golangci-lint-full
   - repo: local
     hooks:
-    - id: go-unit-tests
-      name: go unit tests
-      entry: env OCTOMETRICS_TEST_LOG_LEVEL=disabled gotestsum -- -cover ./...
-      pass_filenames: false
-      types: [go]
-      language: golang
-      stages: [pre-push]
+      - id: go-mod-tidy
+        name: go mod tidy
+        entry: go mod tidy
+        pass_filenames: false
+        types_or: [go, go-mod, go-sum]
+        language: golang
+        stages: [pre-commit, pre-push]
+      - id: go-fix
+        name: go fix
+        entry: go fix ./...
+        pass_filenames: false
+        types_or: [go, go-mod, go-sum]
+        language: golang
+        stages: [pre-commit, pre-push]
+      - id: go-generate
+        name: go generate
+        entry: go generate ./...
+        pass_filenames: false
+        types_or: [go, go-mod, go-sum]
+        language: golang
+        stages: [pre-commit, pre-push]
+      - id: go-short-tests
+        name: go short tests
+        entry: env gotestsum -- -cover -short ./...
+        pass_filenames: false
+        types_or: [go, go-mod, go-sum]
+        language: golang
+        stages: [pre-push]
+
 default_install_hook_types: [pre-commit, pre-push]

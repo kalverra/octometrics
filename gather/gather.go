@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/gofri/go-github-ratelimit/github_ratelimit"
-	"github.com/google/go-github/v70/github"
+	"github.com/google/go-github/v84/github"
 	"github.com/rs/zerolog"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 )
 
+// GitHub API constants for authentication, timeouts, and data storage.
 const (
 	//nolint:gosec // Env var for getting token
 	GitHubTokenEnvVar = "GITHUB_TOKEN"
@@ -87,6 +88,7 @@ func withCommitData(commitData *CommitData) Option {
 	}
 }
 
+// GitHubClient wraps GitHub REST and GraphQL clients for API access.
 type GitHubClient struct {
 	Rest    *github.Client
 	GraphQL *githubv4.Client

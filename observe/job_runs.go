@@ -42,7 +42,7 @@ func JobRuns(
 				return fmt.Errorf("failed to build timeline for job '%d': %w", job.GetID(), err)
 			}
 			jobRunTemplateData.Event = workflowRun.GetEvent()
-			jobRunMonitoringData, err := Monitoring(log, job.Analysis)
+			jobRunMonitoringData, err := monitoring(job.Analysis)
 			if err != nil {
 				return fmt.Errorf("failed to build monitoring data for job '%d': %w", job.GetID(), err)
 			}

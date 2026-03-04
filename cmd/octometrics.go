@@ -37,7 +37,7 @@ var rootCmd = &cobra.Command{
 
 GitHub Actions provides surprisingly little metrics to help you optimize things like runtime and profiling data.
 Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and inefficiencies in your CI/CD pipelines.`,
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+	PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 		var err error
 
 		loggingOpts := []logging.Option{
@@ -75,7 +75,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			Msg("octometrics flags")
 		return nil
 	},
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		err := cmd.Help()
 		if err != nil {
 			logger.Fatal().Err(err).Msg("Failed to print help message")
@@ -90,6 +90,7 @@ func init() {
 		BoolVarP(&disableConsoleLog, "silent", "s", false, "Disables console logs. Still logs to file")
 }
 
+// Execute runs the root command for octometrics.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		logger.Fatal().Err(err).Msg("Failed to execute command")

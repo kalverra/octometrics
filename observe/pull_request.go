@@ -9,6 +9,7 @@ import (
 	"github.com/kalverra/octometrics/gather"
 )
 
+// PullRequest creates an Observation for a given pull request number.
 func PullRequest(
 	log zerolog.Logger,
 	client *gather.GitHubClient,

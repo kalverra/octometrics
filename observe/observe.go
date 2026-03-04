@@ -25,7 +25,9 @@ import (
 //go:embed templates/*.html templates/*.md
 var templateFS embed.FS
 
+// Output directory constants for rendered observations.
 const (
+	// OutputDir is the base directory for all observation output.
 	OutputDir         = "observe_output"
 	htmlOutputDir     = "observe_output/html"
 	markdownOutputDir = "observe_output/md"
@@ -111,6 +113,7 @@ type Observation struct {
 	CommitData []*gather.CommitData
 }
 
+// Render writes the observation to a file in the specified output format (html or md).
 func (o *Observation) Render(log zerolog.Logger, outputType string) (observationFile string, err error) {
 	var baseDir string
 	switch outputType {
@@ -274,6 +277,7 @@ func openBrowser(url string) error {
 	return exec.Command(cmd, args...).Run()
 }
 
+// All generates observations for all gathered data in the specified output formats.
 func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) error {
 	return generateAllObserveData(log, client, outputTypes)
 }
