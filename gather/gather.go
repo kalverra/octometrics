@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gofri/go-github-ratelimit/github_ratelimit"
+	"github.com/gofri/go-github-ratelimit/v2/github_ratelimit"
+	"github.com/gofri/go-github-ratelimit/v2/github_ratelimit/github_primary_ratelimit"
+	"github.com/gofri/go-github-ratelimit/v2/github_ratelimit/github_secondary_ratelimit"
 	"github.com/google/go-github/v84/github"
 	"github.com/rs/zerolog"
 	"github.com/shurcooL/githubv4"
@@ -25,13 +27,18 @@ const (
 )
 
 var (
-	ghCtx = context.WithValue(
-		context.Background(),
-		github.SleepUntilPrimaryRateLimitResetWhenRateLimited,
-		true,
-	)
 	errGitHubTimeout = errors.New("github API timeout")
 )
+
+// ghCtx returns a standard context to use for GitHub API calls.
+func ghCtx() (context.Context, func()) {
+	ctx, cancel := context.WithTimeoutCause(context.Background(), timeoutDur, errGitHubTimeout)
+	return context.WithValue(
+		ctx,
+		github.BypassRateLimitCheck,
+		true,
+	), cancel
+}
 
 // Option is a function that modifies GatherOptions to change how data is gathered from GitHub.
 type Option func(*options)
@@ -98,7 +105,6 @@ func NewGitHubClient(
 	optionalNext http.RoundTripper,
 ) (*GitHubClient, error) {
 	var (
-		err    error
 		next   http.RoundTripper
 		client = &GitHubClient{}
 	)
@@ -107,32 +113,21 @@ func NewGitHubClient(
 		next = optionalNext
 	}
 
-	onRateLimitHit := func(ctx *github_ratelimit.CallbackContext) {
-		l := logger.Warn()
-		if ctx.Request != nil {
-			l = l.Str("request_url", ctx.Request.URL.String())
-		}
-		if ctx.Response != nil {
-			l = l.Int("status", ctx.Response.StatusCode)
-		}
-		if ctx.SleepUntil != nil {
-			l = l.Time("sleep_until", *ctx.SleepUntil)
-		}
-		if ctx.TotalSleepTime != nil {
-			l = l.Str("total_sleep_time", ctx.TotalSleepTime.String())
-		}
-		l.Msg("GitHub API rate limit hit, sleeping until limit reset")
-	}
-
-	baseClient, err := github_ratelimit.NewRateLimitWaiterClient(
-		gitHubClientRoundTripper("REST", logger, next),
-		github_ratelimit.WithLimitDetectedCallback(onRateLimitHit),
+	rateLimiter := github_ratelimit.NewClient(gitHubClientRoundTripper("REST", logger, next),
+		github_primary_ratelimit.WithLimitDetectedCallback(func(ctx *github_primary_ratelimit.CallbackContext) {
+			logger.Warn().
+				Str("category", string(ctx.Category)).
+				Time("reset_time", *ctx.ResetTime).
+				Msg("Primary rate limit hit")
+		}),
+		github_secondary_ratelimit.WithLimitDetectedCallback(func(ctx *github_secondary_ratelimit.CallbackContext) {
+			logger.Warn().
+				Time("reset_time", *ctx.ResetTime).
+				Msg("Secondary rate limit hit")
+		}),
 	)
-	if err != nil {
-		return nil, err
-	}
 
-	client.Rest = github.NewClient(baseClient)
+	client.Rest = github.NewClient(rateLimiter)
 	if githubToken != "" {
 		client.Rest = client.Rest.WithAuthToken(githubToken)
 	}

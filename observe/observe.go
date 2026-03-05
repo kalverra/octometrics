@@ -22,7 +22,7 @@ import (
 	"github.com/kalverra/octometrics/gather"
 )
 
-//go:embed templates/*.html templates/*.md
+//go:embed templates/*.html templates/*.md templates/*.css
 var templateFS embed.FS
 
 // Output directory constants for rendered observations.
@@ -46,7 +46,10 @@ func init() {
 	htmlTemplate, err = template.New("observation_html").Funcs(template.FuncMap{
 		"sanitizeMermaidName": sanitizeMermaidName,
 		"commitRunLink":       commitRunLink,
-	}).ParseFS(templateFS, "templates/*.html")
+		"divideBy1000": func(v int64) float64 {
+			return float64(v) / 1000.0
+		},
+	}).ParseFS(templateFS, "templates/*.html", "templates/*.css")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
 	}
@@ -90,6 +93,46 @@ func WithGatherOptions(opts ...gather.Option) Option {
 	return func(o *options) {
 		o.gatherOptions = opts
 	}
+}
+
+// IndexPage is the data passed to the index_html template for navigation pages.
+type IndexPage struct {
+	Title       string
+	Breadcrumbs []Breadcrumb
+	Dirs        []IndexDir
+	Items       []IndexItem
+}
+
+// Breadcrumb is a single segment of the breadcrumb navigation.
+type Breadcrumb struct {
+	Name string
+	Path string
+}
+
+// IndexDir is a subdirectory entry in an index page.
+type IndexDir struct {
+	Name  string
+	Path  string
+	Count int
+}
+
+// IndexItem is an observation entry in an index page.
+type IndexItem struct {
+	Name  string
+	Path  string
+	State string
+	Actor string
+}
+
+func renderIndex(targetFile string, page IndexPage) error {
+	var buf bytes.Buffer
+	if err := htmlTemplate.ExecuteTemplate(&buf, "index_html", page); err != nil {
+		return fmt.Errorf("failed to render index page: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(targetFile), 0750); err != nil {
+		return fmt.Errorf("failed to create index directory: %w", err)
+	}
+	return os.WriteFile(targetFile, buf.Bytes(), 0600)
 }
 
 // Observation represents a single observation of a PR, commit, or workflow run, or job.
@@ -285,8 +328,14 @@ func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) 
 	return generateAllObserveData(log, client, outputTypes)
 }
 
+type categoryKey struct {
+	owner, repo, category string
+}
+
 func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) error {
-	return filepath.WalkDir(gather.DataDir, func(path string, d os.DirEntry, err error) error {
+	collected := make(map[categoryKey][]IndexItem)
+
+	err := filepath.WalkDir(gather.DataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -304,7 +353,6 @@ func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, out
 			return fmt.Errorf("file %s is not a JSON file", path)
 		}
 
-		// Get owner, repo, and data name from the file path
 		pathComponents := strings.Split(path, string(filepath.Separator))
 		if len(pathComponents) != 5 {
 			return fmt.Errorf("unexpected path format: %s", path)
@@ -348,6 +396,28 @@ func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, out
 			commitSHA = dataName
 			observation, err = Commit(log, client, owner, repo, commitSHA)
 			observations = append(observations, observation)
+		case gather.SurveysDataDir:
+			surveyObs, surveyErr := SurveyFromFile(log, client, owner, repo, path)
+			if surveyErr != nil {
+				return fmt.Errorf("failed to generate survey observation: %w", surveyErr)
+			}
+			if _, surveyErr = RenderSurvey(log, surveyObs, OutputDir); surveyErr != nil {
+				return fmt.Errorf("failed to render survey: %w", surveyErr)
+			}
+			key := categoryKey{owner, repo, gather.SurveysDataDir}
+			eventLabel := surveyObs.Event
+			if eventLabel == "" {
+				eventLabel = "all events"
+			}
+			collected[key] = append(collected[key], IndexItem{
+				Name: fmt.Sprintf("%s (%s to %s)",
+					eventLabel,
+					surveyObs.Since.Format("2006-01-02"),
+					surveyObs.Until.Format("2006-01-02"),
+				),
+				Path: dataName + ".html",
+			})
+			return nil
 		}
 
 		if err != nil {
@@ -355,17 +425,132 @@ func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, out
 		}
 
 		for _, outputType := range outputTypes {
-			for _, observation := range observations {
-				if observation == nil {
+			for _, obs := range observations {
+				if obs == nil {
 					return fmt.Errorf("found a nil observation, this should never happen")
 				}
-				_, err = observation.Render(log, outputType)
+				_, err = obs.Render(log, outputType)
 				if err != nil {
 					return err
 				}
 			}
 		}
 
+		for _, obs := range observations {
+			if obs == nil {
+				continue
+			}
+			key := categoryKey{obs.Owner, obs.Repo, obs.DataType + "s"}
+			collected[key] = append(collected[key], IndexItem{
+				Name:  obs.Name,
+				Path:  obs.ID + ".html",
+				State: obs.State,
+				Actor: obs.Actor,
+			})
+		}
+
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	return generateIndexPages(collected)
+}
+
+func generateIndexPages(collected map[categoryKey][]IndexItem) error {
+	homeBreadcrumb := Breadcrumb{Name: "Home", Path: "/"}
+
+	repos := make(map[string]map[string]int)
+	for key, items := range collected {
+		repoPath := key.owner + "/" + key.repo
+		if repos[repoPath] == nil {
+			repos[repoPath] = make(map[string]int)
+		}
+		repos[repoPath][key.category] += len(items)
+	}
+
+	// Root index: list all owner/repo combos
+	rootDirs := make([]IndexDir, 0, len(repos))
+	for repoPath, categories := range repos {
+		total := 0
+		for _, count := range categories {
+			total += count
+		}
+		rootDirs = append(rootDirs, IndexDir{
+			Name:  repoPath,
+			Path:  "/" + repoPath + "/",
+			Count: total,
+		})
+	}
+	sort.Slice(rootDirs, func(i, j int) bool { return rootDirs[i].Name < rootDirs[j].Name })
+	err := renderIndex(filepath.Join(htmlOutputDir, "index.html"), IndexPage{
+		Title:       "Octometrics",
+		Breadcrumbs: []Breadcrumb{homeBreadcrumb},
+		Dirs:        rootDirs,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to render root index: %w", err)
+	}
+
+	repoCategoryDisplay := map[string]string{
+		"workflow_runs": "Workflow Runs",
+		"pull_requests": "Pull Requests",
+		"surveys":       "Surveys",
+	}
+
+	// Repo indexes: list primary categories for each owner/repo
+	for repoPath, categories := range repos {
+		parts := strings.SplitN(repoPath, "/", 2)
+		owner, repo := parts[0], parts[1]
+
+		catDirs := make([]IndexDir, 0, len(repoCategoryDisplay))
+		for cat, displayName := range repoCategoryDisplay {
+			count := categories[cat]
+			if count == 0 {
+				continue
+			}
+			catDirs = append(catDirs, IndexDir{
+				Name:  displayName,
+				Path:  "/" + repoPath + "/" + cat + "/",
+				Count: count,
+			})
+		}
+		sort.Slice(catDirs, func(i, j int) bool { return catDirs[i].Name < catDirs[j].Name })
+
+		err := renderIndex(filepath.Join(htmlOutputDir, owner, repo, "index.html"), IndexPage{
+			Title: repoPath,
+			Breadcrumbs: []Breadcrumb{
+				homeBreadcrumb,
+				{Name: repoPath, Path: "/" + repoPath + "/"},
+			},
+			Dirs: catDirs,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to render repo index for %s: %w", repoPath, err)
+		}
+	}
+
+	// Category indexes: list observations for each owner/repo/category
+	for key, items := range collected {
+		repoPath := key.owner + "/" + key.repo
+		catPath := repoPath + "/" + key.category
+
+		sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
+
+		err := renderIndex(filepath.Join(htmlOutputDir, key.owner, key.repo, key.category, "index.html"), IndexPage{
+			Title: key.category,
+			Breadcrumbs: []Breadcrumb{
+				homeBreadcrumb,
+				{Name: repoPath, Path: "/" + repoPath + "/"},
+				{Name: key.category, Path: "/" + catPath + "/"},
+			},
+			Items: items,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to render category index for %s: %w", catPath, err)
+		}
+	}
+
+	return nil
 }

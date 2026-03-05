@@ -23,7 +23,7 @@ import (
 // Monitoring data file name and log message constants.
 const (
 	// DataFile is the default file name for monitor output.
-	DataFile = "octometrics.monitor.json"
+	DataFile = "octometrics.monitor.jsonl"
 
 	// CPUSystemInfoMsg is the log message for CPU system info.
 	CPUSystemInfoMsg = "CPU System Info"

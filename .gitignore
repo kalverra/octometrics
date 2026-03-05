@@ -30,6 +30,8 @@ go.work.sum
 
 octometrics.log.json
 octometrics.monitor.json
+octometrics.log.jsonl
+octometrics.monitor.jsonl
 data/
 observe_output/
 test_results/
