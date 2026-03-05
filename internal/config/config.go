@@ -153,9 +153,6 @@ func (c *Config) ValidateSurvey() error {
 	if c.Since.After(c.Until) {
 		return errors.New("since must be before until")
 	}
-	if c.Until.Before(c.Since) {
-		return errors.New("until must be after since")
-	}
 
 	return nil
 }
