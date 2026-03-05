@@ -3,7 +3,6 @@
 package gather
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -200,7 +199,7 @@ func Commit(
 		return nil, fmt.Errorf("GitHub client is nil")
 	}
 
-	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+	ctx, cancel := ghCtx()
 	commit, resp, err := client.Rest.Repositories.GetCommit(ctx, owner, repo, sha, nil)
 	cancel()
 	if err != nil {
@@ -254,7 +253,7 @@ func checkRunsForCommit(
 
 	for {
 		var checkRuns *github.ListCheckRunsResults
-		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+		ctx, cancel := ghCtx()
 		checkRuns, resp, err = client.Rest.Checks.ListCheckRunsForRef(ctx, owner, repo, sha, listOpts)
 		cancel()
 		if err != nil {

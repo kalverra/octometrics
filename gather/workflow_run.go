@@ -2,7 +2,6 @@ package gather
 
 import (
 	"archive/zip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -196,7 +195,7 @@ func WorkflowRun(
 
 	log.Debug().Msg("Fetching workflow run data from GitHub")
 
-	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+	ctx, cancel := ghCtx()
 	workflowRun, resp, err := client.Rest.Actions.GetWorkflowRunByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
@@ -328,7 +327,7 @@ func jobsData(
 			jobs *github.Jobs
 		)
 
-		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+		ctx, cancel := ghCtx()
 		jobs, resp, err = client.Rest.Actions.ListWorkflowJobs(ctx, owner, repo, workflowRunID, listOpts)
 		cancel()
 		if err != nil {
@@ -356,7 +355,7 @@ func billingData(
 	owner, repo string,
 	workflowRunID int64,
 ) (*github.WorkflowRunUsage, error) {
-	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+	ctx, cancel := ghCtx()
 	usage, resp, err := client.Rest.Actions.GetWorkflowRunUsageByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
@@ -409,7 +408,7 @@ func monitoringData(
 	)
 
 	for {
-		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+		ctx, cancel := ghCtx()
 		artifacts, resp, err := client.Rest.Actions.ListWorkflowRunArtifacts(
 			ctx,
 			owner,
@@ -438,7 +437,7 @@ func monitoringData(
 
 	for _, artifact := range artifactsToDownload {
 		// Get URL to download the artifact
-		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+		ctx, cancel := ghCtx()
 		artifactURL, resp, err := client.Rest.Actions.DownloadArtifact(ctx, owner, repo, artifact.GetID(), 5)
 		cancel()
 		if err != nil {

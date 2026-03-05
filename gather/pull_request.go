@@ -91,7 +91,7 @@ func PullRequest(
 		return nil, fmt.Errorf("GitHub client is nil")
 	}
 
-	ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+	ctx, cancel := ghCtx()
 	pr, resp, err := client.Rest.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
 	cancel()
 	if err != nil {
@@ -117,7 +117,15 @@ func PullRequest(
 	}
 
 	opts = append(opts, withPullRequestData(pullRequestData))
-	pullRequestData.CommitData, err = prCommitData(log, client, owner, repo, prCommits, mergeQueueEvents, opts...)
+	pullRequestData.CommitData, err = prCommitData(
+		log,
+		client,
+		owner,
+		repo,
+		prCommits,
+		mergeQueueEvents,
+		opts...,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather commit data for pull request %d: %w", pullRequestNumber, err)
 	}
@@ -159,7 +167,7 @@ func prCommits(
 	)
 
 	for {
-		ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+		ctx, cancel := ghCtx()
 		commitsPage, resp, err := client.Rest.PullRequests.ListCommits(ctx, owner, repo, pullRequestNumber, listOpts)
 		cancel()
 		if err != nil {
@@ -190,7 +198,7 @@ func prCommits(
 		}
 
 		if _, ok := commitsMap[event.Commit]; !ok {
-			ctx, cancel := context.WithTimeoutCause(ghCtx, timeoutDur, errGitHubTimeout)
+			ctx, cancel := ghCtx()
 			commit, resp, err := client.Rest.Repositories.GetCommit(
 				ctx,
 				owner,

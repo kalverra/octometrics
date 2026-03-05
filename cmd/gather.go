@@ -15,8 +15,6 @@ import (
 var (
 	githubToken  string
 	githubClient *gather.GitHubClient
-	forceUpdate  bool
-	noObserve    bool
 )
 
 var gatherCmd = &cobra.Command{
@@ -34,10 +32,6 @@ var gatherCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(_ *cobra.Command, _ []string) error {
-		logger.Debug().
-			Bool("force-update", forceUpdate).
-			Msg("gather flags")
-
 		startTime := time.Now()
 
 		logger = logger.With().Str("owner", cfg.Owner).Str("repo", cfg.Repo).Logger()
@@ -53,7 +47,7 @@ var gatherCmd = &cobra.Command{
 
 		opts := []gather.Option{}
 
-		if forceUpdate {
+		if cfg.ForceUpdate {
 			opts = append(opts, gather.ForceUpdate())
 		}
 
@@ -72,7 +66,7 @@ var gatherCmd = &cobra.Command{
 		logger.Info().Str("duration", time.Since(startTime).String()).Msg("Gathered data")
 		fmt.Println("Gathered data")
 
-		if noObserve {
+		if cfg.NoObserve {
 			return nil
 		}
 
@@ -94,14 +88,16 @@ var gatherCmd = &cobra.Command{
 
 func init() {
 	gatherCmd.Flags().
-		BoolVar(&noObserve, "no-observe", false, "Skip launching the interactive observer after gathering")
-	gatherCmd.Flags().BoolVarP(&forceUpdate, "force-update", "u", false, "Force update of existing data")
+		Bool("no_observe", false, "Skip launching the interactive observer after gathering data")
+	gatherCmd.Flags().BoolP("force_update", "u", false, "Force update of existing data")
 	gatherCmd.Flags().StringP("owner", "o", "", "Repository owner")
 	gatherCmd.Flags().StringP("repo", "r", "", "Repository name")
-	gatherCmd.Flags().StringP("commit-sha", "c", "", "Commit SHA")
+	gatherCmd.Flags().StringP("commit_sha", "c", "", "Commit SHA")
 	gatherCmd.Flags().Int64P("workflow_run_id", "w", 0, "Workflow run ID")
 	gatherCmd.Flags().IntP("pull_request_number", "p", 0, "Pull request number")
 	gatherCmd.Flags().StringP("github_token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")
+	gatherCmd.Flags().
+		Bool("gather_cost", false, "Gather cost data for workflow runs (can significantly increase runtime)")
 
 	rootCmd.AddCommand(gatherCmd)
 }

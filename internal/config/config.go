@@ -4,6 +4,9 @@ package config
 import (
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -11,18 +14,34 @@ import (
 
 // Config is the configuration for the application.
 type Config struct {
-	LogLevel          string `mapstructure:"log_level"`
-	GitHubToken       string `mapstructure:"github_token"`
-	Owner             string `mapstructure:"owner"`
-	Repo              string `mapstructure:"repo"`
-	CommitSHA         string `mapstructure:"commit_sha"`
-	WorkflowRunID     int64  `mapstructure:"workflow_run_id"`
-	PullRequestNumber int    `mapstructure:"pull_request_number"`
+	LogLevel          string    `mapstructure:"log_level"`
+	GitHubToken       string    `mapstructure:"github_token"`
+	Owner             string    `mapstructure:"owner"`
+	Repo              string    `mapstructure:"repo"`
+	CommitSHA         string    `mapstructure:"commit_sha"`
+	WorkflowRunID     int64     `mapstructure:"workflow_run_id"`
+	PullRequestNumber int       `mapstructure:"pull_request_number"`
+	ForceUpdate       bool      `mapstructure:"force_update"`
+	NoObserve         bool      `mapstructure:"no_observe"`
+	Event             string    `mapstructure:"event"`
+	Since             time.Time `mapstructure:"since"`
+	Until             time.Time `mapstructure:"until"`
+	GatherCost        bool      `mapstructure:"gather_cost"`
+	DataDir           string    `mapstructure:"data_dir"`
 }
 
 const (
 	// DefaultLogLevel is the default log level.
 	DefaultLogLevel = "silent"
+	// DefaultDataDir is the default data directory.
+	DefaultDataDir = "data"
+)
+
+var (
+	// DefaultSince is the default start date for survey.
+	DefaultSince = time.Now().AddDate(0, 0, -7)
+	// DefaultUntil is the default end date for survey.
+	DefaultUntil = time.Now()
 )
 
 // LoadOption is a function that can be used to load configuration.
@@ -52,6 +71,9 @@ func Load(opts ...LoadOption) (*Config, error) {
 	v.AddConfigPath(".")
 
 	v.SetDefault("log_level", DefaultLogLevel)
+	v.SetDefault("since", DefaultSince)
+	v.SetDefault("until", DefaultUntil)
+	v.SetDefault("data_dir", DefaultDataDir)
 	v.AutomaticEnv()
 
 	for _, opt := range opts {
@@ -102,6 +124,37 @@ func (c *Config) ValidateGather() error {
 
 	if c.GitHubToken == "" {
 		fmt.Println("WARNING:GitHub token not provided, will likely hit rate limits quickly")
+	}
+
+	return nil
+}
+
+// ValidateSurvey validates the configuration for the survey command.
+func (c *Config) ValidateSurvey() error {
+	if c.Owner == "" {
+		return errors.New("owner is required")
+	}
+	if c.Repo == "" {
+		return errors.New("repo is required")
+	}
+
+	validEvents := []string{"all", "pull_request", "merge_group", "push"}
+	if !slices.Contains(validEvents, c.Event) {
+		return fmt.Errorf("invalid event %q: must be one of %s", c.Event, strings.Join(validEvents, ", "))
+	}
+
+	if c.Since.IsZero() {
+		return errors.New("since is required")
+	}
+	if c.Until.IsZero() {
+		return errors.New("until is required")
+	}
+
+	if c.Since.After(c.Until) {
+		return errors.New("since must be before until")
+	}
+	if c.Until.Before(c.Since) {
+		return errors.New("until must be after since")
 	}
 
 	return nil

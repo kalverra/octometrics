@@ -1,0 +1,64 @@
+{{- /* Go Template file */ -}}
+
+{{ define "index_html" }}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .Title }} | Octometrics</title>
+    <style>
+        {{ template "styles_css" }}
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <nav class="breadcrumbs">
+            {{ range $i, $b := .Breadcrumbs }}{{ if $i }} / {{ end }}<a href="{{ $b.Path }}">{{ $b.Name }}</a>{{ end }}
+        </nav>
+
+        <header class="page-header">
+            <h1>{{ .Title }}</h1>
+        </header>
+
+        {{ if .Dirs }}
+        <ul class="index-list">
+            {{ range .Dirs }}
+            <li class="index-item">
+                <a href="{{ .Path }}" class="index-item-link">
+                    <span class="index-item-name">{{ .Name }}</span>
+                    {{ if .Count }}<span class="badge">{{ .Count }}</span>{{ end }}
+                </a>
+            </li>
+            {{ end }}
+        </ul>
+        {{ end }}
+
+        {{ if .Items }}
+        <ul class="index-list">
+            {{ range .Items }}
+            <li class="index-item">
+                <a href="{{ .Path }}" class="index-item-link">
+                    <span class="index-item-name">{{ .Name }}</span>
+                    {{ if .State }}
+                    <span class="badge badge-{{ .State }}">{{ .State }}</span>
+                    {{ end }}
+                    {{ if .Actor }}
+                    <span class="index-item-meta">{{ .Actor }}</span>
+                    {{ end }}
+                </a>
+            </li>
+            {{ end }}
+        </ul>
+        {{ end }}
+
+        {{ if and (not .Dirs) (not .Items) }}
+        <p class="empty-state">No data gathered yet. Run <code>octometrics gather</code> to get started.</p>
+        {{ end }}
+    </div>
+</body>
+
+</html>
+{{ end }}

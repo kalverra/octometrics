@@ -2,7 +2,8 @@
 
 {{ define "timeline_html" }}
 
-{{ if .Items}}
+{{ if .Items }}
+<div class="timeline-chart">
 <pre class="mermaid">
     gantt
         dateFormat {{ .DateFormat }}
@@ -15,13 +16,14 @@
         {{ range .Items }}
         {{ if .Link }}click {{ .ID }} href "{{ .Link }}" {{ end }}{{ end }}
 </pre>
+</div>
 {{ else }}
-<h2>No timeline to display, there might not be any workflow runs.</h2>
+<p class="empty-state">No timeline to display &mdash; there might not be any workflow runs.</p>
 {{ end }}
 
 {{ if .SkippedItems }}
-<h3>Skipped Items</h3>
-<ul>
+<h3>Skipped</h3>
+<ul class="muted-list">
     {{ range .SkippedItems }}
     <li>{{ . }}</li>
     {{ end }}
@@ -29,10 +31,14 @@
 {{ end }}
 
 {{ if .PostTimelineItems }}
-<h3>Post Timeline Items (e.g. workflows that ran after their PR was closed)</h3>
-<ul>
+<h3>Post-Timeline</h3>
+<p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-top: 0;">Workflows that ran after their PR was closed</p>
+<ul class="post-timeline-list">
     {{ range .PostTimelineItems }}
-    <li><a href="{{ .Link }}">{{ .Name }}</a> | {{ .Time.Format "2006-01-02T15:04:05" }}</li>
+    <li>
+        <a href="{{ .Link }}">{{ .Name }}</a>
+        <span class="timestamp">{{ .Time.Format "2006-01-02T15:04:05" }}</span>
+    </li>
     {{ end }}
 </ul>
 {{ end }}

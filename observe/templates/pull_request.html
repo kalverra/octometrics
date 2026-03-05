@@ -3,29 +3,28 @@
 {{ define "pull_request_html" }}
 
 <h2>Commits</h2>
-<ul>
-    {{ range . }}
-    <li><a href="{{ commitRunLink .GetOwner .GetRepo .GetSHA}}.html">{{ .GetSHA }}</a> - {{ .GetCommit.GetMessage }}
-        ({{
-        .GetCommit.GetAuthor.GetDate.Time.Format
-        "2006-01-02T15:04:05"
-        }})
-        {{ if .GetMergeQueueEvents }}
-        <ul>
-            {{ range .GetMergeQueueEvents }}
-            <li> Added to Merge Queue at {{ .AddedTime.Format "2006-01-02T15:04:05" }} by {{ .AddedActor }}
+<div class="card">
+    <div class="card-body">
+        <ul class="commit-list">
+            {{ range . }}
+            <li class="commit-item">
+                <span class="commit-sha"><a href="{{ commitRunLink .GetOwner .GetRepo .GetSHA }}.html">{{ slice .GetSHA 0 7 }}</a></span>
+                <span class="commit-message">{{ .GetCommit.GetMessage }}</span>
+                <span class="commit-date">{{ .GetCommit.GetAuthor.GetDate.Time.Format "Jan 2, 2006 15:04" }}</span>
             </li>
-            {{ if .RemovedTime }}
-            <li> Removed from Merge Queue at {{ .RemovedTime.Format "2006-01-02T15:04:05" }} by {{ .RemovedActor }}
-                because of
-                {{ .RemovedReason }}
-            </li>
+            {{ if .GetMergeQueueEvents }}
+            <ul class="merge-queue-events">
+                {{ range .GetMergeQueueEvents }}
+                <li>Added to merge queue {{ .AddedTime.Format "Jan 2 15:04" }} by {{ .AddedActor }}</li>
+                {{ if .RemovedTime }}
+                <li>Removed from merge queue {{ .RemovedTime.Format "Jan 2 15:04" }} by {{ .RemovedActor }} &mdash; {{ .RemovedReason }}</li>
+                {{ end }}
+                {{ end }}
+            </ul>
+            {{ end }}
             {{ end }}
         </ul>
-        {{ end }}
-    </li>
-    {{ end }}
-</ul>
-{{ end }}
+    </div>
+</div>
 
 {{ end }}

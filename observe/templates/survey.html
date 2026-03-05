@@ -1,0 +1,167 @@
+{{- /* Go Template file */ -}}
+
+{{ define "survey_html" }}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CI Suite Survey | Octometrics</title>
+    <style>
+        {{ template "styles_css" }}
+
+        .survey-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-surface-border);
+            border-radius: var(--radius-lg);
+            padding: 1rem 1.25rem;
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--color-text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-top: 0.25rem;
+        }
+
+        .percentile-header {
+            display: flex;
+            align-items: baseline;
+            gap: 0.75rem;
+            margin: 0;
+        }
+
+        .percentile-label {
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .percentile-duration {
+            font-family: var(--font-mono);
+            font-size: 1rem;
+            color: var(--color-text-secondary);
+        }
+
+        .percentile-sha {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 0.1rem 0.4rem;
+            background: var(--color-badge-bg);
+            border-radius: var(--radius);
+        }
+    </style>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (prefersDark) {
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: 'base',
+                themeVariables: {
+                    darkMode: true,
+                    background: '#161b22',
+                    primaryColor: '#1f6feb',
+                    primaryTextColor: '#ffffff',
+                    primaryBorderColor: '#388bfd',
+                    secondaryColor: '#238636',
+                    secondaryTextColor: '#ffffff',
+                    secondaryBorderColor: '#2ea043',
+                    tertiaryColor: '#21262d',
+                    tertiaryTextColor: '#e6edf3',
+                    tertiaryBorderColor: '#30363d',
+                    lineColor: '#484f58',
+                    textColor: '#e6edf3',
+                    mainBkg: '#161b22',
+                    nodeBorder: '#388bfd',
+                },
+            });
+        } else {
+            mermaid.initialize({ startOnLoad: true, theme: 'default' });
+        }
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <nav class="breadcrumbs">
+            <a href="/">Home</a> / <a href="/{{ .Owner }}/{{ .Repo }}/">{{ .Owner }}/{{ .Repo }}</a> / <a href="/{{ .Owner }}/{{ .Repo }}/surveys/">Surveys</a>
+        </nav>
+
+        <header class="page-header">
+            <h1>CI Suite Survey</h1>
+            <div class="metadata">
+                {{ if .Event }}
+                <span class="badge">
+                    <span class="badge-label">Event</span> {{ .Event }}
+                </span>
+                {{ end }}
+                <span class="badge">
+                    <span class="badge-label">From</span> {{ .Since.Format "2006-01-02" }}
+                </span>
+                <span class="badge">
+                    <span class="badge-label">To</span> {{ .Until.Format "2006-01-02" }}
+                </span>
+            </div>
+        </header>
+
+        <div class="survey-stats">
+            <div class="stat-card">
+                <div class="stat-value">{{ .TotalCommits }}</div>
+                <div class="stat-label">Commits Analyzed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ .TotalRuns }}</div>
+                <div class="stat-label">Workflow Runs</div>
+            </div>
+            {{ range .Percentiles }}
+            <div class="stat-card">
+                <div class="stat-value">{{ .Duration }}</div>
+                <div class="stat-label">{{ .Label }}</div>
+            </div>
+            {{ end }}
+        </div>
+
+        {{ range .Percentiles }}
+        <details class="section" open>
+            <summary>
+                <span class="percentile-header">
+                    <span class="percentile-label">{{ .Label }}</span>
+                    <span class="percentile-duration">{{ .Duration }}</span>
+                    <span class="percentile-sha">{{ slice .SHA 0 7 }}</span>
+                    <span class="badge badge-{{ .Conclusion }}">{{ .Conclusion }}</span>
+                </span>
+            </summary>
+            <div class="section-body">
+                {{ range .TimelineData }}
+                {{ template "timeline_html" . }}
+                {{ end }}
+            </div>
+        </details>
+        {{ end }}
+
+        {{ if not .Percentiles }}
+        <p class="empty-state">Not enough data to compute percentiles for this time period.</p>
+        {{ end }}
+    </div>
+</body>
+
+</html>
+{{ end }}

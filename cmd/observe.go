@@ -22,20 +22,6 @@ var observeCmd = &cobra.Command{
 		return os.RemoveAll(observe.OutputDir)
 	},
 	RunE: func(_ *cobra.Command, _ []string) error {
-		// if workflowRunID != 0 {
-		// 	err := observe.WorkflowRun(githubClient, owner, repo, workflowRunID, outputTypes)
-		// 	if err != nil {
-		// 		return fmt.Errorf("failed to observe workflow run: %w", err)
-		// 	}
-		// }
-
-		// if pullRequestID != 0 {
-		// 	err := observe.PullRequest(githubClient, owner, repo, pullRequestID, outputTypes)
-		// 	if err != nil {
-		// 		return fmt.Errorf("failed to observe pull request: %w", err)
-		// 	}
-		// }
-
 		return observe.Interactive(logger, githubClient, "")
 	},
 }
