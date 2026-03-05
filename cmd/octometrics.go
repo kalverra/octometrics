@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	logFileName = "octometrics.log.json"
+	logFileName = "octometrics.log.jsonl"
 )
 
 var (
@@ -62,6 +62,12 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 		if err != nil {
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
+
+		if cfg.GitHubToken == "" {
+			logger.Warn().Msg("GitHub token not provided, will likely hit rate limits quickly")
+			fmt.Println("WARNING: GitHub token not provided, will likely hit rate limits quickly")
+		}
+
 		return nil
 	},
 }

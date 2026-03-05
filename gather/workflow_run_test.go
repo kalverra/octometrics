@@ -1,6 +1,7 @@
 package gather
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kalverra/octometrics/internal/testhelpers"
+	"github.com/kalverra/octometrics/monitor"
 )
 
 func TestGatherWorkflowRun(t *testing.T) {
@@ -19,7 +21,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 	var (
 		mockGitHubDownloadPath = "/mock/artifact/download"
 		mockGitHubDownloadURL  = "http://api.github.com" + mockGitHubDownloadPath
-		mockZipFile            = filepath.Join(testDataDir, "octometrics.monitor.json.zip")
+		mockZipFile            = filepath.Join(testDataDir, fmt.Sprintf("%s.zip", monitor.DataFile))
 	)
 	require.FileExists(t, mockZipFile, "test zip file should exist")
 	require.NotEmpty(t, mockZipFile, "test zip file should not be empty")
@@ -54,7 +56,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 			},
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/zip")
-				w.Header().Set("Content-Disposition", "attachment; filename=octometrics.monitor.json.zip")
+				w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.zip", monitor.DataFile))
 				http.ServeFile(w, r, mockZipFile)
 			}),
 		),
@@ -333,7 +335,7 @@ var (
 	mockArtifacts = []*github.Artifact{
 		{
 			ID:          new(int64(1)),
-			Name:        new("octometrics.monitor.json"),
+			Name:        new(monitor.DataFile),
 			SizeInBytes: new(int64(1000)),
 		},
 		{
