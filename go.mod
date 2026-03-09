@@ -7,7 +7,7 @@ tool gotest.tools/gotestsum
 require (
 	github.com/MetalBlueberry/go-plotly v0.7.0
 	github.com/caarlos0/env/v11 v11.4.0
-	github.com/charmbracelet/fang v0.4.4
+	github.com/charmbracelet/fang v1.0.0
 	github.com/gofri/go-github-ratelimit/v2 v2.0.2
 	github.com/google/go-github/v84 v84.0.0
 	github.com/migueleliasweb/go-github-mock v1.3.0
