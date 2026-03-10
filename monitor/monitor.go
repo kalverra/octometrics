@@ -227,8 +227,8 @@ func spotCPU(log zerolog.Logger) error {
 
 	for i, percent := range cpuPercents {
 		log.Debug().
-			Int("cpu", i).
-			Float64("percent", percent).
+			Int("num", i).
+			Float64("used_percent", percent).
 			Msg(ObservedCPUMsg)
 	}
 	return nil

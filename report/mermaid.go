@@ -301,13 +301,20 @@ func buildXYChart(title, yLabel string, yMin, yMax float64, points []timeValue) 
 	fmt.Fprintf(&b, "    title %q\n", title)
 
 	// Build x-axis labels relative to the first point.
+	// Only show ~8 evenly spaced labels to avoid overlap on long workflows.
+	const maxLabels = 8
 	origin := points[0].Time
+	labelInterval := max(1, len(points)/maxLabels)
 	labels := make([]string, len(points))
 	for i, p := range points {
-		rel := p.Time.Sub(origin)
-		minutes := int(rel.Minutes())
-		seconds := int(rel.Seconds()) % 60
-		labels[i] = fmt.Sprintf("%q", fmt.Sprintf("%d:%02d", minutes, seconds))
+		if i%labelInterval == 0 {
+			rel := p.Time.Sub(origin)
+			minutes := int(rel.Minutes())
+			seconds := int(rel.Seconds()) % 60
+			labels[i] = fmt.Sprintf("%q", fmt.Sprintf("%d:%02d", minutes, seconds))
+		} else {
+			labels[i] = `" "`
+		}
 	}
 	fmt.Fprintf(&b, "    x-axis [%s]\n", strings.Join(labels, ", "))
 	fmt.Fprintf(&b, "    y-axis %q %.0f --> %.0f\n", yLabel, yMin, math.Ceil(yMax))
