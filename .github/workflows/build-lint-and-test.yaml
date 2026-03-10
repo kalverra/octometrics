@@ -43,7 +43,7 @@ jobs:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.8
+        uses: kalverra/octometrics-action@v0.0.9
         with:
           job_name: Test
           version: ./octometrics-binary
@@ -76,12 +76,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Built Binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.8
+        uses: kalverra/octometrics-action@v0.0.9
         with:
           job_name: Test (Race)
           version: ./octometrics-binary
@@ -104,12 +104,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Built Binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.8
+        uses: kalverra/octometrics-action@v0.0.9
         with:
           job_name: Lint
           version: ./octometrics-binary
