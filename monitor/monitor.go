@@ -164,8 +164,14 @@ func systemInfo(log zerolog.Logger) error {
 	if envVars == nil {
 		return nil
 	}
+	redacted := *envVars
+	if envVars.Token != "" {
+		redacted.Token = "REDACTED"
+	} else {
+		redacted.Token = "EMPTY"
+	}
 	log.Debug().
-		Interface("github_actions_env_vars", envVars).
+		Interface("github_actions_env_vars", redacted).
 		Msg(GitHubActionsEnvVarsMsg)
 
 	return nil
