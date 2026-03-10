@@ -13,7 +13,6 @@ import (
 )
 
 var (
-	githubToken  string
 	githubClient *gather.GitHubClient
 )
 
@@ -25,7 +24,7 @@ var gatherCmd = &cobra.Command{
 			return err
 		}
 		var err error
-		githubClient, err = gather.NewGitHubClient(logger, githubToken, nil)
+		githubClient, err = gather.NewGitHubClient(logger, cfg.GitHubToken, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create GitHub client: %w", err)
 		}
@@ -88,16 +87,16 @@ var gatherCmd = &cobra.Command{
 
 func init() {
 	gatherCmd.Flags().
-		Bool("no_observe", false, "Skip launching the interactive observer after gathering data")
-	gatherCmd.Flags().BoolP("force_update", "u", false, "Force update of existing data")
+		Bool("no-observe", false, "Skip launching the interactive observer after gathering data")
+	gatherCmd.Flags().BoolP("force-update", "u", false, "Force update of existing data")
 	gatherCmd.Flags().StringP("owner", "o", "", "Repository owner")
 	gatherCmd.Flags().StringP("repo", "r", "", "Repository name")
-	gatherCmd.Flags().StringP("commit_sha", "c", "", "Commit SHA")
-	gatherCmd.Flags().Int64P("workflow_run_id", "w", 0, "Workflow run ID")
-	gatherCmd.Flags().IntP("pull_request_number", "p", 0, "Pull request number")
-	gatherCmd.Flags().StringP("github_token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")
+	gatherCmd.Flags().StringP("commit-sha", "c", "", "Commit SHA")
+	gatherCmd.Flags().Int64P("workflow-run-id", "w", 0, "Workflow run ID")
+	gatherCmd.Flags().IntP("pull-request-number", "p", 0, "Pull request number")
+	gatherCmd.Flags().StringP("github-token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")
 	gatherCmd.Flags().
-		Bool("gather_cost", false, "Gather cost data for workflow runs (can significantly increase runtime)")
+		Bool("gather-cost", false, "Gather cost data for workflow runs (can significantly increase runtime)")
 
 	rootCmd.AddCommand(gatherCmd)
 }

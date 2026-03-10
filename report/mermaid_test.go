@@ -1,6 +1,7 @@
 package report
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kalverra/octometrics/internal/testhelpers"
 	"github.com/kalverra/octometrics/monitor"
 )
 
@@ -132,6 +134,7 @@ func TestCPUChart(t *testing.T) {
 		assert.Contains(t, result, "```mermaid")
 		assert.Contains(t, result, "xychart-beta")
 		assert.Contains(t, result, "CPU Usage")
+		assert.Contains(t, result, `x-axis "Seconds" 0 -->`, "short duration should use Seconds x-axis")
 	})
 }
 
@@ -162,6 +165,7 @@ func TestMemoryChart(t *testing.T) {
 		result := memoryChart(analysis)
 		assert.Contains(t, result, "Memory Usage")
 		assert.Contains(t, result, "xychart-beta")
+		assert.Contains(t, result, `x-axis "Seconds" 0 -->`, "short duration should use Seconds x-axis")
 	})
 }
 
@@ -206,7 +210,7 @@ func TestDownsample(t *testing.T) {
 			{Time: time.Now(), Value: 1},
 			{Time: time.Now(), Value: 2},
 		}
-		result := downsample(points, 40, maxAggregator)
+		result := downsample(points, 500, maxAggregator)
 		assert.Len(t, result, 2)
 	})
 
@@ -298,4 +302,67 @@ func TestConclusionToGanttStatus(t *testing.T) {
 	assert.Equal(t, "done", conclusionToGanttStatus("cancelled"))
 	assert.Empty(t, conclusionToGanttStatus("success"))
 	assert.Empty(t, conclusionToGanttStatus(""))
+}
+
+func TestBuildXYChartNumericAxis(t *testing.T) {
+	t.Parallel()
+
+	t.Run("short duration uses seconds", func(t *testing.T) {
+		t.Parallel()
+		base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		points := make([]timeValue, 50)
+		for i := range points {
+			points[i] = timeValue{
+				Time:  base.Add(time.Duration(i) * time.Second),
+				Value: float64(i),
+			}
+		}
+		result := buildXYChart("Test", "Value", 0, 100, points)
+		assert.Contains(t, result, `x-axis "Seconds" 0 --> 49`)
+		assert.NotContains(t, result, `x-axis [`, "should not use categorical x-axis")
+	})
+
+	t.Run("long duration uses minutes", func(t *testing.T) {
+		t.Parallel()
+		base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		points := make([]timeValue, 50)
+		for i := range points {
+			points[i] = timeValue{
+				Time:  base.Add(time.Duration(i) * 10 * time.Second),
+				Value: float64(i),
+			}
+		}
+		result := buildXYChart("Test", "Value", 0, 100, points)
+		assert.Contains(t, result, `x-axis "Minutes" 0 -->`)
+		assert.NotContains(t, result, `x-axis [`, "should not use categorical x-axis")
+	})
+}
+
+func TestChartsFromLongMonitorData(t *testing.T) {
+	t.Parallel()
+
+	log, _ := testhelpers.Setup(t)
+	dataFile := filepath.Join("testdata", "octometrics.monitor.long.testdata.jsonl")
+	require.FileExists(t, dataFile)
+
+	analysis, err := monitor.Analyze(log, dataFile)
+	require.NoError(t, err)
+
+	cpu := cpuChart(analysis)
+	require.NotEmpty(t, cpu, "CPU chart should not be empty")
+	assert.Contains(t, cpu, `x-axis "Minutes" 0 -->`, "multi-minute workflow should use Minutes x-axis")
+	assert.NotContains(t, cpu, `x-axis [`, "should not use categorical x-axis")
+	assert.Contains(t, cpu, "line [")
+
+	mem := memoryChart(analysis)
+	require.NotEmpty(t, mem, "memory chart should not be empty")
+	assert.Contains(t, mem, `x-axis "Minutes" 0 -->`)
+
+	disk := diskChart(analysis)
+	require.NotEmpty(t, disk, "disk chart should not be empty")
+	assert.Contains(t, disk, `x-axis "Minutes" 0 -->`)
+
+	io := ioChart(analysis)
+	require.NotEmpty(t, io, "IO chart should not be empty")
+	assert.Contains(t, io, `x-axis "Minutes" 0 -->`)
 }

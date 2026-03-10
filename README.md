@@ -11,7 +11,7 @@ A simple CLI tool to visualize and profile your GitHub Actions workflows. See al
 go run . -h
 ```
 
-## Monitor (⚠️ Under Construction)
+## Monitor
 
 This will launch a background process to monitor stats like CPU and memory usage. This can be run on GHA runners so that when you later `gather` and `observe` the data, you will also have detailed profiling info.
 

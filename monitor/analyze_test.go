@@ -12,7 +12,7 @@ import (
 func TestAnalyze(t *testing.T) {
 	t.Parallel()
 
-	monitorLogFile := filepath.Join(testDataDir, "octometrics.monitor.testdata.json")
+	monitorLogFile := filepath.Join(testDataDir, "octometrics.monitor.testdata.jsonl")
 	log, _ := testhelpers.Setup(t)
 	require.FileExists(t, monitorLogFile, "monitor log file does not exist")
 	analysis, err := Analyze(log, monitorLogFile)

@@ -67,9 +67,6 @@ func Load(opts ...LoadOption) (*Config, error) {
 	v := viper.New()
 
 	v.AutomaticEnv()
-	v.SetConfigName("config")
-	v.SetConfigType("yaml")
-	v.AddConfigPath(".")
 
 	v.SetDefault("log_level", DefaultLogLevel)
 	v.SetDefault("since", DefaultSince)

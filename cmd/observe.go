@@ -15,7 +15,7 @@ var observeCmd = &cobra.Command{
 	Short: "Observe metrics from GitHub",
 	PreRunE: func(_ *cobra.Command, _ []string) error {
 		var err error
-		githubClient, err = gather.NewGitHubClient(logger, githubToken, nil)
+		githubClient, err = gather.NewGitHubClient(logger, cfg.GitHubToken, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create GitHub client: %w", err)
 		}
