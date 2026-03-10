@@ -424,7 +424,7 @@ func monitoringData(
 			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 		}
 		for _, artifact := range artifacts.Artifacts {
-			if strings.HasSuffix(artifact.GetName(), "octometrics.monitor.log") {
+			if strings.HasSuffix(artifact.GetName(), "octometrics.monitor.log.jsonl") {
 				artifactsToDownload = append(artifactsToDownload, artifact)
 			}
 		}
@@ -513,7 +513,7 @@ func monitoringData(
 
 		var monitorFile *os.File
 		for _, file := range zipReader.File {
-			if strings.HasSuffix(file.Name, "octometrics.monitor.log") {
+			if strings.HasSuffix(file.Name, "octometrics.monitor.log.jsonl") {
 				// Open the target file inside the zip
 				rc, err := file.Open()
 				if err != nil {
