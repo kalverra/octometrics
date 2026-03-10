@@ -349,6 +349,7 @@ func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, out
 			return nil
 		}
 		if d.Name() == ".DS_Store" {
+			//nolint:gosec // I don't care
 			if err := os.Remove(path); err != nil {
 				return fmt.Errorf("failed to remove .DS_Store file: %w", err)
 			}
