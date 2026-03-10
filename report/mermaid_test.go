@@ -163,7 +163,7 @@ func TestMemoryChart(t *testing.T) {
 		}
 
 		result := memoryChart(analysis)
-		assert.Contains(t, result, "Memory Usage")
+		assert.Contains(t, result, "Memory Usage (GB)", "8 GB total should select GB unit")
 		assert.Contains(t, result, "xychart-beta")
 		assert.Contains(t, result, `x-axis "Seconds" 0 -->`, "short duration should use Seconds x-axis")
 	})
@@ -183,7 +183,7 @@ func TestDiskChart(t *testing.T) {
 	}
 
 	result := diskChart(analysis)
-	assert.Contains(t, result, "Disk Usage")
+	assert.Contains(t, result, "Disk Usage (GB)", "100 GB total should select GB unit")
 }
 
 func TestIOChart(t *testing.T) {
@@ -197,8 +197,8 @@ func TestIOChart(t *testing.T) {
 	}
 
 	result := ioChart(analysis)
-	assert.Contains(t, result, "Network Sent")
-	assert.Contains(t, result, "Network Received")
+	assert.Contains(t, result, "Network Sent (MB)", "MB-range data should select MB unit")
+	assert.Contains(t, result, "Network Received (MB)", "MB-range data should select MB unit")
 }
 
 func TestDownsample(t *testing.T) {
@@ -302,6 +302,30 @@ func TestConclusionToGanttStatus(t *testing.T) {
 	assert.Equal(t, "done", conclusionToGanttStatus("cancelled"))
 	assert.Empty(t, conclusionToGanttStatus("success"))
 	assert.Empty(t, conclusionToGanttStatus(""))
+}
+
+func TestByteScale(t *testing.T) {
+	t.Parallel()
+
+	divisor, unit := byteScale(500)
+	assert.InEpsilon(t, 1.0, divisor, 0.000001)
+	assert.Equal(t, "B", unit)
+
+	divisor, unit = byteScale(2048)
+	assert.InEpsilon(t, 1024.0, divisor, 0.000001)
+	assert.Equal(t, "KB", unit)
+
+	divisor, unit = byteScale(5 * 1024 * 1024)
+	assert.InEpsilon(t, float64(1024*1024), divisor, 0.000001)
+	assert.Equal(t, "MB", unit)
+
+	divisor, unit = byteScale(3 * 1024 * 1024 * 1024)
+	assert.InEpsilon(t, float64(1024*1024*1024), divisor, 0.000001)
+	assert.Equal(t, "GB", unit)
+
+	divisor, unit = byteScale(0)
+	assert.InEpsilon(t, 1.0, divisor, 0.000001)
+	assert.Equal(t, "B", unit)
 }
 
 func TestBuildXYChartNumericAxis(t *testing.T) {

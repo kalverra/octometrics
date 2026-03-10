@@ -123,96 +123,110 @@ func cpuChart(analysis *monitor.Analysis) string {
 	return buildXYChart("CPU Usage (%)", "Usage %", 0, 100, downsampled)
 }
 
-// memoryChart builds a Mermaid xychart-beta line chart for memory usage in MB.
+// memoryChart builds a Mermaid xychart-beta line chart for memory usage.
 func memoryChart(analysis *monitor.Analysis) string {
 	if len(analysis.MemoryMeasurements) == 0 {
 		return ""
 	}
 
-	points := make([]timeValue, len(analysis.MemoryMeasurements))
-	for i, m := range analysis.MemoryMeasurements {
-		points[i] = timeValue{Time: m.Time, Value: float64(m.Used) / 1024 / 1024}
-	}
-
-	var maxY float64
+	var maxRaw uint64
 	if analysis.SystemInfo != nil && analysis.SystemInfo.Memory != nil && analysis.SystemInfo.Memory.Total > 0 {
-		maxY = float64(analysis.SystemInfo.Memory.Total) / 1024 / 1024
+		maxRaw = analysis.SystemInfo.Memory.Total
 	} else {
-		for _, p := range points {
-			if p.Value > maxY {
-				maxY = p.Value
+		for _, m := range analysis.MemoryMeasurements {
+			if m.Used > maxRaw {
+				maxRaw = m.Used
 			}
 		}
+	}
+
+	divisor, unit := byteScale(maxRaw)
+	points := make([]timeValue, len(analysis.MemoryMeasurements))
+	for i, m := range analysis.MemoryMeasurements {
+		points[i] = timeValue{Time: m.Time, Value: float64(m.Used) / divisor}
+	}
+
+	maxY := float64(maxRaw) / divisor
+	if analysis.SystemInfo == nil || analysis.SystemInfo.Memory == nil || analysis.SystemInfo.Memory.Total == 0 {
 		maxY *= 1.1
 	}
 
 	downsampled := downsample(points, defaultTargetPoints, lastAggregator)
-	return buildXYChart("Memory Usage (MB)", "MB", 0, maxY, downsampled)
+	return buildXYChart(fmt.Sprintf("Memory Usage (%s)", unit), unit, 0, maxY, downsampled)
 }
 
-// diskChart builds a Mermaid xychart-beta line chart for disk usage in GB.
+// diskChart builds a Mermaid xychart-beta line chart for disk usage.
 func diskChart(analysis *monitor.Analysis) string {
 	if len(analysis.DiskMeasurements) == 0 {
 		return ""
 	}
 
-	points := make([]timeValue, len(analysis.DiskMeasurements))
-	for i, m := range analysis.DiskMeasurements {
-		points[i] = timeValue{Time: m.Time, Value: float64(m.Used) / 1024 / 1024 / 1024}
-	}
-
-	var maxY float64
+	var maxRaw uint64
 	if analysis.SystemInfo != nil && analysis.SystemInfo.Disk != nil && analysis.SystemInfo.Disk.Total > 0 {
-		maxY = float64(analysis.SystemInfo.Disk.Total) / 1024 / 1024 / 1024
+		maxRaw = analysis.SystemInfo.Disk.Total
 	} else {
-		for _, p := range points {
-			if p.Value > maxY {
-				maxY = p.Value
+		for _, m := range analysis.DiskMeasurements {
+			if m.Used > maxRaw {
+				maxRaw = m.Used
 			}
 		}
+	}
+
+	divisor, unit := byteScale(maxRaw)
+	points := make([]timeValue, len(analysis.DiskMeasurements))
+	for i, m := range analysis.DiskMeasurements {
+		points[i] = timeValue{Time: m.Time, Value: float64(m.Used) / divisor}
+	}
+
+	maxY := float64(maxRaw) / divisor
+	if analysis.SystemInfo == nil || analysis.SystemInfo.Disk == nil || analysis.SystemInfo.Disk.Total == 0 {
 		maxY *= 1.1
 	}
 
 	downsampled := downsample(points, defaultTargetPoints, lastAggregator)
-	return buildXYChart("Disk Usage (GB)", "GB", 0, maxY, downsampled)
+	return buildXYChart(fmt.Sprintf("Disk Usage (%s)", unit), unit, 0, maxY, downsampled)
 }
 
-// ioChart builds Mermaid xychart-beta line charts for network I/O in MB.
+// ioChart builds Mermaid xychart-beta line charts for network I/O.
 // Returns two charts: one for bytes sent and one for bytes received.
+// Each chart independently selects the best unit (B, KB, MB, GB).
 func ioChart(analysis *monitor.Analysis) string {
 	if len(analysis.IOMeasurements) == 0 {
 		return ""
 	}
 
-	sent := make([]timeValue, len(analysis.IOMeasurements))
-	recv := make([]timeValue, len(analysis.IOMeasurements))
-	for i, m := range analysis.IOMeasurements {
-		sent[i] = timeValue{Time: m.Time, Value: float64(m.BytesSent) / 1024 / 1024}
-		recv[i] = timeValue{Time: m.Time, Value: float64(m.BytesRecv) / 1024 / 1024}
+	var maxRawSent, maxRawRecv uint64
+	for _, m := range analysis.IOMeasurements {
+		if m.BytesSent > maxRawSent {
+			maxRawSent = m.BytesSent
+		}
+		if m.BytesRecv > maxRawRecv {
+			maxRawRecv = m.BytesRecv
+		}
 	}
 
 	var b strings.Builder
 
-	dsSent := downsample(sent, defaultTargetPoints, lastAggregator)
-	var maxSent float64
-	for _, p := range dsSent {
-		if p.Value > maxSent {
-			maxSent = p.Value
+	if maxRawSent > 0 {
+		sentDiv, sentUnit := byteScale(maxRawSent)
+		sent := make([]timeValue, len(analysis.IOMeasurements))
+		for i, m := range analysis.IOMeasurements {
+			sent[i] = timeValue{Time: m.Time, Value: float64(m.BytesSent) / sentDiv}
 		}
-	}
-	if maxSent > 0 {
-		b.WriteString(buildXYChart("Network Sent (MB)", "MB", 0, maxSent*1.1, dsSent))
+		dsSent := downsample(sent, defaultTargetPoints, lastAggregator)
+		maxSent := float64(maxRawSent) / sentDiv
+		b.WriteString(buildXYChart(fmt.Sprintf("Network Sent (%s)", sentUnit), sentUnit, 0, maxSent*1.1, dsSent))
 	}
 
-	dsRecv := downsample(recv, defaultTargetPoints, lastAggregator)
-	var maxRecv float64
-	for _, p := range dsRecv {
-		if p.Value > maxRecv {
-			maxRecv = p.Value
+	if maxRawRecv > 0 {
+		recvDiv, recvUnit := byteScale(maxRawRecv)
+		recv := make([]timeValue, len(analysis.IOMeasurements))
+		for i, m := range analysis.IOMeasurements {
+			recv[i] = timeValue{Time: m.Time, Value: float64(m.BytesRecv) / recvDiv}
 		}
-	}
-	if maxRecv > 0 {
-		b.WriteString(buildXYChart("Network Received (MB)", "MB", 0, maxRecv*1.1, dsRecv))
+		dsRecv := downsample(recv, defaultTargetPoints, lastAggregator)
+		maxRecv := float64(maxRawRecv) / recvDiv
+		b.WriteString(buildXYChart(fmt.Sprintf("Network Received (%s)", recvUnit), recvUnit, 0, maxRecv*1.1, dsRecv))
 	}
 
 	return b.String()
@@ -327,6 +341,21 @@ func conclusionToGanttStatus(conclusion string) string {
 		return "done"
 	default:
 		return ""
+	}
+}
+
+// byteScale returns the best divisor and unit label for displaying byte values
+// based on the maximum value in the dataset.
+func byteScale(maxBytes uint64) (divisor float64, unit string) {
+	switch {
+	case maxBytes >= 1024*1024*1024:
+		return 1024 * 1024 * 1024, "GB"
+	case maxBytes >= 1024*1024:
+		return 1024 * 1024, "MB"
+	case maxBytes >= 1024:
+		return 1024, "KB"
+	default:
+		return 1, "B"
 	}
 }
 
