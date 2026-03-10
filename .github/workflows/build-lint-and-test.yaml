@@ -25,7 +25,7 @@ jobs:
       - name: Build Octometrics
         run: go build -o octometrics-binary .
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: octometrics-binary
           path: octometrics-binary
@@ -43,7 +43,7 @@ jobs:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.9
+        uses: kalverra/octometrics-action@v0.0.10
         with:
           job_name: Test
           version: ./octometrics-binary
@@ -64,11 +64,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: cover.out
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/test-results-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   test-race:
     name: Test (Race)
@@ -81,7 +76,7 @@ jobs:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.9
+        uses: kalverra/octometrics-action@v0.0.10
         with:
           job_name: Test (Race)
           version: ./octometrics-binary
@@ -109,7 +104,7 @@ jobs:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.9
+        uses: kalverra/octometrics-action@v0.0.10
         with:
           job_name: Lint
           version: ./octometrics-binary
