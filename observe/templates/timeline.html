@@ -21,6 +21,17 @@
 <p class="empty-state">No timeline to display &mdash; there might not be any workflow runs.</p>
 {{ end }}
 
+{{ $hasRequired := false }}
+{{ range .Items }}{{ if .IsRequired }}{{ $hasRequired = true }}{{ end }}{{ end }}
+{{ if $hasRequired }}
+<h3>Required for Merge</h3>
+<ul class="required-list">
+    {{ range .Items }}{{ if .IsRequired }}
+    <li>{{ .Name }}</li>
+    {{ end }}{{ end }}
+</ul>
+{{ end }}
+
 {{ if .SkippedItems }}
 <h3>Skipped</h3>
 <ul class="muted-list">

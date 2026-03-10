@@ -66,6 +66,7 @@ func WithFlags(flags *pflag.FlagSet) LoadOption {
 func Load(opts ...LoadOption) (*Config, error) {
 	v := viper.New()
 
+	v.AutomaticEnv()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 	v.AddConfigPath(".")
@@ -74,7 +75,6 @@ func Load(opts ...LoadOption) (*Config, error) {
 	v.SetDefault("since", DefaultSince)
 	v.SetDefault("until", DefaultUntil)
 	v.SetDefault("data_dir", DefaultDataDir)
-	v.AutomaticEnv()
 
 	for _, opt := range opts {
 		if err := opt(v); err != nil {

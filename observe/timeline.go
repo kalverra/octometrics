@@ -37,6 +37,7 @@ type timelineItem struct {
 	Duration   time.Duration
 	Conclusion string
 	Link       string
+	IsRequired bool
 }
 
 func (g *timelineData) process() error {
@@ -86,7 +87,10 @@ func (g *timelineData) process() error {
 
 func sanitizeMermaidName(s string) string {
 	s = strings.TrimSpace(s)
+	if len(s) > 80 {
+		s = s[:77] + "..."
+	}
 	s = strings.ReplaceAll(s, ":", "#colon;")
-	s = strings.ReplaceAll(s, ",", "<comma>")
+	s = strings.ReplaceAll(s, ",", "#comma;")
 	return s
 }

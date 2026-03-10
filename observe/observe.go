@@ -49,6 +49,7 @@ func init() {
 		"divideBy1000": func(v int64) float64 {
 			return float64(v) / 1000.0
 		},
+		"joinStrings": strings.Join,
 	}).ParseFS(templateFS, "templates/*.html", "templates/*.css")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
@@ -147,6 +148,10 @@ type Observation struct {
 	State      string
 	Actor      string
 	Cost       int64 // Cost in tenths of a cent
+
+	// Branch protection: required status checks for the default branch
+	RequiredWorkflows       []string
+	BranchProtectionWarning bool
 
 	// Data used to show job, workflow, and commit runs
 	TimelineData   []*timelineData
@@ -334,6 +339,7 @@ type categoryKey struct {
 
 func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) error {
 	collected := make(map[categoryKey][]IndexItem)
+	bpCache := make(map[string]*gather.BranchProtectionResult)
 
 	err := filepath.WalkDir(gather.DataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -396,33 +402,24 @@ func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, out
 			commitSHA = dataName
 			observation, err = Commit(log, client, owner, repo, commitSHA)
 			observations = append(observations, observation)
-		case gather.SurveysDataDir:
-			surveyObs, surveyErr := SurveyFromFile(log, client, owner, repo, path)
-			if surveyErr != nil {
-				return fmt.Errorf("failed to generate survey observation: %w", surveyErr)
-			}
-			if _, surveyErr = RenderSurvey(log, surveyObs, OutputDir); surveyErr != nil {
-				return fmt.Errorf("failed to render survey: %w", surveyErr)
-			}
-			key := categoryKey{owner, repo, gather.SurveysDataDir}
-			eventLabel := surveyObs.Event
-			if eventLabel == "" {
-				eventLabel = "all events"
-			}
-			collected[key] = append(collected[key], IndexItem{
-				Name: fmt.Sprintf("%s (%s to %s)",
-					eventLabel,
-					surveyObs.Since.Format("2006-01-02"),
-					surveyObs.Until.Format("2006-01-02"),
-				),
-				Path: dataName + ".html",
-			})
-			return nil
 		}
 
 		if err != nil {
 			return fmt.Errorf("failed to generate observe data: %w", err)
 		}
+
+		repoKey := owner + "/" + repo
+		if _, ok := bpCache[repoKey]; !ok {
+			bp, bpErr := gather.BranchProtection(log, client, owner, repo)
+			if bpErr != nil {
+				log.Warn().Err(bpErr).
+					Str("owner", owner).Str("repo", repo).
+					Msg("Failed to fetch branch protection; continuing without it")
+				bp = &gather.BranchProtectionResult{}
+			}
+			bpCache[repoKey] = bp
+		}
+		applyBranchProtection(observations, bpCache[repoKey])
 
 		for _, outputType := range outputTypes {
 			for _, obs := range observations {
@@ -553,4 +550,42 @@ func generateIndexPages(collected map[categoryKey][]IndexItem) error {
 	}
 
 	return nil
+}
+
+// applyBranchProtection attaches branch protection data to a set of observations
+// and marks timeline items whose names match a required status check.
+func applyBranchProtection(observations []*Observation, bp *gather.BranchProtectionResult) {
+	if bp == nil {
+		return
+	}
+	for _, obs := range observations {
+		if obs == nil {
+			continue
+		}
+		if bp.PermissionDenied {
+			obs.BranchProtectionWarning = true
+			continue
+		}
+		obs.RequiredWorkflows = bp.RequiredChecks
+		for _, td := range obs.TimelineData {
+			for i := range td.Items {
+				td.Items[i].IsRequired = isRequiredCheck(td.Items[i].Name, bp.RequiredChecks)
+			}
+		}
+	}
+}
+
+// isRequiredCheck returns true if itemName matches any required check.
+// Matches on exact equality, or when one is a prefix of the other
+// separated by " / " (GitHub Actions uses "WorkflowName / JobName").
+func isRequiredCheck(itemName string, requiredChecks []string) bool {
+	for _, rc := range requiredChecks {
+		if itemName == rc {
+			return true
+		}
+		if strings.HasPrefix(itemName, rc+" / ") || strings.HasPrefix(rc, itemName+" / ") {
+			return true
+		}
+	}
+	return false
 }

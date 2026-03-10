@@ -11,6 +11,7 @@ flowchart TD
         Survey[survey]
         Observe[observe]
         Monitor[monitor]
+        Report[report]
     end
 
     subgraph gatherPkg [gather package]
@@ -51,6 +52,19 @@ flowchart TD
     ObsSurvey --> HTML
 
     HTML --> Browser[Browser :8080]
+
+    subgraph reportPkg [report package]
+        ReportRun["Run()"]
+        MermaidBuild["Mermaid builders"]
+        StepSummary["GITHUB_STEP_SUMMARY"]
+        PRComment["PR / commit comment"]
+    end
+
+    Report --> ReportRun
+    ReportRun --> MermaidBuild
+    MermaidBuild --> StepSummary
+    MermaidBuild --> PRComment
+    Monitor -.->|JSONL| ReportRun
 ```
 
 ## Survey Two-Phase Architecture
@@ -78,10 +92,66 @@ flowchart LR
     end
 ```
 
+## Branch Protection Required Checks
+
+During observation rendering, octometrics fetches the default branch's required status checks via `Repositories.Get` (to discover the default branch name) and `Repositories.GetRequiredStatusChecks`. Results are cached per `owner/repo` to avoid redundant API calls across observations in the same repository. Timeline items whose names match a required check are marked `IsRequired` and highlighted in the visualization.
+
+```mermaid
+flowchart LR
+    subgraph bp [Branch Protection Lookup]
+        RepoGet["Repositories.Get"] --> DefaultBranch[default branch name]
+        DefaultBranch --> GetChecks["GetRequiredStatusChecks"]
+    end
+
+    subgraph outcomes [Outcomes]
+        GetChecks -->|200| RequiredList[Required checks list]
+        GetChecks -->|403| Warning[Permission warning banner]
+        GetChecks -->|"404 / not protected"| Empty[Empty list]
+    end
+```
+
+The `GetRequiredStatusChecks` endpoint requires **Administration: Read** permission. When the token lacks this permission (403), the observation renders a small warning banner instead of failing. When the branch is unprotected or has no required checks, the section is simply omitted.
+
+## Report: In-Action Monitoring Summary
+
+The `report` command runs in the GitHub Actions `post` step (after the monitor process is killed) and produces an inline Mermaid-based summary without generating or hosting images. It analyzes the monitor's JSONL output for resource metrics and calls the GitHub API for job step timing.
+
+```mermaid
+flowchart TD
+    subgraph actionPost [octometrics-action post.js]
+        KillMonitor[Kill monitor process]
+        RunReport["octometrics report -f monitor.jsonl"]
+        UploadArtifact[Upload JSONL artifact]
+    end
+
+    subgraph reportFlow [report package]
+        AnalyzeJSONL["monitor.Analyze(JSONL)"]
+        FetchSteps["Fetch job steps via API"]
+        BuildCharts["Build Mermaid charts"]
+        AssembleMD["Assemble markdown"]
+        WriteSummary["Append to GITHUB_STEP_SUMMARY"]
+        PostComment["Upsert PR comment"]
+    end
+
+    KillMonitor --> RunReport
+    RunReport --> AnalyzeJSONL
+    RunReport --> FetchSteps
+    AnalyzeJSONL --> BuildCharts
+    FetchSteps --> BuildCharts
+    BuildCharts --> AssembleMD
+    AssembleMD --> WriteSummary
+    AssembleMD --> PostComment
+    RunReport --> UploadArtifact
+```
+
+The report uses Mermaid `gantt` for the step timeline and `xychart-beta` for CPU, memory, disk, and I/O line charts. Monitoring data is downsampled to ~40 points per chart. A compact metric summary table with peak/average values accompanies the charts. For PR workflows, the report upserts a comment identified by an HTML marker so re-runs update in place rather than creating duplicates.
+
 ## Key Design Decisions
 
 - **Local JSON cache**: All gathered data is stored as JSON in `data/` and re-read on subsequent runs, avoiding redundant API calls. `ForceUpdate` bypasses the cache.
 - **Rate limit awareness**: The REST client uses `go-github-ratelimit` to automatically sleep when rate-limited. Survey's two-phase design reduces total API calls from O(commits x workflows x jobs) to O(listing_pages + 3 x detail_calls).
 - **Real representative commits for percentiles**: Rather than constructing synthetic "average" timelines, the survey picks actual commits whose CI duration falls at each percentile. This shows real job distributions and integrates with existing Gantt visualization.
 - **Mermaid Gantt for timelines**: Workflow/job/step timing is rendered as Mermaid Gantt charts, giving a visual representation of parallelism and duration without requiring a charting library.
-- **Plotly for monitoring data**: CPU, memory, disk, and I/O metrics from optional `octometrics monitor` instrumentation are rendered using Plotly.js.
+- **Plotly for monitoring data**: CPU, memory, disk, and I/O metrics from optional `octometrics monitor` instrumentation are rendered using Plotly.js in the interactive `observe` view.
+- **Mermaid for in-action reports**: The `report` command uses Mermaid `gantt` and `xychart-beta` for inline charts in GitHub Step Summaries and PR comments — no images to generate, host, or upload.
+- **Graceful degradation for branch protection**: Branch protection data enriches visualizations when available but never blocks rendering. A 403 produces a small UI warning; a 404 or unprotected branch silently omits the section.

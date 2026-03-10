@@ -25,9 +25,9 @@
                 themeVariables: {
                     darkMode: true,
                     background: '#161b22',
-                    primaryColor: '#1f6feb',
+                    primaryColor: '#238636',
                     primaryTextColor: '#ffffff',
-                    primaryBorderColor: '#388bfd',
+                    primaryBorderColor: '#2ea043',
                     secondaryColor: '#238636',
                     secondaryTextColor: '#ffffff',
                     secondaryBorderColor: '#2ea043',
@@ -37,11 +37,41 @@
                     lineColor: '#484f58',
                     textColor: '#e6edf3',
                     mainBkg: '#161b22',
-                    nodeBorder: '#388bfd',
+                    nodeBorder: '#2ea043',
+                    critBkgColor: '#da3633',
+                    critBorderColor: '#f85149',
+                    doneTaskBkgColor: '#30363d',
+                    doneTaskBorderColor: '#484f58',
+                    taskTextColor: '#ffffff',
+                    taskTextDarkColor: '#ffffff',
+                    taskTextClickableColor: '#ffffff',
                 },
             });
         } else {
-            mermaid.initialize({ startOnLoad: true, theme: 'default' });
+            mermaid.initialize({
+                startOnLoad: true,
+                theme: 'base',
+                themeVariables: {
+                    primaryColor: '#2da44e',
+                    primaryTextColor: '#ffffff',
+                    primaryBorderColor: '#1a7f37',
+                    secondaryColor: '#2da44e',
+                    secondaryTextColor: '#ffffff',
+                    secondaryBorderColor: '#1a7f37',
+                    tertiaryColor: '#f6f8fa',
+                    tertiaryTextColor: '#1f2328',
+                    tertiaryBorderColor: '#d1d9e0',
+                    lineColor: '#d1d9e0',
+                    textColor: '#1f2328',
+                    critBkgColor: '#cf222e',
+                    critBorderColor: '#a40e26',
+                    doneTaskBkgColor: '#eaeef2',
+                    doneTaskBorderColor: '#d1d9e0',
+                    taskTextColor: '#ffffff',
+                    taskTextDarkColor: '#1f2328',
+                    taskTextClickableColor: '#ffffff',
+                },
+            });
         }
     </script>
     {{ end }}
@@ -67,7 +97,17 @@
                     <span class="badge-label">Cost</span> ${{ printf "%.2f" (divideBy1000 .Cost) }}
                 </span>
                 {{ end }}
+                {{ if .RequiredWorkflows }}
+                <span class="badge badge-required">
+                    <span class="badge-label">Required</span> {{ joinStrings .RequiredWorkflows ", " }}
+                </span>
+                {{ end }}
             </div>
+            {{ if .BranchProtectionWarning }}
+            <div class="warning-banner">
+                Required workflows could not be loaded (insufficient permissions).
+            </div>
+            {{ end }}
         </header>
 
         {{ range .TimelineData }}

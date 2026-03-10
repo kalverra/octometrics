@@ -165,6 +165,38 @@ a:hover {
     color: var(--color-accent-blue);
 }
 
+.badge-required {
+    background: var(--color-accent-blue-bg);
+    color: var(--color-accent-blue);
+}
+
+.warning-banner {
+    margin-top: 0.75rem;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.85rem;
+    color: var(--color-accent-yellow);
+    background: var(--color-accent-yellow-bg);
+    border-radius: var(--radius);
+}
+
+.required-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.required-list li {
+    padding: 0.3rem 0;
+    color: var(--color-accent-blue);
+    font-size: 0.9rem;
+}
+
+.required-list li::before {
+    content: "\2713";
+    margin-right: 0.5rem;
+    font-weight: 600;
+}
+
 /* Cards / Sections */
 .card {
     background: var(--color-surface);
