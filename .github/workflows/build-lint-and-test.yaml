@@ -15,9 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: stable
       - name: Install Dependencies
@@ -38,21 +38,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download Built Binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.6
+        uses: kalverra/octometrics-action@v0.0.7
         with:
           job_name: Test
           version: ./octometrics-binary
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: stable
       - name: Install Dependencies
@@ -81,16 +81,16 @@ jobs:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.6
+        uses: kalverra/octometrics-action@v0.0.7
         with:
           job_name: Test (Race)
           version: ./octometrics-binary
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: stable
       - name: Install Dependencies
@@ -109,16 +109,16 @@ jobs:
           name: octometrics-binary
           path: .
       - name: Monitor
-        uses: kalverra/octometrics-action@v0.0.6
+        uses: kalverra/octometrics-action@v0.0.7
         with:
           job_name: Lint
           version: ./octometrics-binary
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: stable
       - name: Install Dependencies
