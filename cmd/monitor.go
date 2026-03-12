@@ -24,7 +24,16 @@ var (
 var monitorCmd = &cobra.Command{
 	Use:   "monitor",
 	Short: "Monitor system resources",
-	Long:  "Monitor system resources and save the data to a file for later analysis.",
+	Long: `Monitor system resources for later analysis.
+
+This command will monitor system resources like CPU, memory, disk, and I/O during a GHA job.
+
+It will write the data to a file for later analysis. Primarily used in the octometrics-action to monitor system resources during a GHA job.`,
+	Example: `
+octometrics monitor # Monitor system resources until interrupted
+octometrics monitor --duration=1h # Monitor system resources for 1 hour
+octometrics monitor --interval=5s # Monitor system resources every 5 seconds
+`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		var (
 			ctx    context.Context

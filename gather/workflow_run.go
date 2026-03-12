@@ -125,7 +125,9 @@ func (w *WorkflowRunData) GetUsage() *github.WorkflowRunUsage {
 	return w.Usage
 }
 
-// WorkflowRun gathers all metrics for a completed workflow run
+// WorkflowRun gathers all metrics for a workflow run.
+// In-progress runs are supported: billing and monitoring data are skipped,
+// and the result is not cached locally so fresh data is always fetched.
 func WorkflowRun(
 	log zerolog.Logger,
 	client *GitHubClient,
@@ -207,8 +209,11 @@ func WorkflowRun(
 	if workflowRun == nil {
 		return nil, "", fmt.Errorf("workflow run '%d' not found on GitHub", workflowRunID)
 	}
-	if workflowRun.GetStatus() != "completed" {
-		return nil, "", fmt.Errorf("workflow run '%d' is still in progress", workflowRunID)
+	completed := workflowRun.GetStatus() == "completed"
+	if !completed {
+		log.Warn().
+			Str("status", workflowRun.GetStatus()).
+			Msg("Workflow run is not yet completed; billing and monitoring data will be unavailable")
 	}
 
 	workflowRunData.WorkflowRun = workflowRun
@@ -220,22 +225,24 @@ func WorkflowRun(
 		analyses            []*monitor.Analysis
 	)
 
-	eg.Go(func() error {
-		var analysisErr error
-		analyses, analysisErr = monitoringData(log, client, owner, repo, workflowRunID, targetDir)
-		return analysisErr
-	})
+	if completed {
+		eg.Go(func() error {
+			var analysisErr error
+			analyses, analysisErr = monitoringData(log, client, owner, repo, workflowRunID, targetDir)
+			return analysisErr
+		})
+
+		eg.Go(func() error {
+			var billingErr error
+			workflowBillingData, billingErr = billingData(client, owner, repo, workflowRunID)
+			return billingErr
+		})
+	}
 
 	eg.Go(func() error {
 		var jobsErr error
 		workflowRunJobs, jobsErr = jobsData(client, owner, repo, workflowRunID)
 		return jobsErr
-	})
-
-	eg.Go(func() error {
-		var billingErr error
-		workflowBillingData, billingErr = billingData(client, owner, repo, workflowRunID)
-		return billingErr
 	})
 
 	if err := eg.Wait(); err != nil {
@@ -247,19 +254,26 @@ func WorkflowRun(
 	}
 	workflowRunData.Usage = workflowBillingData
 
-	// Calculate job cost data and add to workflow run data
 	for _, job := range workflowRunJobs {
-		// Calculate completed at for the workflow. GitHub API only gives "UpdatedAt" for workflows
-		// which can be misleading.
-		if workflowRunData.RunCompletedAt.IsZero() {
-			workflowRunData.RunCompletedAt = job.GetCompletedAt().Time
-		} else if job.GetCompletedAt().After(workflowRunData.RunCompletedAt) {
-			workflowRunData.RunCompletedAt = job.GetCompletedAt().Time
+		completedAt := job.GetCompletedAt().Time
+		if !completedAt.IsZero() {
+			if workflowRunData.RunCompletedAt.IsZero() {
+				workflowRunData.RunCompletedAt = completedAt
+			} else if completedAt.After(workflowRunData.RunCompletedAt) {
+				workflowRunData.RunCompletedAt = completedAt
+			}
 		}
 
-		runner, cost, err := calculateJobRunBilling(job.GetID(), workflowBillingData)
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to calculate cost for job '%d': %w", job.GetID(), err)
+		var (
+			runner string
+			cost   int64
+		)
+		if completed {
+			var billingErr error
+			runner, cost, billingErr = calculateJobRunBilling(job.GetID(), workflowBillingData)
+			if billingErr != nil {
+				return nil, "", fmt.Errorf("failed to calculate cost for job '%d': %w", job.GetID(), billingErr)
+			}
 		}
 		workflowRunData.Cost += cost
 		workflowRunData.Jobs = append(workflowRunData.Jobs, &JobData{
@@ -269,16 +283,17 @@ func WorkflowRun(
 		})
 	}
 
-	// Match monitoring data to jobs
-nextAnalysisLoop:
-	for _, analysis := range analyses {
-		for _, job := range workflowRunData.Jobs {
-			if analysis.JobName == job.GetName() {
-				job.Analysis = analysis
-				continue nextAnalysisLoop
+	if completed {
+	nextAnalysisLoop:
+		for _, analysis := range analyses {
+			for _, job := range workflowRunData.Jobs {
+				if analysis.JobName == job.GetName() {
+					job.Analysis = analysis
+					continue nextAnalysisLoop
+				}
 			}
+			log.Warn().Str("monitoring_data_job_name", analysis.JobName).Msg("Found monitoring data for job but found no job name matches")
 		}
-		log.Warn().Str("monitoring_data_job_name", analysis.JobName).Msg("Found monitoring data for job but found no job name matches")
 	}
 
 	data, err := json.Marshal(workflowRunData)

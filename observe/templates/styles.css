@@ -390,6 +390,123 @@ h3 {
     color: var(--color-text-secondary);
 }
 
+/* Runtime table */
+.runtime-details {
+    margin: 0.75rem 0 0;
+    border: 1px solid var(--color-surface-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.runtime-details > summary {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    color: var(--color-text-secondary);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.runtime-details > summary::-webkit-details-marker {
+    display: none;
+}
+
+.runtime-details > summary::before {
+    content: "▸";
+    display: inline-block;
+    transition: transform 0.15s ease;
+    font-size: 0.75em;
+    color: var(--color-text-secondary);
+}
+
+.runtime-details[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.runtime-details > summary:hover {
+    background: var(--color-badge-bg);
+}
+
+.runtime-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.runtime-table thead {
+    background: var(--color-badge-bg);
+}
+
+.runtime-table th {
+    padding: 0.4rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--color-surface-border);
+}
+
+.runtime-table td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--color-surface-border);
+}
+
+.runtime-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.runtime-table tbody tr:hover {
+    background: var(--color-badge-bg);
+}
+
+.runtime-table .rt-duration {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.runtime-table .rt-status {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.rt-badge {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.rt-success {
+    background: var(--color-accent-green-bg);
+    color: var(--color-accent-green);
+}
+
+.rt-failure {
+    background: var(--color-accent-red-bg);
+    color: var(--color-accent-red);
+}
+
+.rt-cancelled {
+    background: var(--color-badge-bg);
+    color: var(--color-text-secondary);
+}
+
+.rt-in-progress {
+    background: var(--color-accent-yellow-bg);
+    color: var(--color-accent-yellow);
+}
+
 /* Plotly chart container */
 .plotly-chart {
     width: 100%;

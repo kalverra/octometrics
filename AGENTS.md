@@ -4,12 +4,12 @@
 
 Octometrics is a Go CLI that profiles GitHub Actions workflows. Read `design.md` for architecture diagrams and key design decisions. The main commands are:
 
-| Command | Purpose |
-|---------|---------|
-| `monitor` | Collects system metrics (CPU, memory, disk, I/O) during a GHA job, writes JSONL |
-| `gather` | Fetches workflow/job/step data from the GitHub REST & GraphQL APIs, stores as JSON |
-| `observe` | Renders gathered data as interactive HTML (Mermaid Gantt charts, Plotly metric charts) |
-| `report` | Analyzes monitor JSONL and posts Mermaid-based summaries to GHA step summaries and PR comments |
+| Command   | Purpose                                                                                        |
+| --------- | ---------------------------------------------------------------------------------------------- |
+| `monitor` | Collects system metrics (CPU, memory, disk, I/O) during a GHA job, writes JSONL                |
+| `gather`  | Fetches workflow/job/step data from the GitHub REST & GraphQL APIs, stores as JSON             |
+| `observe` | Renders gathered data as interactive HTML (Mermaid Gantt charts, Plotly metric charts)         |
+| `report`  | Analyzes monitor JSONL and posts Mermaid-based summaries to GHA step summaries and PR comments |
 
 Key packages: `cmd/` (Cobra CLI), `monitor/` (system metrics), `gather/` (GitHub API), `observe/` (HTML visualization), `report/` (in-action reporting), `internal/config/` (Viper config), `logging/` (zerolog setup).
 
@@ -29,6 +29,7 @@ Analyze the outputs and fix issues you introduced. **Do not change a test unless
 - Tests use `github.com/stretchr/testify` (`require` for fatal checks, `assert` for non-fatal).
 - Use the `internal/testhelpers.Setup(t)` helper to create a temp directory and logger for tests. It auto-cleans on success and preserves on failure.
 - Test data goes in `<package>/testdata/` directories.
+- You can run `pre-commit` using the `.pre-commit-config.yaml` file for extensive checks.
 
 ## Coding Conventions
 
@@ -49,10 +50,12 @@ Provide a **Risk Rating** at the top of the review summary:
 - **LOW:** Documentation, styling, minor bug fixes in non-critical paths, or boilerplate.
 
 ### 2. Targeted Review Areas
-Identify specific code blocks that require **scrupulous human review**. Focus on:
+Identify and call out specific code blocks that require **scrupulous human review**. Focus on:
 - Complex conditional logic or concurrency-prone areas.
 - Potential breaking changes in internal or external APIs.
 - Logic that lacks sufficient unit test coverage within the PR.
+
+If you find any, list them and give a brief description of why they deserve extra attention.
 
 ### 3. Reviewer Recommendations
 Analyze the git history (recent editors) to suggest the most qualified reviewers.

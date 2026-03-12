@@ -19,6 +19,26 @@ var (
 var gatherCmd = &cobra.Command{
 	Use:   "gather",
 	Short: "Gather metrics from GitHub",
+	Long: `Gather metrics from GitHub.
+
+Read workflow runtime data from GitHub to display in the browser.
+
+It can be used to gather data for a specific workflow run, pull request, or commit.
+In-progress workflows are supported and will be displayed with an active status indicator.
+`,
+	Example: `
+# To see all workflows run on all commits a part of this PR (including merge queue runs): https://github.com/kalverra/octometrics/pull/33
+octometrics gather -o kalverra -r octometrics -p 33
+
+# To see all workflows run on a specific commit: https://github.com/kalverra/octometrics/pull/33/changes/94ad3f7e2f45852a99791326847ea12c94b964dc
+octometrics gather -o kalverra -r octometrics -c 94ad3f7e2f45852a99791326847ea12c94b964dc
+
+# To see a specific workflow run: https://github.com/kalverra/octometrics/actions/runs/22918636165
+octometrics gather -o kalverra -r octometrics -w 22918636165
+
+# Use '-u' to force update local data if it already exists
+octometrics gather -o kalverra -r octometrics -p 33 -u
+`,
 	PreRunE: func(_ *cobra.Command, _ []string) error {
 		if err := cfg.ValidateGather(); err != nil {
 			return err

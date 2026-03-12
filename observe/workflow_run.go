@@ -3,6 +3,7 @@ package observe
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -27,6 +28,11 @@ func WorkflowRun(
 		return nil, err
 	}
 
+	state := workflowRun.GetConclusion()
+	if state == "" {
+		state = workflowRun.GetStatus()
+	}
+
 	var (
 		observationData = &Observation{
 			ID:         fmt.Sprint(workflowRunID),
@@ -34,7 +40,7 @@ func WorkflowRun(
 			GitHubLink: workflowRun.GetHTMLURL(),
 			Owner:      owner,
 			Repo:       repo,
-			State:      workflowRun.GetConclusion(),
+			State:      state,
 			Actor:      workflowRun.GetActor().GetLogin(),
 			DataType:   "workflow_run",
 		}
@@ -54,23 +60,34 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 		items             = make([]timelineItem, 0, len(workflowRun.Jobs))
 		postTimelineItems = []postTimelineItem{}
 		skippedItems      = []string{}
+		queuedItems       = []string{}
 
 		owner = workflowRun.GetRepository().GetOwner().GetLogin()
 		repo  = workflowRun.GetRepository().GetName()
 	)
 
 	for _, job := range workflowRun.Jobs {
-		var (
-			startedAt = job.GetStartedAt().Time
-			duration  = job.GetCompletedAt().Sub(startedAt)
-		)
+		startedAt := job.GetStartedAt().Time
 
-		if job.GetConclusion() == "skipped" || duration.Seconds() == 0 {
+		if job.GetStatus() == "queued" && startedAt.IsZero() {
+			queuedItems = append(queuedItems, job.GetName())
+			continue
+		}
+
+		inProgress := job.GetConclusion() == "" && job.GetStatus() == "in_progress"
+
+		var duration time.Duration
+		if inProgress {
+			duration = time.Since(startedAt)
+		} else {
+			duration = job.GetCompletedAt().Sub(startedAt)
+		}
+
+		if job.GetConclusion() == "skipped" || (!inProgress && duration.Seconds() == 0) {
 			skippedItems = append(skippedItems, job.GetName())
 			continue
 		}
 
-		// If there's a PR, catch any post-PR jobs that might have run, like on: [pull_request] activity: closed
 		if workflowRun.GetEvent() == "pull_request" && !workflowRun.CorrespondingPRCloseTime.IsZero() {
 			if startedAt.After(workflowRun.CorrespondingPRCloseTime) {
 				postTimelineItems = append(postTimelineItems, postTimelineItem{
@@ -82,15 +99,22 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 			}
 		}
 
+		conclusion := job.GetConclusion()
+		if inProgress {
+			conclusion = "in_progress"
+		}
+
 		newTask := timelineItem{
 			Name:       job.GetName(),
 			ID:         fmt.Sprint(job.GetID()),
-			StartTime:  job.GetStartedAt().Time,
-			Conclusion: conclusionToGanttStatus(job.GetConclusion()),
+			StartTime:  startedAt,
+			Conclusion: conclusionToGanttStatus(conclusion),
 			Duration:   duration,
 			Link:       jobRunLink(owner, repo, job.GetID()) + ".html",
 		}
-		if job.GetConclusion() == "cancelled" {
+		if inProgress {
+			newTask.Name = fmt.Sprintf("%s (in progress)", job.GetName())
+		} else if job.GetConclusion() == "cancelled" {
 			newTask.Name = fmt.Sprintf("%s (cancelled)", job.GetName())
 		}
 		if job.GetRunAttempt() > 1 {
@@ -103,6 +127,7 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 		Event:             workflowRun.GetEvent(),
 		Items:             items,
 		SkippedItems:      skippedItems,
+		QueuedItems:       queuedItems,
 		PostTimelineItems: postTimelineItems,
 	}
 
@@ -111,14 +136,15 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 
 // https://mermaid.js.org/syntax/gantt.html#syntax
 func conclusionToGanttStatus(conclusion string) string {
-	status := ""
 	switch conclusion {
 	case "failure":
-		status = "crit"
+		return "crit"
 	case "cancelled":
-		status = "done"
+		return "done"
+	case "in_progress":
+		return "active"
 	}
-	return status
+	return ""
 }
 
 // jobRunLink returns the link to a specific job run's rendering.

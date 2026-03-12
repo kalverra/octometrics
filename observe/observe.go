@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"html/template"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,7 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"text/template"
 	"time"
 
 	"github.com/rs/zerolog"

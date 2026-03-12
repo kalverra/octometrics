@@ -2,6 +2,7 @@ package observe
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -47,6 +48,11 @@ func JobRuns(
 				return fmt.Errorf("failed to build monitoring data for job '%d': %w", job.GetID(), err)
 			}
 
+			jobState := job.GetConclusion()
+			if jobState == "" {
+				jobState = job.GetStatus()
+			}
+
 			observationsChan <- &Observation{
 				ID:             fmt.Sprint(job.GetID()),
 				Name:           job.GetName(),
@@ -55,7 +61,7 @@ func JobRuns(
 				Owner:          owner,
 				Repo:           repo,
 				DataType:       "job_run",
-				State:          job.GetConclusion(),
+				State:          jobState,
 				Actor:          workflowRun.GetActor().GetLogin(),
 				MonitoringData: jobRunMonitoringData,
 				Cost:           job.GetCost(),
@@ -80,27 +86,46 @@ func buildJobRunTimelineData(job *gather.JobData) (*timelineData, error) {
 	var (
 		items        = make([]timelineItem, 0, len(job.Steps))
 		skippedItems = []string{}
+		queuedItems  = []string{}
 	)
 
 	for _, step := range job.Steps {
-		var (
-			startTime = step.GetStartedAt().Time
-			duration  = step.GetCompletedAt().Sub(startTime)
-		)
+		startTime := step.GetStartedAt().Time
 
-		if step.GetConclusion() == "skipped" || duration.Seconds() == 0 {
+		if step.GetStatus() == "queued" && startTime.IsZero() {
+			queuedItems = append(queuedItems, step.GetName())
+			continue
+		}
+
+		inProgress := step.GetConclusion() == "" && step.GetStatus() == "in_progress"
+
+		var duration time.Duration
+		if inProgress {
+			duration = time.Since(startTime)
+		} else {
+			duration = step.GetCompletedAt().Sub(startTime)
+		}
+
+		if step.GetConclusion() == "skipped" || (!inProgress && duration.Seconds() == 0) {
 			skippedItems = append(skippedItems, step.GetName())
 			continue
+		}
+
+		conclusion := step.GetConclusion()
+		if inProgress {
+			conclusion = "in_progress"
 		}
 
 		newItem := timelineItem{
 			Name:       step.GetName(),
 			ID:         step.GetName(),
-			StartTime:  step.GetStartedAt().Time,
-			Conclusion: conclusionToGanttStatus(step.GetConclusion()),
+			StartTime:  startTime,
+			Conclusion: conclusionToGanttStatus(conclusion),
 			Duration:   duration,
 		}
-		if step.GetConclusion() == "cancelled" {
+		if inProgress {
+			newItem.Name = fmt.Sprintf("%s (in progress)", step.GetName())
+		} else if step.GetConclusion() == "cancelled" {
 			newItem.Name = fmt.Sprintf("%s (cancelled)", step.GetName())
 		}
 		items = append(items, newItem)
@@ -109,5 +134,6 @@ func buildJobRunTimelineData(job *gather.JobData) (*timelineData, error) {
 	return &timelineData{
 		Items:        items,
 		SkippedItems: skippedItems,
+		QueuedItems:  queuedItems,
 	}, nil
 }

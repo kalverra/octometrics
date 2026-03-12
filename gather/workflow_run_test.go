@@ -15,6 +15,77 @@ import (
 	"github.com/kalverra/octometrics/monitor"
 )
 
+func TestGatherWorkflowRun_InProgress(t *testing.T) {
+	t.Parallel()
+
+	mockWorkflowRunInProgress := *mockWorkflowRun
+	mockWorkflowRunInProgress.ID = new(int64(2))
+	mockWorkflowRunInProgress.Status = new("in_progress")
+	mockWorkflowRunInProgress.Conclusion = new("")
+	mockWorkflowRunInProgress.UpdatedAt = new(github.Timestamp{Time: startTime})
+
+	mockJobInProgress := *mockJobs[0]
+	mockJobInProgress.Status = new("in_progress")
+	mockJobInProgress.Conclusion = new("")
+	mockJobInProgress.StartedAt = new(github.Timestamp{Time: startTime})
+	mockJobInProgress.CompletedAt = nil
+	mockJobInProgress.Steps = []*github.TaskStep{
+		{
+			Name:        new("mocked-step-1"),
+			Status:      new("in_progress"),
+			StartedAt:   new(github.Timestamp{Time: startTime}),
+			CompletedAt: nil,
+		},
+	}
+
+	mockedHTTPClient := mock.NewMockedHTTPClient(
+		mock.WithRequestMatch(
+			mock.GetReposActionsRunsByOwnerByRepoByRunId,
+			mockWorkflowRunInProgress,
+		),
+		mock.WithRequestMatchPages(
+			mock.GetReposActionsRunsJobsByOwnerByRepoByRunId,
+			&github.Jobs{
+				TotalCount: new(1),
+				Jobs:       []*github.WorkflowJob{&mockJobInProgress},
+			},
+		),
+	)
+
+	log, testDataDir := testhelpers.Setup(t)
+	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
+	require.NoError(t, err, "error creating GitHub client")
+
+	workflowRun, targetFile, err := WorkflowRun(
+		log, client, testGatherOwner, testGatherRepo, mockWorkflowRunInProgress.GetID(), CustomDataFolder(testDataDir),
+	)
+	require.NoError(t, err, "error getting workflow run info")
+	require.NotNil(t, workflowRun, "workflow run should not be nil")
+	require.FileExists(t, targetFile, "workflow run file should exist")
+
+	require.Equal(t, mockWorkflowRunInProgress.GetID(), workflowRun.GetID(), "workflow run ID should match")
+	require.Equal(t, mockWorkflowRunInProgress.GetName(), workflowRun.GetName(), "workflow run name should match")
+	require.Equal(t, mockWorkflowRunInProgress.GetStatus(), workflowRun.GetStatus(), "workflow run status should match")
+	require.Equal(
+		t,
+		mockWorkflowRunInProgress.GetConclusion(),
+		workflowRun.GetConclusion(),
+		"workflow run conclusion should match",
+	)
+	require.Equal(
+		t,
+		mockWorkflowRunInProgress.GetUpdatedAt(),
+		workflowRun.GetUpdatedAt(),
+		"workflow run updated at should match",
+	)
+	require.Equal(
+		t,
+		mockWorkflowRunInProgress.GetCreatedAt(),
+		workflowRun.GetCreatedAt(),
+		"workflow run created at should match",
+	)
+}
+
 func TestGatherWorkflowRun(t *testing.T) {
 	t.Parallel()
 
