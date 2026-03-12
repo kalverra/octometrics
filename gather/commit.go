@@ -291,7 +291,7 @@ func setWorkflowRunsForCommit(
 
 	for _, checkRun := range checkRuns {
 		if checkRun.GetStatus() != "completed" {
-			log.Warn().Str("Check Run", checkRun.GetName()).Msg("Check run is not yet completed")
+			log.Warn().Str("check_run", checkRun.GetName()).Msg("Check run is not yet completed")
 		}
 		match := workflowRunIDRe.FindStringSubmatch(checkRun.GetHTMLURL())
 		if len(match) == 0 {

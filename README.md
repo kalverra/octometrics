@@ -10,7 +10,7 @@ Before running, make sure to provide GitHub API token, either through the `GITHU
 
 ```sh
 # Install
-go install github.com/kalverra/octometrics
+go install github.com/kalverra/octometrics@latest
 
 # Show help menu
 octometrics -h

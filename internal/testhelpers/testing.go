@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	testLogFile        = "test.log.json"
+	testLogFile        = "test.log.jsonl"
 	testLogLevelEnvVar = "OCTOMETRICS_TEST_LOG_LEVEL"
 )
 

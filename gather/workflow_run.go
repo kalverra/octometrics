@@ -296,23 +296,21 @@ func WorkflowRun(
 		}
 	}
 
-	if completed {
-		data, err := json.Marshal(workflowRunData)
-		if err != nil {
-			return nil, "", fmt.Errorf(
-				"failed to marshal workflow run data to json for workflow run '%d': %w",
-				workflowRunID,
-				err,
-			)
-		}
-		err = os.WriteFile(targetFile, data, 0600)
-		if err != nil {
-			return nil, "", fmt.Errorf(
-				"failed to write workflow run data to file for workflow run '%d': %w",
-				workflowRunID,
-				err,
-			)
-		}
+	data, err := json.Marshal(workflowRunData)
+	if err != nil {
+		return nil, "", fmt.Errorf(
+			"failed to marshal workflow run data to json for workflow run '%d': %w",
+			workflowRunID,
+			err,
+		)
+	}
+	err = os.WriteFile(targetFile, data, 0600)
+	if err != nil {
+		return nil, "", fmt.Errorf(
+			"failed to write workflow run data to file for workflow run '%d': %w",
+			workflowRunID,
+			err,
+		)
 	}
 
 	log.Debug().

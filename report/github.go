@@ -122,10 +122,5 @@ func fetchJobSteps(log zerolog.Logger, gha *ghaContext) ([]*github.TaskStep, err
 		opts.Page = resp.NextPage
 	}
 
-	log.Warn().
-		Str("wanted", gha.JobName).
-		Strs("available", allJobNames).
-		Msg("Could not find matching job by name")
-
 	return nil, fmt.Errorf("job %q not found among %d workflow jobs", gha.JobName, len(allJobNames))
 }
