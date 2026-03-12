@@ -290,26 +290,25 @@ func setWorkflowRunsForCommit(
 	)
 
 	for _, checkRun := range checkRuns {
-		if checkRun.GetStatus() == "completed" {
-			match := workflowRunIDRe.FindStringSubmatch(checkRun.GetHTMLURL())
-			if len(match) == 0 {
-				log.Warn().
-					Str("owner", owner).
-					Str("repo", repo).
-					Str("SHA", commitData.GetSHA()).
-					Str("check_run", checkRun.GetName()).
-					Str("URL", checkRun.GetHTMLURL()).
-					Msg("Failed to parse workflow run ID from check run URL")
-				continue
-			}
-			workflowRunID, err := strconv.ParseInt(match[1], 10, 64)
-			if err != nil {
-				return fmt.Errorf("failed to parse workflow run ID from check run URL: %w", err)
-			}
-			workflowRunIDsSet[workflowRunID] = struct{}{}
-		} else {
-			log.Warn().Str("Check Run", checkRun.GetName()).Msg("Check run is not yet completed, skipping")
+		if checkRun.GetStatus() != "completed" {
+			log.Warn().Str("Check Run", checkRun.GetName()).Msg("Check run is not yet completed")
 		}
+		match := workflowRunIDRe.FindStringSubmatch(checkRun.GetHTMLURL())
+		if len(match) == 0 {
+			log.Warn().
+				Str("owner", owner).
+				Str("repo", repo).
+				Str("SHA", commitData.GetSHA()).
+				Str("check_run", checkRun.GetName()).
+				Str("URL", checkRun.GetHTMLURL()).
+				Msg("Failed to parse workflow run ID from check run URL")
+			continue
+		}
+		workflowRunID, err := strconv.ParseInt(match[1], 10, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse workflow run ID from check run URL: %w", err)
+		}
+		workflowRunIDsSet[workflowRunID] = struct{}{}
 	}
 
 	// Pass commit data down to the workflow run
@@ -323,7 +322,11 @@ func setWorkflowRunsForCommit(
 				}
 				commitData.comparisonMutex.Lock()
 				defer commitData.comparisonMutex.Unlock()
-				commitData.Conclusion = establishPRChecksConclusion(commitData.Conclusion, workflowRun.GetConclusion())
+				conclusion := workflowRun.GetConclusion()
+				if conclusion == "" {
+					conclusion = workflowRun.GetStatus()
+				}
+				commitData.Conclusion = establishPRChecksConclusion(commitData.Conclusion, conclusion)
 				commitData.Cost += workflowRun.GetCost()
 				if workflowRun.GetRunStartedAt().Before(commitData.StartActionsTime) ||
 					commitData.StartActionsTime.IsZero() {

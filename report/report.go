@@ -30,6 +30,11 @@ func Run(log zerolog.Logger, opts Options) error {
 		return nil
 	}
 
+	if gha.JobName == "" && analysis.JobName != "" {
+		log.Debug().Str("job_name", analysis.JobName).Msg("Using job name from monitor data as fallback")
+		gha.JobName = analysis.JobName
+	}
+
 	var steps []*github.TaskStep
 	steps, err = fetchJobSteps(log, gha)
 	if err != nil {

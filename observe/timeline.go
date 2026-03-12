@@ -20,6 +20,7 @@ type timelineData struct {
 	PostTimelineItems []postTimelineItem
 	Items             []timelineItem
 	SkippedItems      []string
+	QueuedItems       []string
 
 	// Set by the renderer
 	StartTime    time.Time
@@ -83,6 +84,16 @@ func (g *timelineData) process() error {
 		g.DateFormat, g.AxisFormat, g.GoDateFormat = "mm:ss", "%M:%S", "04:05"
 	}
 	return nil
+}
+
+// ItemsByDuration returns items sorted by duration descending (longest first).
+func (g *timelineData) ItemsByDuration() []timelineItem {
+	sorted := make([]timelineItem, len(g.Items))
+	copy(sorted, g.Items)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Duration > sorted[j].Duration
+	})
+	return sorted
 }
 
 func sanitizeMermaidName(s string) string {

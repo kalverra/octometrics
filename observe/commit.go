@@ -3,6 +3,7 @@ package observe
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -73,19 +74,33 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 		var (
 			items             = make([]timelineItem, 0, len(runs))
 			skippedItems      = []string{}
+			queuedItems       = []string{}
 			postTimelineItems = []postTimelineItem{}
 		)
 
 		for _, workflowRun := range runs {
 			startTime := workflowRun.GetRunStartedAt().Time
-			duration := workflowRun.GetRunCompletedAt().Sub(startTime)
 
-			if workflowRun.GetConclusion() == "skipped" || duration.Seconds() == 0 {
+			if workflowRun.GetStatus() == "queued" && startTime.IsZero() {
+				queuedItems = append(queuedItems, workflowRun.GetName())
+				continue
+			}
+
+			inProgress := workflowRun.GetConclusion() == "" && workflowRun.GetStatus() == "in_progress"
+
+			var duration time.Duration
+			completedAt := workflowRun.GetRunCompletedAt()
+			if inProgress || completedAt.IsZero() {
+				duration = time.Since(startTime)
+			} else {
+				duration = completedAt.Sub(startTime)
+			}
+
+			if workflowRun.GetConclusion() == "skipped" || (!inProgress && duration.Seconds() == 0) {
 				skippedItems = append(skippedItems, workflowRun.GetName())
 				continue
 			}
 
-			// If there's a PR, catch any post-PR workflows that might have run, like on: [pull_request] activity: closed
 			if workflowRun.GetEvent() == "pull_request" && !workflowRun.CorrespondingPRCloseTime.IsZero() {
 				if startTime.After(workflowRun.CorrespondingPRCloseTime) {
 					postTimelineItems = append(postTimelineItems, postTimelineItem{
@@ -97,15 +112,22 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 				}
 			}
 
+			conclusion := workflowRun.GetConclusion()
+			if inProgress {
+				conclusion = "in_progress"
+			}
+
 			newItem := timelineItem{
 				Name:       workflowRun.GetName(),
 				ID:         fmt.Sprint(workflowRun.GetID()),
 				StartTime:  workflowRun.GetRunStartedAt().Time,
-				Conclusion: conclusionToGanttStatus(workflowRun.GetConclusion()),
+				Conclusion: conclusionToGanttStatus(conclusion),
 				Duration:   duration,
 				Link:       workflowRunLink(owner, repo, workflowRun.GetID()) + ".html",
 			}
-			if workflowRun.GetConclusion() == "cancelled" {
+			if inProgress {
+				newItem.Name = fmt.Sprintf("%s (in progress)", workflowRun.GetName())
+			} else if workflowRun.GetConclusion() == "cancelled" {
 				newItem.Name = fmt.Sprintf("%s (cancelled)", workflowRun.GetName())
 			}
 			items = append(items, newItem)
@@ -114,6 +136,7 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 			Event:             event,
 			Items:             items,
 			SkippedItems:      skippedItems,
+			QueuedItems:       queuedItems,
 			PostTimelineItems: postTimelineItems,
 		})
 	}

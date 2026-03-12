@@ -21,6 +21,36 @@
 <p class="empty-state">No timeline to display &mdash; there might not be any workflow runs.</p>
 {{ end }}
 
+{{ if .Items }}
+<details class="runtime-details">
+    <summary>Runtimes ({{ len .Items }} items)</summary>
+    <table class="runtime-table">
+        <thead>
+            <tr>
+                <th class="rt-name">Name</th>
+                <th class="rt-duration">Duration</th>
+                <th class="rt-status">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range .ItemsByDuration }}
+            <tr>
+                <td class="rt-name">{{ if .Link }}<a href="{{ .Link }}">{{ .Name }}</a>{{ else }}{{ .Name }}{{ end }}</td>
+                <td class="rt-duration">{{ .Duration }}</td>
+                <td class="rt-status">
+                    {{ if eq .Conclusion "crit" }}<span class="rt-badge rt-failure">failure</span>
+                    {{ else if eq .Conclusion "done" }}<span class="rt-badge rt-cancelled">cancelled</span>
+                    {{ else if eq .Conclusion "active" }}<span class="rt-badge rt-in-progress">in progress</span>
+                    {{ else }}<span class="rt-badge rt-success">success</span>
+                    {{ end }}
+                </td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
+</details>
+{{ end }}
+
 {{ $hasRequired := false }}
 {{ range .Items }}{{ if .IsRequired }}{{ $hasRequired = true }}{{ end }}{{ end }}
 {{ if $hasRequired }}
@@ -29,6 +59,15 @@
     {{ range .Items }}{{ if .IsRequired }}
     <li>{{ .Name }}</li>
     {{ end }}{{ end }}
+</ul>
+{{ end }}
+
+{{ if .QueuedItems }}
+<h3>Queued</h3>
+<ul class="muted-list">
+    {{ range .QueuedItems }}
+    <li>{{ . }}</li>
+    {{ end }}
 </ul>
 {{ end }}
 
