@@ -48,8 +48,7 @@ func BranchProtection(log zerolog.Logger, client *GitHubClient, owner, repo stri
 			return &BranchProtectionResult{}, nil
 		}
 
-		var errResp *github.ErrorResponse
-		if errors.As(err, &errResp) {
+		if errResp, ok := errors.AsType[*github.ErrorResponse](err); ok {
 			switch errResp.Response.StatusCode {
 			case http.StatusForbidden:
 				log.Warn().
