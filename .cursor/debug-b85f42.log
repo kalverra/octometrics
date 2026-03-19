@@ -1,0 +1,2 @@
+{"sessionId":"b85f42","runId":"run1","hypothesisId":"H1,H2,H3","location":"config.go:88","message":"Viper keys before unmarshal","data":{"keys":"[log_level no_observe github_token until gather_cost commit_sha workflow_run_id owner pull_request_number since data_dir repo force_update help]"},"timestamp":1773935618918}
+{"sessionId":"b85f42","runId":"run1","hypothesisId":"H1,H2,H3","location":"config.go:94","message":"Config after unmarshal","data":{"log_level":"silent", "owner":"kalverra"},"timestamp":1773935618919}

@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -58,7 +59,14 @@ func WithConfigFile(path string) LoadOption {
 // WithFlags binds flags to the viper instance.
 func WithFlags(flags *pflag.FlagSet) LoadOption {
 	return func(v *viper.Viper) error {
-		return v.BindPFlags(flags)
+		var err error
+		flags.VisitAll(func(f *pflag.Flag) {
+			configName := strings.ReplaceAll(f.Name, "-", "_")
+			if bindErr := v.BindPFlag(configName, f); bindErr != nil && err == nil {
+				err = bindErr
+			}
+		})
+		return err
 	}
 }
 
@@ -66,18 +74,32 @@ func WithFlags(flags *pflag.FlagSet) LoadOption {
 func Load(opts ...LoadOption) (*Config, error) {
 	v := viper.New()
 
-	v.AutomaticEnv()
+	// Handle flags like --log-level instead of --log_level
+	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
 	v.SetDefault("log_level", DefaultLogLevel)
 	v.SetDefault("since", DefaultSince)
 	v.SetDefault("until", DefaultUntil)
 	v.SetDefault("data_dir", DefaultDataDir)
 
+	// Bind all configuration fields to environment variables
+	typ := reflect.TypeFor[Config]()
+	for field := range typ.Fields() {
+		tag := field.Tag.Get("mapstructure")
+		if tag != "" {
+			if err := v.BindEnv(tag); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	for _, opt := range opts {
 		if err := opt(v); err != nil {
 			return nil, err
 		}
 	}
+
+	v.AutomaticEnv()
 
 	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok { // If the config file is not found, we don't need to return an error
