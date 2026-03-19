@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"charm.land/huh/v2/spinner"
 	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/gather"
@@ -50,6 +51,9 @@ func init() {
 			return float64(v) / 1000.0
 		},
 		"joinStrings": strings.Join,
+		"mermaidDiagram": func(s string) template.HTML {
+			return template.HTML(s)
+		},
 	}).ParseFS(templateFS, "templates/*.html", "templates/*.css")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
@@ -330,7 +334,25 @@ func openBrowser(url string) error {
 
 // All generates observations for all gathered data in the specified output formats.
 func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) error {
-	return generateAllObserveData(log, client, outputTypes)
+	var (
+		startTime = time.Now()
+		err       error
+	)
+	spinnerErr := spinner.New().
+		Title("Building observations").
+		Action(func() {
+			err = generateAllObserveData(log, client, outputTypes)
+		}).
+		Run()
+	if err != nil {
+		return err
+	}
+	if spinnerErr != nil {
+		return spinnerErr
+	}
+
+	fmt.Printf("Observations built (%s) ✅\n", time.Since(startTime).String())
+	return nil
 }
 
 type categoryKey struct {

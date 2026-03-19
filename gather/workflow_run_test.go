@@ -1,9 +1,11 @@
 package gather
 
 import (
+	"archive/zip"
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -153,14 +155,26 @@ func TestGatherWorkflowRun(t *testing.T) {
 	require.NoError(t, err, "error creating GitHub client")
 
 	workflowRun, targetFile, err := WorkflowRun(
-		log, client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
+		log,
+		client,
+		testGatherOwner,
+		testGatherRepo,
+		mockWorkflowRun.GetID(),
+		CustomDataFolder(testDataDir),
+		WithCost(),
 	)
 	require.NoError(t, err, "error getting workflow run info")
 	require.NotNil(t, workflowRun, "workflow run should not be nil")
 	require.FileExists(t, targetFile, "workflow run file should exist")
 
 	readData, readFile, err := WorkflowRun(
-		log, client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
+		log,
+		client,
+		testGatherOwner,
+		testGatherRepo,
+		mockWorkflowRun.GetID(),
+		CustomDataFolder(testDataDir),
+		WithCost(),
 	)
 
 	// Check if the file is written correctly
@@ -426,3 +440,42 @@ var (
 		},
 	}
 )
+
+func TestReadAllLimited(t *testing.T) {
+	t.Parallel()
+
+	data, err := readAllLimited(strings.NewReader("hello"), 10)
+	require.NoError(t, err)
+	require.Equal(t, "hello", string(data))
+
+	_, err = readAllLimited(strings.NewReader("hello"), 3)
+	require.Error(t, err)
+}
+
+func TestSafeMonitorJSONLZipEntry(t *testing.T) {
+	t.Parallel()
+
+	require.True(
+		t,
+		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "octometrics.monitor.log.jsonl"}}),
+	)
+	require.True(
+		t,
+		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "job/octometrics.monitor.log.jsonl"}}),
+	)
+	require.False(
+		t,
+		safeMonitorJSONLZipEntry(
+			&zip.File{FileHeader: zip.FileHeader{Name: "../../../tmp/octometrics.monitor.log.jsonl"}},
+		),
+	)
+	require.False(
+		t,
+		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "/abs/octometrics.monitor.log.jsonl"}}),
+	)
+	require.False(
+		t,
+		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: `win\octometrics.monitor.log.jsonl`}}),
+	)
+	require.False(t, safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "wrong.log.jsonl"}}))
+}

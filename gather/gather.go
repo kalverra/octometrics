@@ -52,12 +52,14 @@ type options struct {
 	// Optional data params to pass things down the stack so that e.g. a workflow can easily know what PR it belongs to
 	pullRequestData *PullRequestData
 	commitData      *CommitData
+	gatherCost      bool
 }
 
 func defaultOptions() *options {
 	return &options{
 		ForceUpdate: false,
 		DataDir:     DataDir,
+		gatherCost:  false,
 	}
 }
 
@@ -89,6 +91,13 @@ func withPullRequestData(prData *PullRequestData) Option {
 func withCommitData(commitData *CommitData) Option {
 	return func(o *options) {
 		o.commitData = commitData
+	}
+}
+
+// WithCost enables gathering cost data for workflow runs
+func WithCost() Option {
+	return func(o *options) {
+		o.gatherCost = true
 	}
 }
 

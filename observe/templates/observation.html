@@ -11,17 +11,25 @@
     <style>
         {{ template "styles_css" }}
     </style>
-    {{ if .MonitoringData }}
-    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
-    {{ end }}
-    {{ if .TimelineData }}
+    {{ if or .TimelineData .MonitoringData }}
     <script type="module">
         import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const chartWidth = 1100;
+        const chartHeight = 420;
+        const base = {
+            startOnLoad: true,
+            theme: 'base',
+            useMaxWidth: true,
+            xyChart: {
+                width: chartWidth,
+                height: chartHeight,
+                plotReservedSpacePercent: 42,
+            },
+        };
         if (prefersDark) {
             mermaid.initialize({
-                startOnLoad: true,
-                theme: 'base',
+                ...base,
                 themeVariables: {
                     darkMode: true,
                     background: '#161b22',
@@ -51,8 +59,7 @@
             });
         } else {
             mermaid.initialize({
-                startOnLoad: true,
-                theme: 'base',
+                ...base,
                 themeVariables: {
                     primaryColor: '#2da44e',
                     primaryTextColor: '#ffffff',
@@ -121,15 +128,20 @@
             </summary>
             <div class="section-body">
                 {{ template "timeline_html" . }}
+                {{ if $.MonitoringData }}
+                {{ range $.MonitoringData.Charts }}
+                <details class="monitoring-category">
+                    <summary>{{ .Title }}</summary>
+                    <div class="monitoring-body">
+                        <div class="timeline-chart">
+                            <pre class="mermaid">{{ mermaidDiagram .Diagram }}</pre>
+                        </div>
+                    </div>
+                </details>
+                {{ end }}
+                {{ end }}
             </div>
         </details>
-        {{ end }}
-
-        {{ if .MonitoringData }}
-        <h2>Analysis</h2>
-        {{ range .MonitoringData.PlotlyData }}
-        {{ template "plotly_html" . }}
-        {{ end }}
         {{ end }}
 
         {{ if .CommitData }}

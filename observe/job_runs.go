@@ -43,7 +43,8 @@ func JobRuns(
 				return fmt.Errorf("failed to build timeline for job '%d': %w", job.GetID(), err)
 			}
 			jobRunTemplateData.Event = workflowRun.GetEvent()
-			jobRunMonitoringData, err := monitoring(job.Analysis)
+			winStart, winEnd, _ := jobMonitoringTimeWindow(job)
+			jobRunMonitoringData, err := monitoring(job.Analysis, winStart, winEnd)
 			if err != nil {
 				return fmt.Errorf("failed to build monitoring data for job '%d': %w", job.GetID(), err)
 			}
@@ -136,4 +137,49 @@ func buildJobRunTimelineData(job *gather.JobData) (*timelineData, error) {
 		SkippedItems: skippedItems,
 		QueuedItems:  queuedItems,
 	}, nil
+}
+
+// jobMonitoringTimeWindow is the [start, end) time span of non-skipped steps with real durations,
+// matching buildJobRunTimelineData. Used to align metric xycharts with the job Gantt.
+func jobMonitoringTimeWindow(job *gather.JobData) (windowStart, windowEnd time.Time, ok bool) {
+	if job == nil {
+		return time.Time{}, time.Time{}, false
+	}
+	now := time.Now()
+	var earliest time.Time
+	var latest time.Time
+	first := true
+	for _, step := range job.Steps {
+		startTime := step.GetStartedAt().Time
+		if step.GetStatus() == "queued" && startTime.IsZero() {
+			continue
+		}
+		inProgress := step.GetConclusion() == "" && step.GetStatus() == "in_progress"
+		var duration time.Duration
+		if inProgress {
+			duration = now.Sub(startTime)
+		} else {
+			duration = step.GetCompletedAt().Sub(startTime)
+		}
+		if step.GetConclusion() == "skipped" || (!inProgress && duration.Seconds() == 0) {
+			continue
+		}
+		var stepEnd time.Time
+		if inProgress {
+			stepEnd = now
+		} else {
+			stepEnd = step.GetCompletedAt().Time
+		}
+		if first || startTime.Before(earliest) {
+			earliest = startTime
+		}
+		if first || stepEnd.After(latest) {
+			latest = stepEnd
+		}
+		first = false
+	}
+	if first || !latest.After(earliest) {
+		return time.Time{}, time.Time{}, false
+	}
+	return earliest, latest, true
 }

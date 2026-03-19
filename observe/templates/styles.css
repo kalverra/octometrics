@@ -255,15 +255,72 @@ details.section > .section-body {
     padding: 0 1.25rem 1rem;
 }
 
-/* Timeline chart */
+/* Monitoring charts (collapsible per category, nested under timeline) */
+details.monitoring-category {
+    background: var(--color-surface);
+    border: 1px solid var(--color-surface-border);
+    border-radius: var(--radius-lg);
+    margin: 1rem 0 0;
+    overflow: hidden;
+}
+
+details.monitoring-category > summary {
+    padding: 0.65rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+details.monitoring-category > summary::-webkit-details-marker {
+    display: none;
+}
+
+details.monitoring-category > summary::before {
+    content: "▸";
+    display: inline-block;
+    transition: transform 0.15s ease;
+    font-size: 0.8em;
+    color: var(--color-text-secondary);
+}
+
+details.monitoring-category[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+details.monitoring-category > summary:hover {
+    background: var(--color-badge-bg);
+}
+
+details.monitoring-category > .monitoring-body {
+    padding: 0 0 1rem;
+}
+
+/* Timeline chart (Gantt + monitoring xychart-beta): same column width */
 .timeline-chart {
+    width: 100%;
+    min-width: 0;
     overflow-x: auto;
     margin: 0.5rem 0;
 }
 
 .timeline-chart pre.mermaid {
     margin: 0;
+    width: 100%;
+    display: block;
+    box-sizing: border-box;
     background: transparent;
+}
+
+.timeline-chart svg {
+    display: block;
+    width: 100% !important;
+    max-width: 100%;
+    height: auto !important;
 }
 
 /* Section headings */
@@ -505,13 +562,6 @@ h3 {
 .rt-in-progress {
     background: var(--color-accent-yellow-bg);
     color: var(--color-accent-yellow);
-}
-
-/* Plotly chart container */
-.plotly-chart {
-    width: 100%;
-    min-height: 400px;
-    margin: 1rem 0;
 }
 
 /* Breadcrumbs */
