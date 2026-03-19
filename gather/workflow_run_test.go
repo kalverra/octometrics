@@ -153,14 +153,26 @@ func TestGatherWorkflowRun(t *testing.T) {
 	require.NoError(t, err, "error creating GitHub client")
 
 	workflowRun, targetFile, err := WorkflowRun(
-		log, client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
+		log,
+		client,
+		testGatherOwner,
+		testGatherRepo,
+		mockWorkflowRun.GetID(),
+		CustomDataFolder(testDataDir),
+		WithCost(),
 	)
 	require.NoError(t, err, "error getting workflow run info")
 	require.NotNil(t, workflowRun, "workflow run should not be nil")
 	require.FileExists(t, targetFile, "workflow run file should exist")
 
 	readData, readFile, err := WorkflowRun(
-		log, client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID(), CustomDataFolder(testDataDir),
+		log,
+		client,
+		testGatherOwner,
+		testGatherRepo,
+		mockWorkflowRun.GetID(),
+		CustomDataFolder(testDataDir),
+		WithCost(),
 	)
 
 	// Check if the file is written correctly

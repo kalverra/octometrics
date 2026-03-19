@@ -95,7 +95,7 @@ func Analyze(log zerolog.Logger, dataFile string) (*Analysis, error) {
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close analysis file")
+			log.Error().Err(err).Msg("failed to close analysis file")
 		}
 	}()
 

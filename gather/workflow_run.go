@@ -519,13 +519,17 @@ func monitoringData(
 			}
 		}()
 
-		var monitorFile *os.File
+		var (
+			analysis    *monitor.Analysis
+			analysisErr error
+			monitorFile *os.File
+		)
 		for _, file := range zipReader.File {
 			if strings.HasSuffix(file.Name, "octometrics.monitor.log.jsonl") {
 				// Open the target file inside the zip
 				rc, err := file.Open()
 				if err != nil {
-					log.Error().Err(err).Msg("failed to open file in zip")
+					return nil, fmt.Errorf("failed to open file in zip: %w", err)
 				}
 				defer func() {
 					if err := rc.Close(); err != nil {
@@ -541,6 +545,10 @@ func monitoringData(
 				defer func() {
 					if err := monitorFile.Close(); err != nil {
 						log.Error().Err(err).Msg("failed to close temp file")
+					}
+
+					if analysisErr != nil { // if the analysis failed, leave the file for debugging
+						return
 					}
 					//nolint:gosec // path comes from os.CreateTemp, not user input
 					if err := os.Remove(monitorFile.Name()); err != nil {
@@ -564,9 +572,13 @@ func monitoringData(
 		}
 
 		// Analyze the extracted file
-		analysis, err := monitor.Analyze(log, monitorFile.Name())
-		if err != nil {
-			return nil, fmt.Errorf("failed to analyze octometrics file %s: %w", monitorFile.Name(), err)
+		analysis, analysisErr = monitor.Analyze(log, monitorFile.Name())
+		if analysisErr != nil {
+			return nil, fmt.Errorf(
+				"failed to analyze octometrics monitoring data file '%s', leaving file for debugging: %w",
+				monitorFile.Name(),
+				err,
+			)
 		}
 		analyses = append(analyses, analysis)
 	}

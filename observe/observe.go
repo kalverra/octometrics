@@ -51,6 +51,9 @@ func init() {
 			return float64(v) / 1000.0
 		},
 		"joinStrings": strings.Join,
+		"mermaidDiagram": func(s string) template.HTML {
+			return template.HTML(s)
+		},
 	}).ParseFS(templateFS, "templates/*.html", "templates/*.css")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))

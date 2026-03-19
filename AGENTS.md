@@ -8,7 +8,7 @@ Octometrics is a Go CLI that profiles GitHub Actions workflows. Read `design.md`
 | --------- | ---------------------------------------------------------------------------------------------- |
 | `monitor` | Collects system metrics (CPU, memory, disk, I/O) during a GHA job, writes JSONL                |
 | `gather`  | Fetches workflow/job/step data from the GitHub REST & GraphQL APIs, stores as JSON             |
-| `observe` | Renders gathered data as interactive HTML (Mermaid Gantt charts, Plotly metric charts)         |
+| `observe` | Renders gathered data as interactive HTML (Mermaid Gantt and xychart-beta metric charts)      |
 | `report`  | Analyzes monitor JSONL and posts Mermaid-based summaries to GHA step summaries and PR comments |
 
 Key packages: `cmd/` (Cobra CLI), `monitor/` (system metrics), `gather/` (GitHub API), `observe/` (HTML visualization), `report/` (in-action reporting), `internal/config/` (Viper config), `logging/` (zerolog setup).
@@ -24,12 +24,7 @@ go test ./...
 
 Analyze the outputs and fix issues you introduced. **Do not change a test unless it is necessary to comply with new changes or implementations**.
 
-- `make lint` runs `golangci-lint run ./... --fix` with the config in `.golangci.yaml`.
-- `make test` runs `go tool gotestsum -- -cover ./...`.
-- Tests use `github.com/stretchr/testify` (`require` for fatal checks, `assert` for non-fatal).
-- Use the `internal/testhelpers.Setup(t)` helper to create a temp directory and logger for tests. It auto-cleans on success and preserves on failure.
-- Test data goes in `<package>/testdata/` directories.
-- You can run `pre-commit` using the `.pre-commit-config.yaml` file for extensive checks.
+When validating UI changes, you can run the tool and bring up the whole UI with `go run . observe` and going to `http://localhost:8080`.
 
 ## Coding Conventions
 

@@ -101,6 +101,109 @@ func TestGanttChart(t *testing.T) {
 	})
 }
 
+func TestMonitoringMermaidCharts(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil analysis", func(t *testing.T) {
+		t.Parallel()
+		assert.Nil(t, MonitoringMermaidCharts(nil))
+	})
+
+	t.Run("matches report markdown body without fences", func(t *testing.T) {
+		t.Parallel()
+		base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		analysis := &monitor.Analysis{
+			CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+				0: {
+					{Time: base, UsedPercent: 50.0},
+					{Time: base.Add(time.Second), UsedPercent: 75.0},
+				},
+			},
+		}
+		charts := MonitoringMermaidCharts(analysis)
+		require.Len(t, charts, 1)
+		assert.Equal(t, "CPU Usage", charts[0].Title)
+		assert.Contains(t, charts[0].Diagram, "xychart-beta")
+		assert.NotContains(t, charts[0].Diagram, "```")
+		assert.Contains(t, cpuChart(analysis), charts[0].Diagram)
+	})
+}
+
+func TestMonitoringMermaidChartsWithWindow(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil analysis", func(t *testing.T) {
+		t.Parallel()
+		base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		assert.Nil(t, MonitoringMermaidChartsWithWindow(nil, base, base.Add(time.Minute)))
+	})
+
+	t.Run("invalid window", func(t *testing.T) {
+		t.Parallel()
+		base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		analysis := &monitor.Analysis{
+			CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+				0: {{Time: base, UsedPercent: 10}},
+			},
+		}
+		assert.Nil(t, MonitoringMermaidChartsWithWindow(analysis, base, base))
+		assert.Nil(t, MonitoringMermaidChartsWithWindow(analysis, base.Add(time.Minute), base))
+	})
+
+	t.Run("x-axis spans job window in seconds", func(t *testing.T) {
+		t.Parallel()
+		winStart := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		winEnd := winStart.Add(45 * time.Second)
+		analysis := &monitor.Analysis{
+			CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+				0: {
+					{Time: winStart, UsedPercent: 10},
+					{Time: winStart.Add(22 * time.Second), UsedPercent: 90},
+					{Time: winEnd, UsedPercent: 20},
+				},
+			},
+		}
+		charts := MonitoringMermaidChartsWithWindow(analysis, winStart, winEnd)
+		require.Len(t, charts, 1)
+		assert.Contains(t, charts[0].Diagram, `x-axis "Seconds" 0 --> 45`)
+		assert.Contains(t, charts[0].Diagram, "line [")
+	})
+
+	t.Run("axis extends past window when samples run longer", func(t *testing.T) {
+		t.Parallel()
+		winStart := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		winEnd := winStart.Add(10 * time.Second)
+		analysis := &monitor.Analysis{
+			CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+				0: {
+					{Time: winStart, UsedPercent: 10},
+					{Time: winStart.Add(30 * time.Second), UsedPercent: 50},
+				},
+			},
+		}
+		charts := MonitoringMermaidChartsWithWindow(analysis, winStart, winEnd)
+		require.Len(t, charts, 1)
+		assert.Contains(t, charts[0].Diagram, `x-axis "Seconds" 0 --> 30`)
+	})
+
+	t.Run("long window uses minutes axis", func(t *testing.T) {
+		t.Parallel()
+		winStart := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		winEnd := winStart.Add(150 * time.Second)
+		analysis := &monitor.Analysis{
+			CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+				0: {
+					{Time: winStart, UsedPercent: 10},
+					{Time: winEnd, UsedPercent: 20},
+				},
+			},
+		}
+		charts := MonitoringMermaidChartsWithWindow(analysis, winStart, winEnd)
+		require.Len(t, charts, 1)
+		assert.Contains(t, charts[0].Diagram, `x-axis "Minutes" 0 --> 3`)
+	})
+}
+
 func TestCPUChart(t *testing.T) {
 	t.Parallel()
 
