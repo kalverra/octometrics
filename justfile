@@ -1,5 +1,3 @@
-.PHONY: lint test test_race
-
 goreleaser:
 	goreleaser release --clean --snapshot
 

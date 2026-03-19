@@ -18,8 +18,8 @@ Key packages: `cmd/` (Cobra CLI), `monitor/` (system metrics), `gather/` (GitHub
 After making changes, always run:
 
 ```sh
-make lint
-make test
+golangci-lint run ./... --fix
+go test ./...
 ```
 
 Analyze the outputs and fix issues you introduced. **Do not change a test unless it is necessary to comply with new changes or implementations**.

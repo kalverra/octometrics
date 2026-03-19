@@ -33,3 +33,10 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 Run `monitor` directly in your GitHub action and it will post performance data as a comment and summary to the action run. [See the octometrics-action](https://github.com/kalverra/octometrics-action).
 
 Highly inspired by the [workflow-telemetry-action](https://github.com/catchpoint/workflow-telemetry-action/tree/master).
+
+## Contributing
+
+```sh
+just lint # Run linters
+just test # Run tests
+```

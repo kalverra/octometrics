@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/charmbracelet/huh/spinner"
 	"github.com/spf13/cobra"
 
 	"github.com/kalverra/octometrics/gather"
@@ -62,7 +63,6 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 		}
 
 		logger.Info().Msg("Gathering data")
-		fmt.Println("Gathering data...")
 
 		opts := []gather.Option{}
 
@@ -71,19 +71,30 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 		}
 
 		var err error
-		if cfg.WorkflowRunID != 0 {
-			_, _, err = gather.WorkflowRun(logger, githubClient, cfg.Owner, cfg.Repo, cfg.WorkflowRunID, opts...)
-		} else if cfg.PullRequestNumber != 0 {
-			_, err = gather.PullRequest(logger, githubClient, cfg.Owner, cfg.Repo, cfg.PullRequestNumber, opts...)
-		} else if cfg.CommitSHA != "" {
-			_, err = gather.Commit(logger, githubClient, cfg.Owner, cfg.Repo, cfg.CommitSHA, opts...)
+		action := func() {
+			if cfg.WorkflowRunID != 0 {
+				_, _, err = gather.WorkflowRun(logger, githubClient, cfg.Owner, cfg.Repo, cfg.WorkflowRunID, opts...)
+			} else if cfg.PullRequestNumber != 0 {
+				_, err = gather.PullRequest(logger, githubClient, cfg.Owner, cfg.Repo, cfg.PullRequestNumber, opts...)
+			} else if cfg.CommitSHA != "" {
+				_, err = gather.Commit(logger, githubClient, cfg.Owner, cfg.Repo, cfg.CommitSHA, opts...)
+			}
 		}
+
+		spinnerErr := spinner.New().
+			Title("Gathering data").
+			Action(action).
+			Run()
+
 		if err != nil {
 			return err
 		}
+		if spinnerErr != nil {
+			return spinnerErr
+		}
 
 		logger.Info().Str("duration", time.Since(startTime).String()).Msg("Gathered data")
-		fmt.Println("Gathered data")
+		fmt.Printf("Gathered data (%s) ✅\n", time.Since(startTime).String())
 
 		if cfg.NoObserve {
 			return nil

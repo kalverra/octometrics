@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/charmbracelet/fang"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 
 	"github.com/kalverra/octometrics/internal/config"
 	"github.com/kalverra/octometrics/logging"
@@ -75,9 +73,6 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 }
 
 func init() {
-	rootCmd.SetGlobalNormalizationFunc(func(_ *pflag.FlagSet, name string) pflag.NormalizedName {
-		return pflag.NormalizedName(strings.ReplaceAll(name, "-", "_"))
-	})
 	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "Level for detailed logging")
 }
 
