@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/charmbracelet/huh/spinner"
+	"charm.land/huh/v2/spinner"
 	"github.com/spf13/cobra"
 
 	"github.com/kalverra/octometrics/gather"
@@ -68,6 +68,10 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 
 		if cfg.ForceUpdate {
 			opts = append(opts, gather.ForceUpdate())
+		}
+
+		if cfg.GatherCost {
+			opts = append(opts, gather.WithCost())
 		}
 
 		var err error

@@ -74,9 +74,6 @@ func WithFlags(flags *pflag.FlagSet) LoadOption {
 func Load(opts ...LoadOption) (*Config, error) {
 	v := viper.New()
 
-	// Handle flags like --log-level instead of --log_level
-	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-
 	v.SetDefault("log_level", DefaultLogLevel)
 	v.SetDefault("since", DefaultSince)
 	v.SetDefault("until", DefaultUntil)

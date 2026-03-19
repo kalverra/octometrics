@@ -3,6 +3,7 @@ package gather
 import (
 	"archive/zip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -233,6 +234,10 @@ func WorkflowRun(
 		})
 
 		eg.Go(func() error {
+			if !opts.gatherCost {
+				return nil
+			}
+
 			var billingErr error
 			workflowBillingData, billingErr = billingData(client, owner, repo, workflowRunID)
 			return billingErr
@@ -268,7 +273,7 @@ func WorkflowRun(
 			runner string
 			cost   int64
 		)
-		if completed {
+		if completed && opts.gatherCost {
 			var billingErr error
 			runner, cost, billingErr = calculateJobRunBilling(job.GetID(), workflowBillingData)
 			if billingErr != nil {
@@ -420,35 +425,20 @@ func monitoringData(
 		}
 		artifactsToDownload = []*github.Artifact{}
 		analyses            []*monitor.Analysis
+
+		ctx, cancel   = ghCtx()
+		artifactsIter = client.Rest.Actions.ListWorkflowRunArtifactsIter(ctx, owner, repo, workflowRunID, listOpts)
 	)
 
-	for {
-		ctx, cancel := ghCtx()
-		artifacts, resp, err := client.Rest.Actions.ListWorkflowRunArtifacts(
-			ctx,
-			owner,
-			repo,
-			workflowRunID,
-			listOpts,
-		)
-		cancel()
+	for artifact, err := range artifactsIter {
 		if err != nil {
 			return nil, fmt.Errorf("failed to list workflow run artifacts: %w", err)
 		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		if strings.HasSuffix(artifact.GetName(), "octometrics.monitor.log.jsonl") {
+			artifactsToDownload = append(artifactsToDownload, artifact)
 		}
-		for _, artifact := range artifacts.Artifacts {
-			if strings.HasSuffix(artifact.GetName(), "octometrics.monitor.log.jsonl") {
-				artifactsToDownload = append(artifactsToDownload, artifact)
-			}
-		}
-
-		if resp.NextPage == 0 {
-			break
-		}
-		listOpts.Page = resp.NextPage
 	}
+	cancel()
 
 	for _, artifact := range artifactsToDownload {
 		// Get URL to download the artifact
@@ -479,7 +469,10 @@ func monitoringData(
 			}
 			//nolint:gosec // path comes from os.Create, not user input
 			if err := os.Remove(zippedArtifact.Name()); err != nil {
-				log.Error().Err(err).Msg("failed to remove monitor data artifact file")
+				if !errors.Is(err, os.ErrNotExist) { // ignore "no such file or directory" error
+					log.Error().Str("path", zippedArtifact.Name()).Err(err).
+						Msg("failed to remove monitor data artifact file")
+				}
 			}
 		}()
 
@@ -532,11 +525,11 @@ func monitoringData(
 				// Open the target file inside the zip
 				rc, err := file.Open()
 				if err != nil {
-					log.Error().Err(err).Msg("Failed to open file in zip")
+					log.Error().Err(err).Msg("failed to open file in zip")
 				}
 				defer func() {
 					if err := rc.Close(); err != nil {
-						log.Error().Err(err).Msg("Failed to close file in zip")
+						log.Error().Err(err).Msg("failed to close file in zip")
 					}
 				}()
 
@@ -547,18 +540,23 @@ func monitoringData(
 				}
 				defer func() {
 					if err := monitorFile.Close(); err != nil {
-						log.Error().Err(err).Msg("Failed to close temp file")
+						log.Error().Err(err).Msg("failed to close temp file")
 					}
 					//nolint:gosec // path comes from os.CreateTemp, not user input
 					if err := os.Remove(monitorFile.Name()); err != nil {
-						log.Error().Err(err).Msg("failed to remove monitor data file")
+						if !errors.Is(err, os.ErrNotExist) { // ignore "no such file or directory" error
+							log.Error().
+								Str("path", monitorFile.Name()).
+								Err(err).
+								Msg("failed to remove monitor data temp file")
+						}
 					}
 				}()
 
 				//nolint:gosec // trusted source
 				_, err = io.Copy(monitorFile, rc)
 				if err != nil {
-					log.Error().Err(err).Msg("Failed to copy file content to temp file")
+					log.Error().Err(err).Msg("failed to copy file content to temp file")
 				}
 
 				break

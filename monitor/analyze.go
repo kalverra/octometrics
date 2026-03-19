@@ -1,10 +1,10 @@
 package monitor
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -100,7 +100,7 @@ func Analyze(log zerolog.Logger, dataFile string) (*Analysis, error) {
 	}()
 
 	var (
-		scanner      = bufio.NewScanner(file)
+		decoder      = json.NewDecoder(file)
 		startTime    = time.Now()
 		linesScanned = 0
 		analysis     = &Analysis{
@@ -111,15 +111,17 @@ func Analyze(log zerolog.Logger, dataFile string) (*Analysis, error) {
 			IOMeasurements:     []*IOMeasurement{},
 		}
 	)
-	for scanner.Scan() {
-		line := scanner.Text()
-		linesScanned++
-
+	for {
 		var entry *monitorEntry
-		err := json.Unmarshal([]byte(line), &entry)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse entry: %w", err)
+		err := decoder.Decode(&entry)
+		if err == io.EOF {
+			break
 		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse entry at line %d: %w", linesScanned+1, err)
+		}
+
+		linesScanned++
 
 		if entry == nil {
 			return nil, fmt.Errorf("entry %d is nil", linesScanned)
@@ -128,10 +130,6 @@ func Analyze(log zerolog.Logger, dataFile string) (*Analysis, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to process entry %d: %w", linesScanned, err)
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading file: %w", err)
 	}
 	log.Info().
 		Str("Duration", time.Since(startTime).String()).
