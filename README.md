@@ -12,6 +12,9 @@ Before running, make sure to provide GitHub API token, either through the `GITHU
 # Install
 go install github.com/kalverra/octometrics@latest
 
+# Set your GITHUB_TOKEN to avoid rate limits
+export GITHUB_TOKEN=$(gh auth token)
+
 # Show help menu
 octometrics -h
 

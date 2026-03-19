@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -26,6 +27,15 @@ const WorkflowRunsDataDir = "workflow_runs"
 
 // maxMonitorJSONLSize caps extracted monitor log size per artifact (zip decompression).
 const maxMonitorJSONLSize = 512 << 20 // 512 MiB
+
+// maxMonitorZipDownloadSize caps raw bytes read from the artifact URL (bounded memory, DoS mitigation).
+const maxMonitorZipDownloadSize = maxMonitorJSONLSize
+
+// maxArtifactErrorBodyBytes limits how much of a failed HTTP response we read for error messages.
+const maxArtifactErrorBodyBytes = 64 << 10 // 64 KiB
+
+// maxZipEntriesPerArtifact rejects archives with excessive entries (zip quine / parser DoS).
+const maxZipEntriesPerArtifact = 4096
 
 // Mapping of how much a minute for each runner type costs
 // cost depicted in tenths of a cent
@@ -434,6 +444,7 @@ func monitoringData(
 		artifactsIter = client.Rest.Actions.ListWorkflowRunArtifactsIter(ctx, owner, repo, workflowRunID, listOpts)
 	)
 
+	defer cancel()
 	for artifact, err := range artifactsIter {
 		if err != nil {
 			return nil, fmt.Errorf("failed to list workflow run artifacts: %w", err)
@@ -442,7 +453,6 @@ func monitoringData(
 			artifactsToDownload = append(artifactsToDownload, artifact)
 		}
 	}
-	cancel()
 
 	for _, artifact := range artifactsToDownload {
 		analysis, err := downloadAndAnalyzeArtifact(log, client, owner, repo, artifact, targetDir)
@@ -453,6 +463,37 @@ func monitoringData(
 	}
 
 	return analyses, nil
+}
+
+// readAllLimited reads from r until EOF. If the stream contains more than maxBytes, it returns an error.
+func readAllLimited(r io.Reader, maxBytes int64) ([]byte, error) {
+	if maxBytes < 0 {
+		return nil, errors.New("readAllLimited: maxBytes must be non-negative")
+	}
+	data, err := io.ReadAll(io.LimitReader(r, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("content exceeds maximum size of %d bytes", maxBytes)
+	}
+	return data, nil
+}
+
+// safeMonitorJSONLZipEntry returns true if zf is a plausible octometrics log path (no zip-slip).
+func safeMonitorJSONLZipEntry(zf *zip.File) bool {
+	if zf == nil {
+		return false
+	}
+	name := zf.Name
+	if name == "" || strings.Contains(name, "..") || strings.Contains(name, "\\") {
+		return false
+	}
+	clean := path.Clean(name)
+	if clean == "." || strings.HasPrefix(clean, "../") || path.IsAbs(clean) {
+		return false
+	}
+	return path.Base(clean) == "octometrics.monitor.log.jsonl"
 }
 
 // downloadAndAnalyzeArtifact fetches one monitoring artifact from GitHub, reads the zip from memory
@@ -490,7 +531,7 @@ func downloadAndAnalyzeArtifact(
 		}
 	}()
 	if downloadResp.StatusCode != http.StatusOK {
-		bodyBytes, readErr := io.ReadAll(downloadResp.Body)
+		bodyBytes, readErr := readAllLimited(downloadResp.Body, maxArtifactErrorBodyBytes)
 		if readErr != nil {
 			return nil, fmt.Errorf(
 				"got unexpected status code %d downloading monitoring data artifact %d, and failed to read response body: %w",
@@ -507,7 +548,7 @@ func downloadAndAnalyzeArtifact(
 		)
 	}
 
-	zipBytes, err := io.ReadAll(downloadResp.Body)
+	zipBytes, err := readAllLimited(downloadResp.Body, maxMonitorZipDownloadSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read monitor data artifact body: %w", err)
 	}
@@ -516,9 +557,18 @@ func downloadAndAnalyzeArtifact(
 		return nil, fmt.Errorf("failed to open monitor data zip from download: %w", err)
 	}
 
+	if len(zr.File) > maxZipEntriesPerArtifact {
+		return nil, fmt.Errorf(
+			"artifact %d (%q) has too many zip entries (%d); refusing to process",
+			artifact.GetID(),
+			artifact.GetName(),
+			len(zr.File),
+		)
+	}
+
 	var jsonl *zip.File
 	for _, f := range zr.File {
-		if strings.HasSuffix(f.Name, "octometrics.monitor.log.jsonl") {
+		if safeMonitorJSONLZipEntry(f) {
 			jsonl = f
 			break
 		}
