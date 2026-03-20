@@ -54,6 +54,34 @@ func init() {
 		"mermaidDiagram": func(s string) template.HTML {
 			return template.HTML(s)
 		},
+		"formatDelta": formatDelta,
+		"shortSHA": func(sha string) string {
+			if len(sha) >= 7 {
+				return sha[:7]
+			}
+			return sha
+		},
+		"deltaClass": func(d time.Duration) string {
+			if d > 0 {
+				return "delta-slower"
+			}
+			if d < 0 {
+				return "delta-faster"
+			}
+			return ""
+		},
+		"conclusionBadge": func(conclusion string) template.HTML {
+			switch conclusion {
+			case "crit":
+				return template.HTML(`<span class="rt-badge rt-failure">failure</span>`)
+			case "done":
+				return template.HTML(`<span class="rt-badge rt-cancelled">cancelled</span>`)
+			case "active":
+				return template.HTML(`<span class="rt-badge rt-in-progress">in progress</span>`)
+			default:
+				return template.HTML(`<span class="rt-badge rt-success">success</span>`)
+			}
+		},
 	}).ParseFS(templateFS, "templates/*.html", "templates/*.css")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
@@ -277,6 +305,20 @@ func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath st
 	if err != nil {
 		return fmt.Errorf("failed to generate all HTML observe data: %w", err)
 	}
+
+	log.Info().
+		Str("url", "http://localhost:8080"+initialPath).
+		Str("built_observations_dur", time.Since(startTime).String()).
+		Str("dir", htmlOutputDir).
+		Msg("Observing data...")
+	fmt.Println("Observe data at http://localhost:8080")
+
+	return ServeHTML(log, initialPath)
+}
+
+// ServeHTML starts a local HTTP file server for the HTML output directory
+// and opens the browser to the specified initial path.
+func ServeHTML(log zerolog.Logger, initialPath string) error {
 	var (
 		baseURL    = "http://localhost:8080"
 		browserURL = baseURL + initialPath
@@ -284,13 +326,6 @@ func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath st
 		fs         = http.FileServer(dir)
 	)
 	http.Handle("/", fs)
-
-	log.Info().
-		Str("url", browserURL).
-		Str("built_observations_dur", time.Since(startTime).String()).
-		Str("dir", htmlOutputDir).
-		Msg("Observing data...")
-	fmt.Println("Observe data at http://localhost:8080")
 
 	go func() {
 		interruptChan := make(chan os.Signal, 1)

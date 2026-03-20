@@ -67,9 +67,6 @@ func (g *timelineData) process() error {
 			endTime = item.StartTime.Add(item.Duration)
 		}
 	}
-	g.Duration = endTime.Sub(startTime)
-	g.StartTime = startTime
-	g.EndTime = endTime
 
 	// Adjust the start time of each item so that the full timeline starts at 0
 	newStartTime := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, startTime.Location())
@@ -78,12 +75,30 @@ func (g *timelineData) process() error {
 		g.Items[i].StartTime = g.Items[i].StartTime.Add(startTimeDiff)
 	}
 
-	if endTime.Sub(startTime) >= time.Hour {
-		g.DateFormat, g.AxisFormat, g.GoDateFormat = "HH:mm:ss", "%H:%M:%S", "15:04:05"
-	} else {
-		g.DateFormat, g.AxisFormat, g.GoDateFormat = "mm:ss", "%M:%S", "04:05"
+	// Recompute bounds from shifted times. Pre-shift g.StartTime/g.EndTime would not match
+	// item StartTimes (used by compare Gantt alignment and observation headers).
+	g.StartTime = g.Items[0].StartTime
+	g.EndTime = g.Items[0].StartTime.Add(g.Items[0].Duration)
+	for _, item := range g.Items {
+		if item.StartTime.Before(g.StartTime) {
+			g.StartTime = item.StartTime
+		}
+		if itemEnd := item.StartTime.Add(item.Duration); itemEnd.After(g.EndTime) {
+			g.EndTime = itemEnd
+		}
 	}
+	g.Duration = g.EndTime.Sub(g.StartTime)
+	g.DateFormat, g.AxisFormat, g.GoDateFormat = GanttFormatsForDuration(g.Duration)
 	return nil
+}
+
+// GanttFormatsForDuration returns the dateFormat, axisFormat, and goDateFormat for a given duration.
+// Durations under one hour use mm:ss; longer spans use HH:mm:ss (matches Mermaid gantt dateFormat).
+func GanttFormatsForDuration(span time.Duration) (dateFormat, axisFormat, goDateFormat string) {
+	if span >= time.Hour {
+		return "HH:mm:ss", "%H:%M:%S", "15:04:05"
+	}
+	return "mm:ss", "%M:%S", "04:05"
 }
 
 // ItemsByDuration returns items sorted by duration descending (longest first).

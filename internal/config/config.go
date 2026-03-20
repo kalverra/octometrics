@@ -145,6 +145,17 @@ func (c *Config) ValidateGather() error {
 	return nil
 }
 
+// ValidateCompare validates the configuration for the compare command.
+func (c *Config) ValidateCompare() error {
+	if c.Owner == "" {
+		return errors.New("owner is required")
+	}
+	if c.Repo == "" {
+		return errors.New("repo is required")
+	}
+	return nil
+}
+
 // ValidateSurvey validates the configuration for the survey command.
 func (c *Config) ValidateSurvey() error {
 	if c.Owner == "" {

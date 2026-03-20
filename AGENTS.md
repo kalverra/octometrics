@@ -2,24 +2,15 @@
 
 ## Project Overview
 
-Octometrics is a Go CLI that profiles GitHub Actions workflows. Read `design.md` for architecture diagrams and key design decisions. The main commands are:
-
-| Command   | Purpose                                                                                        |
-| --------- | ---------------------------------------------------------------------------------------------- |
-| `monitor` | Collects system metrics (CPU, memory, disk, I/O) during a GHA job, writes JSONL                |
-| `gather`  | Fetches workflow/job/step data from the GitHub REST & GraphQL APIs, stores as JSON             |
-| `observe` | Renders gathered data as interactive HTML (Mermaid Gantt and xychart-beta metric charts)      |
-| `report`  | Analyzes monitor JSONL and posts Mermaid-based summaries to GHA step summaries and PR comments |
-
-Key packages: `cmd/` (Cobra CLI), `monitor/` (system metrics), `gather/` (GitHub API), `observe/` (HTML visualization), `report/` (in-action reporting), `internal/config/` (Viper config), `logging/` (zerolog setup).
+Octometrics is a Go CLI that profiles GitHub Actions workflows. Read `design.md` for architecture diagrams and key design decisions.
 
 ## Testing and Linting
 
 After making changes, always run:
 
 ```sh
-golangci-lint run ./... --fix
-go test ./...
+golangci-lint run ./... --fix # Linting, do not bother running go vet or gofmt
+go test ./... # Testing
 ```
 
 Analyze the outputs and fix issues you introduced. **Do not change a test unless it is necessary to comply with new changes or implementations**.

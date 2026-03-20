@@ -17,7 +17,7 @@ import (
 	"github.com/shirou/gopsutil/v4/net"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/kalverra/octometrics/logging"
+	"github.com/kalverra/octometrics/internal/logging"
 )
 
 // Monitoring data file name and log message constants.

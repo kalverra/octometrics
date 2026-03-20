@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kalverra/octometrics/logging"
+	"github.com/kalverra/octometrics/internal/logging"
 )
 
 const (

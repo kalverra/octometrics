@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kalverra/octometrics/internal/config"
-	"github.com/kalverra/octometrics/logging"
+	"github.com/kalverra/octometrics/internal/logging"
 )
 
 const (
