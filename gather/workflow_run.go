@@ -493,7 +493,8 @@ func safeMonitorJSONLZipEntry(zf *zip.File) bool {
 	if clean == "." || strings.HasPrefix(clean, "../") || path.IsAbs(clean) {
 		return false
 	}
-	return path.Base(clean) == "octometrics.monitor.log.jsonl"
+	base := path.Base(clean)
+	return base == "octometrics.monitor.log.jsonl" || strings.HasSuffix(base, "-octometrics.monitor.log.jsonl")
 }
 
 // downloadAndAnalyzeArtifact fetches one monitoring artifact from GitHub, reads the zip from memory

@@ -2,7 +2,7 @@ package observe
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -150,9 +150,9 @@ func conclusionToGanttStatus(conclusion string) string {
 // jobRunLink returns the link to a specific job run's rendering.
 // You need to add on the extension (.html, .md) to this path.
 func jobRunLink(owner, repo string, jobRunID int64) string {
-	return filepath.Join("/", owner, repo, jobRunOutputDir, fmt.Sprint(jobRunID))
+	return path.Join("/", owner, repo, jobRunOutputDir, fmt.Sprint(jobRunID))
 }
 
 func workflowRunLink(owner, repo string, workflowRunID int64) string {
-	return filepath.Join("/", owner, repo, gather.WorkflowRunsDataDir, fmt.Sprint(workflowRunID))
+	return path.Join("/", owner, repo, gather.WorkflowRunsDataDir, fmt.Sprint(workflowRunID))
 }

@@ -28,13 +28,6 @@ repos:
         types_or: [go, go-mod, go-sum]
         language: golang
         stages: [pre-commit, pre-push]
-      - id: go-fix
-        name: go fix
-        entry: go fix ./...
-        pass_filenames: false
-        types_or: [go, go-mod, go-sum]
-        language: golang
-        stages: [pre-commit, pre-push]
       - id: go-generate
         name: go generate
         entry: go generate ./...

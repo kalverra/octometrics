@@ -7,7 +7,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
-	"github.com/kalverra/octometrics/logging"
+	"github.com/kalverra/octometrics/internal/logging"
 )
 
 // Option mutates how monitoring is done

@@ -2,7 +2,7 @@ package observe
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 
 	"github.com/rs/zerolog"
 
@@ -42,5 +42,5 @@ func PullRequest(
 }
 
 func commitRunLink(owner, repo, sha string) string {
-	return filepath.Join("/", owner, repo, gather.CommitsDataDir, sha)
+	return path.Join("/", owner, repo, gather.CommitsDataDir, sha)
 }

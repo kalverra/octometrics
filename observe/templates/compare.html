@@ -1,0 +1,290 @@
+{{- /* Go Template file */ -}}
+
+{{ define "compare_html" }}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Compare: {{ .Left.Name }} vs {{ .Right.Name }} | Octometrics</title>
+    <style>
+        {{ template "styles_css" }}
+    </style>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const chartWidth = 1100;
+        const chartHeight = 420;
+        const base = {
+            startOnLoad: true,
+            theme: 'base',
+            useMaxWidth: true,
+            xyChart: {
+                width: chartWidth,
+                height: chartHeight,
+                plotReservedSpacePercent: 42,
+            },
+        };
+        if (prefersDark) {
+            mermaid.initialize({
+                ...base,
+                themeVariables: {
+                    darkMode: true,
+                    background: '#161b22',
+                    primaryColor: '#238636',
+                    primaryTextColor: '#ffffff',
+                    primaryBorderColor: '#2ea043',
+                    secondaryColor: '#238636',
+                    secondaryTextColor: '#ffffff',
+                    secondaryBorderColor: '#2ea043',
+                    tertiaryColor: '#21262d',
+                    tertiaryTextColor: '#e6edf3',
+                    tertiaryBorderColor: '#30363d',
+                    lineColor: '#484f58',
+                    textColor: '#e6edf3',
+                    mainBkg: '#161b22',
+                    nodeBorder: '#2ea043',
+                    critBkgColor: '#da3633',
+                    critBorderColor: '#f85149',
+                    activeTaskBkgColor: '#d29922',
+                    activeTaskBorderColor: '#e3b341',
+                    doneTaskBkgColor: '#30363d',
+                    doneTaskBorderColor: '#484f58',
+                    taskTextColor: '#ffffff',
+                    taskTextDarkColor: '#ffffff',
+                    taskTextClickableColor: '#ffffff',
+                },
+            });
+        } else {
+            mermaid.initialize({
+                ...base,
+                themeVariables: {
+                    primaryColor: '#2da44e',
+                    primaryTextColor: '#ffffff',
+                    primaryBorderColor: '#1a7f37',
+                    secondaryColor: '#2da44e',
+                    secondaryTextColor: '#ffffff',
+                    secondaryBorderColor: '#1a7f37',
+                    tertiaryColor: '#f6f8fa',
+                    tertiaryTextColor: '#1f2328',
+                    tertiaryBorderColor: '#d1d9e0',
+                    lineColor: '#d1d9e0',
+                    textColor: '#1f2328',
+                    critBkgColor: '#cf222e',
+                    critBorderColor: '#a40e26',
+                    activeTaskBkgColor: '#bf8700',
+                    activeTaskBorderColor: '#9a6700',
+                    doneTaskBkgColor: '#eaeef2',
+                    doneTaskBorderColor: '#d1d9e0',
+                    taskTextColor: '#ffffff',
+                    taskTextDarkColor: '#1f2328',
+                    taskTextClickableColor: '#ffffff',
+                },
+            });
+        }
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <nav class="breadcrumbs">
+            <a href="/">Home</a> / <a href="/{{ .Owner }}/{{ .Repo }}/">{{ .Owner }}/{{ .Repo }}</a> / Compare
+        </nav>
+
+        <header class="page-header">
+            <h1>Comparison</h1>
+            <div class="compare-header">
+                <div class="compare-side">
+                    <span class="compare-label">Left</span>
+                    <a target="_blank" href="{{ .Left.GitHubLink }}">{{ .Left.Name }}</a>
+                    <span class="badge badge-identifier" style="font-family: var(--font-mono); font-size: 0.8em; margin-left: 0.5rem; background: var(--color-surface); border: 1px solid var(--color-surface-border);">{{ if eq .Left.DataType "commit" }}{{ shortSHA .Left.ID }}{{ else }}#{{ .Left.ID }}{{ end }}</span>
+                    <span class="badge badge-{{ .Left.State }}">{{ .Left.State }}</span>
+                </div>
+                <div class="compare-side">
+                    <span class="compare-label">Right</span>
+                    <a target="_blank" href="{{ .Right.GitHubLink }}">{{ .Right.Name }}</a>
+                    <span class="badge badge-identifier" style="font-family: var(--font-mono); font-size: 0.8em; margin-left: 0.5rem; background: var(--color-surface); border: 1px solid var(--color-surface-border);">{{ if eq .Right.DataType "commit" }}{{ shortSHA .Right.ID }}{{ else }}#{{ .Right.ID }}{{ end }}</span>
+                    <span class="badge badge-{{ .Right.State }}">{{ .Right.State }}</span>
+                </div>
+            </div>
+            <div class="metadata">
+                {{ if or .Summary.LeftCost .Summary.RightCost }}
+                <span class="badge badge-cost">
+                    <span class="badge-label">Cost</span>
+                    ${{ printf "%.2f" (divideBy1000 .Summary.LeftCost) }} &rarr; ${{ printf "%.2f" (divideBy1000 .Summary.RightCost) }}
+                </span>
+                {{ end }}
+            </div>
+        </header>
+
+        {{ range .EventPairs }}
+        <details class="section"{{ if .IsTypical }} open{{ end }}>
+            <summary>
+                {{ .Event }}
+                <span class="badge" style="margin-left: 1rem;">
+                    <span class="badge-label">Duration</span>
+                    {{ .LeftDuration }} &rarr; {{ .RightDuration }}
+                    ({{ formatDelta .DurationDelta }})
+                </span>
+            </summary>
+            <div class="section-body">
+                {{ if .CombinedGantt }}
+                <h3>Combined timeline</h3>
+                <p class="compare-gantt-hint">Left and right runs share the same start time on this chart so you can compare structure and overlap directly.</p>
+                {{ template "compare_gantt_html" .CombinedGantt }}
+                {{ else }}
+                {{ if .Left }}
+                <h3>Left &mdash; {{ .Left.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Left.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Left.Duration }})</h3>
+                {{ template "timeline_html" .Left }}
+                {{ else }}
+                <h3>Left</h3>
+                <p class="empty-state">No runs for this event.</p>
+                {{ end }}
+
+                {{ if .Right }}
+                <h3>Right &mdash; {{ .Right.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Right.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Right.Duration }})</h3>
+                {{ template "timeline_html" .Right }}
+                {{ else }}
+                <h3>Right</h3>
+                <p class="empty-state">No runs for this event.</p>
+                {{ end }}
+                {{ end }}
+
+                {{ if .Items }}
+                <details open>
+                    <summary>Comparison ({{ len .Items }} matched)</summary>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th class="ct-name">Name</th>
+                                <th class="ct-duration">Left Duration</th>
+                                <th class="ct-duration">Right Duration</th>
+                                <th class="ct-duration">Delta</th>
+                                <th class="ct-status">Left Status</th>
+                                <th class="ct-status">Right Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .Items }}
+                            <tr{{ if .StatusChanged }} class="status-changed"{{ end }}>
+                                <td class="ct-name">{{ .Name }}</td>
+                                <td class="ct-duration">{{ .LeftDuration }}</td>
+                                <td class="ct-duration">{{ .RightDuration }}</td>
+                                <td class="ct-duration {{ deltaClass .DurationDelta }}">{{ formatDelta .DurationDelta }}</td>
+                                <td class="ct-status">{{ conclusionBadge .LeftConclusion }}</td>
+                                <td class="ct-status">{{ conclusionBadge .RightConclusion }}</td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </details>
+                {{ end }}
+
+                {{ if .OnlyLeft }}
+                <details>
+                    <summary>Only in Left ({{ len .OnlyLeft }})</summary>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th class="ct-name">Name</th>
+                                <th class="ct-duration">Duration</th>
+                                <th class="ct-status">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .OnlyLeft }}
+                            <tr>
+                                <td class="ct-name">{{ .Name }}</td>
+                                <td class="ct-duration">{{ .Duration }}</td>
+                                <td class="ct-status">{{ conclusionBadge .Conclusion }}</td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </details>
+                {{ end }}
+
+                {{ if .OnlyRight }}
+                <details>
+                    <summary>Only in Right ({{ len .OnlyRight }})</summary>
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th class="ct-name">Name</th>
+                                <th class="ct-duration">Duration</th>
+                                <th class="ct-status">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range .OnlyRight }}
+                            <tr>
+                                <td class="ct-name">{{ .Name }}</td>
+                                <td class="ct-duration">{{ .Duration }}</td>
+                                <td class="ct-status">{{ conclusionBadge .Conclusion }}</td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </details>
+                {{ end }}
+
+                {{ if $.MonitoringPairs }}
+                {{ range $.MonitoringPairs }}
+                <details class="monitoring-category">
+                    <summary>{{ .Title }}</summary>
+                    <div class="monitoring-body">
+                        <div class="timeline-chart">
+                            <h4 style="margin-top: 0; margin-bottom: 0.5rem; color: var(--color-text-secondary);">Left</h4>
+                            {{ if .LeftDiagram }}
+                            <pre class="mermaid">{{ .LeftDiagram }}</pre>
+                            {{ else }}
+                            <p class="empty-state">No data</p>
+                            {{ end }}
+                        </div>
+                        <div class="timeline-chart" style="margin-top: 2rem;">
+                            <h4 style="margin-top: 0; margin-bottom: 0.5rem; color: var(--color-text-secondary);">Right</h4>
+                            {{ if .RightDiagram }}
+                            <pre class="mermaid">{{ .RightDiagram }}</pre>
+                            {{ else }}
+                            <p class="empty-state">No data</p>
+                            {{ end }}
+                        </div>
+                    </div>
+                </details>
+                {{ end }}
+                {{ end }}
+            </div>
+        </details>
+        {{ end }}
+
+        {{ if not .EventPairs }}
+        <p class="empty-state">No timeline items to compare.</p>
+        {{ end }}
+    </div>
+</body>
+
+</html>
+{{ end }}
+
+{{ define "compare_gantt_html" }}
+{{ if .Sections }}
+<div class="timeline-chart compare-gantt">
+<pre class="mermaid">
+    gantt
+        dateFormat {{ .DateFormat }}
+        axisFormat {{ .AxisFormat }}
+        {{ $fmt := .GoDateFormat }}
+        {{ range .Sections }}
+        section {{ .Label }}
+        {{ range .Tasks }}
+        {{ sanitizeMermaidName .Name }} :{{ if .Conclusion }}{{ .Conclusion }},{{ end }} {{ .ID }}, {{ .StartTime.Format $fmt }}, {{ .Duration.Seconds }}s
+        {{ end }}
+        {{ end }}
+        {{ range .Sections }}{{ range .Tasks }}
+        {{ if .Link }}click {{ .ID }} href "{{ .Link }}" {{ end }}
+        {{ end }}{{ end }}
+</pre>
+</div>
+{{ end }}
+{{ end }}

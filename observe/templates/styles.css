@@ -639,6 +639,116 @@ h3 {
     border-radius: var(--radius);
 }
 
+/* Comparison view */
+.compare-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 0.75rem;
+}
+
+.compare-side {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-surface-border);
+    border-radius: var(--radius);
+    min-width: 0;
+}
+
+.compare-side a {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.compare-label {
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 2rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    background: var(--color-badge-bg);
+    color: var(--color-text-secondary);
+}
+
+.compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.compare-table thead {
+    background: var(--color-badge-bg);
+}
+
+.compare-table th {
+    padding: 0.4rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+    border-bottom: 1px solid var(--color-surface-border);
+}
+
+.compare-table td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--color-surface-border);
+}
+
+.compare-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.compare-table tbody tr:hover {
+    background: var(--color-badge-bg);
+}
+
+.compare-table .ct-duration {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.compare-table .ct-status {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.compare-table tr.status-changed {
+    background: var(--color-accent-yellow-bg);
+}
+
+.delta-faster {
+    color: var(--color-accent-green);
+    font-weight: 600;
+}
+
+.delta-slower {
+    color: var(--color-accent-red);
+    font-weight: 600;
+}
+
+.compare-gantt-hint {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    margin: 0 0 0.75rem;
+    line-height: 1.4;
+}
+
+.compare-gantt {
+    margin-bottom: 0.5rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .container {
@@ -656,6 +766,10 @@ h3 {
 
     .commit-date {
         font-size: 0.75rem;
+    }
+
+    .compare-header {
+        grid-template-columns: 1fr;
     }
 }
 {{ end }}
