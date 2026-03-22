@@ -21,7 +21,7 @@ func commentMarker(jobName string) string {
 // associated with a PR, it falls back to a commit comment on the HEAD SHA.
 func postComment(log zerolog.Logger, gha *ghaContext, markdown string) error {
 	if gha.Token == "" {
-		return fmt.Errorf("GITHUB_TOKEN not set, cannot post comment")
+		return fmt.Errorf("github_token not set, cannot post comment")
 	}
 
 	marker := commentMarker(gha.JobName)

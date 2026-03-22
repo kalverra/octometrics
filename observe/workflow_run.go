@@ -131,6 +131,10 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*Timelin
 		PostTimelineItems: postTimelineItems,
 	}
 
+	if err := templateData.normalize(); err != nil {
+		return nil, fmt.Errorf("failed to normalize timeline: %w", err)
+	}
+
 	return templateData, nil
 }
 

@@ -162,7 +162,7 @@ func Range(
 	opts ...Option,
 ) error {
 	if client == nil {
-		return fmt.Errorf("GitHub client is nil")
+		return fmt.Errorf("github client is nil")
 	}
 
 	log.Info().

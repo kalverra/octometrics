@@ -140,25 +140,24 @@ func (c *Config) ValidateGather() error {
 	if c.PullRequestNumber != 0 {
 		setCount++
 	}
+	if !c.From.IsZero() || !c.To.IsZero() {
+		setCount++
+	}
 
 	if setCount > 1 {
-		return errors.New("only one of commit SHA, workflow run ID or pull request number can be provided")
+		return errors.New(
+			"only one of commit SHA, workflow run ID, pull request number, or a time range can be provided",
+		)
 	}
 
 	if setCount == 0 {
-		// If no specific item is provided, we must have a time range
-		if c.From.IsZero() || c.To.IsZero() {
-			return errors.New(
-				"one of commit SHA, workflow run ID, pull request number, or a time range (--from and --to) must be provided",
-			)
-		}
-		if c.From.After(c.To) {
-			return errors.New("from date must be before to date")
-		}
+		return errors.New(
+			"one of commit SHA, workflow run ID, pull request number, or a time range (--from and --to) must be provided",
+		)
 	}
 
-	if c.GitHubToken == "" {
-		fmt.Println("WARNING: GitHub token not provided, will likely hit rate limits quickly")
+	if !c.From.IsZero() && !c.To.IsZero() && c.From.After(c.To) {
+		return errors.New("from date must be before to date")
 	}
 
 	return nil

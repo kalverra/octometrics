@@ -702,17 +702,6 @@ func renderWorkflowRunAndJobs(
 
 // Render writes the comparison to an HTML file and returns the URL path for the browser.
 func (c *Comparison) Render(log zerolog.Logger) (string, error) {
-	for _, td := range c.Left.TimelineData {
-		if err := td.process(); err != nil {
-			return "", fmt.Errorf("failed to process left timeline: %w", err)
-		}
-	}
-	for _, td := range c.Right.TimelineData {
-		if err := td.process(); err != nil {
-			return "", fmt.Errorf("failed to process right timeline: %w", err)
-		}
-	}
-
 	c.EventPairs = buildEventPairs(c.Left.TimelineData, c.Right.TimelineData, c.Owner, c.Repo, c.CompareType)
 
 	targetFile := filepath.Join(

@@ -46,7 +46,8 @@ func TestHandleGetWorkflowSummary(t *testing.T) {
 		},
 	}
 
-	obsMock.On("WorkflowRun", mock.Anything, mock.Anything, "owner", "repo", int64(123)).Return(sampleObs, nil)
+	obsMock.On("WorkflowRun", mock.Anything, mock.Anything, mock.Anything, "owner", "repo", int64(123)).
+		Return(sampleObs, nil)
 
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -110,7 +111,8 @@ func TestHandleGetJobTimeline(t *testing.T) {
 		},
 	}
 
-	obsMock.On("JobRuns", mock.Anything, mock.Anything, "owner", "repo", int64(123)).Return(sampleJobs, nil)
+	obsMock.On("JobRuns", mock.Anything, mock.Anything, mock.Anything, "owner", "repo", int64(123)).
+		Return(sampleJobs, nil)
 
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -170,7 +172,7 @@ func TestHandleCompareRuns(t *testing.T) {
 		},
 	}
 
-	obsMock.On("CompareWorkflowRuns", mock.Anything, mock.Anything, "owner", "repo", int64(1), int64(2)).
+	obsMock.On("CompareWorkflowRuns", mock.Anything, mock.Anything, mock.Anything, "owner", "repo", int64(1), int64(2)).
 		Return(sampleComp, nil)
 
 	req := mcp.CallToolRequest{
@@ -221,7 +223,8 @@ func TestHandleGetPerformanceMetrics(t *testing.T) {
 		},
 	}
 
-	obsMock.On("JobRuns", mock.Anything, mock.Anything, "owner", "repo", int64(123)).Return(sampleJobs, nil)
+	obsMock.On("JobRuns", mock.Anything, mock.Anything, mock.Anything, "owner", "repo", int64(123)).
+		Return(sampleJobs, nil)
 
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -255,7 +258,7 @@ func TestHandlers_ObserverErrors(t *testing.T) {
 		observer: obsMock,
 	}
 
-	obsMock.On("WorkflowRun", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+	obsMock.On("WorkflowRun", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, assert.AnError)
 
 	req := mcp.CallToolRequest{
@@ -285,7 +288,8 @@ func TestHandleGetJobTimeline_NotFound(t *testing.T) {
 		observer: obsMock,
 	}
 
-	obsMock.On("JobRuns", mock.Anything, mock.Anything, "o", "r", int64(1)).Return([]*observe.Observation{}, nil)
+	obsMock.On("JobRuns", mock.Anything, mock.Anything, mock.Anything, "o", "r", int64(1)).
+		Return([]*observe.Observation{}, nil)
 
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -328,7 +332,7 @@ func TestHandleListWorkflowRuns(t *testing.T) {
 		},
 	}
 
-	obsMock.On("ListWorkflowRuns", mock.Anything, mock.Anything, "owner", "repo", from, to, "pull_request").
+	obsMock.On("ListWorkflowRuns", mock.Anything, mock.Anything, mock.Anything, "owner", "repo", from, to, "pull_request").
 		Return(sampleRuns, nil)
 
 	req := mcp.CallToolRequest{

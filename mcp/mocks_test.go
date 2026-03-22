@@ -5,6 +5,7 @@
 package mcp
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/go-github/v84/github"
@@ -42,12 +43,12 @@ func (_m *MockObserver) EXPECT() *MockObserver_Expecter {
 }
 
 // CompareWorkflowRuns provides a mock function for the type MockObserver
-func (_mock *MockObserver) CompareWorkflowRuns(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, leftID int64, rightID int64, opts ...observe.Option) (*observe.Comparison, error) {
+func (_mock *MockObserver) CompareWorkflowRuns(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, leftID int64, rightID int64, opts ...observe.Option) (*observe.Comparison, error) {
 	var tmpRet mock.Arguments
 	if len(opts) > 0 {
-		tmpRet = _mock.Called(log, client, owner, repo, leftID, rightID, opts)
+		tmpRet = _mock.Called(ctx, log, client, owner, repo, leftID, rightID, opts)
 	} else {
-		tmpRet = _mock.Called(log, client, owner, repo, leftID, rightID)
+		tmpRet = _mock.Called(ctx, log, client, owner, repo, leftID, rightID)
 	}
 	ret := tmpRet
 
@@ -57,18 +58,18 @@ func (_mock *MockObserver) CompareWorkflowRuns(log zerolog.Logger, client *gathe
 
 	var r0 *observe.Comparison
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, int64, ...observe.Option) (*observe.Comparison, error)); ok {
-		return returnFunc(log, client, owner, repo, leftID, rightID, opts...)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, int64, ...observe.Option) (*observe.Comparison, error)); ok {
+		return returnFunc(ctx, log, client, owner, repo, leftID, rightID, opts...)
 	}
-	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, int64, ...observe.Option) *observe.Comparison); ok {
-		r0 = returnFunc(log, client, owner, repo, leftID, rightID, opts...)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, int64, ...observe.Option) *observe.Comparison); ok {
+		r0 = returnFunc(ctx, log, client, owner, repo, leftID, rightID, opts...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*observe.Comparison)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, int64, ...observe.Option) error); ok {
-		r1 = returnFunc(log, client, owner, repo, leftID, rightID, opts...)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, int64, ...observe.Option) error); ok {
+		r1 = returnFunc(ctx, log, client, owner, repo, leftID, rightID, opts...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -81,6 +82,7 @@ type MockObserver_CompareWorkflowRuns_Call struct {
 }
 
 // CompareWorkflowRuns is a helper method to define mock.On call
+//   - ctx context.Context
 //   - log zerolog.Logger
 //   - client *gather.GitHubClient
 //   - owner string
@@ -88,32 +90,144 @@ type MockObserver_CompareWorkflowRuns_Call struct {
 //   - leftID int64
 //   - rightID int64
 //   - opts ...observe.Option
-func (_e *MockObserver_Expecter) CompareWorkflowRuns(log interface{}, client interface{}, owner interface{}, repo interface{}, leftID interface{}, rightID interface{}, opts ...interface{}) *MockObserver_CompareWorkflowRuns_Call {
+func (_e *MockObserver_Expecter) CompareWorkflowRuns(ctx interface{}, log interface{}, client interface{}, owner interface{}, repo interface{}, leftID interface{}, rightID interface{}, opts ...interface{}) *MockObserver_CompareWorkflowRuns_Call {
 	return &MockObserver_CompareWorkflowRuns_Call{Call: _e.mock.On("CompareWorkflowRuns",
-		append([]interface{}{log, client, owner, repo, leftID, rightID}, opts...)...)}
+		append([]interface{}{ctx, log, client, owner, repo, leftID, rightID}, opts...)...)}
 }
 
-func (_c *MockObserver_CompareWorkflowRuns_Call) Run(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, leftID int64, rightID int64, opts ...observe.Option)) *MockObserver_CompareWorkflowRuns_Call {
+func (_c *MockObserver_CompareWorkflowRuns_Call) Run(run func(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, leftID int64, rightID int64, opts ...observe.Option)) *MockObserver_CompareWorkflowRuns_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 zerolog.Logger
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(zerolog.Logger)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 *gather.GitHubClient
+		var arg1 zerolog.Logger
 		if args[1] != nil {
-			arg1 = args[1].(*gather.GitHubClient)
+			arg1 = args[1].(zerolog.Logger)
 		}
-		var arg2 string
+		var arg2 *gather.GitHubClient
 		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg2 = args[2].(*gather.GitHubClient)
 		}
 		var arg3 string
 		if args[3] != nil {
 			arg3 = args[3].(string)
 		}
-		var arg4 int64
+		var arg4 string
 		if args[4] != nil {
-			arg4 = args[4].(int64)
+			arg4 = args[4].(string)
+		}
+		var arg5 int64
+		if args[5] != nil {
+			arg5 = args[5].(int64)
+		}
+		var arg6 int64
+		if args[6] != nil {
+			arg6 = args[6].(int64)
+		}
+		var arg7 []observe.Option
+		var variadicArgs []observe.Option
+		if len(args) > 7 {
+			variadicArgs = args[7].([]observe.Option)
+		}
+		arg7 = variadicArgs
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+			arg7...,
+		)
+	})
+	return _c
+}
+
+func (_c *MockObserver_CompareWorkflowRuns_Call) Return(comparison *observe.Comparison, err error) *MockObserver_CompareWorkflowRuns_Call {
+	_c.Call.Return(comparison, err)
+	return _c
+}
+
+func (_c *MockObserver_CompareWorkflowRuns_Call) RunAndReturn(run func(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, leftID int64, rightID int64, opts ...observe.Option) (*observe.Comparison, error)) *MockObserver_CompareWorkflowRuns_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// JobRuns provides a mock function for the type MockObserver
+func (_mock *MockObserver) JobRuns(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) ([]*observe.Observation, error) {
+	var tmpRet mock.Arguments
+	if len(opts) > 0 {
+		tmpRet = _mock.Called(ctx, log, client, owner, repo, runID, opts)
+	} else {
+		tmpRet = _mock.Called(ctx, log, client, owner, repo, runID)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for JobRuns")
+	}
+
+	var r0 []*observe.Observation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) ([]*observe.Observation, error)); ok {
+		return returnFunc(ctx, log, client, owner, repo, runID, opts...)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) []*observe.Observation); ok {
+		r0 = returnFunc(ctx, log, client, owner, repo, runID, opts...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*observe.Observation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) error); ok {
+		r1 = returnFunc(ctx, log, client, owner, repo, runID, opts...)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockObserver_JobRuns_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'JobRuns'
+type MockObserver_JobRuns_Call struct {
+	*mock.Call
+}
+
+// JobRuns is a helper method to define mock.On call
+//   - ctx context.Context
+//   - log zerolog.Logger
+//   - client *gather.GitHubClient
+//   - owner string
+//   - repo string
+//   - runID int64
+//   - opts ...observe.Option
+func (_e *MockObserver_Expecter) JobRuns(ctx interface{}, log interface{}, client interface{}, owner interface{}, repo interface{}, runID interface{}, opts ...interface{}) *MockObserver_JobRuns_Call {
+	return &MockObserver_JobRuns_Call{Call: _e.mock.On("JobRuns",
+		append([]interface{}{ctx, log, client, owner, repo, runID}, opts...)...)}
+}
+
+func (_c *MockObserver_JobRuns_Call) Run(run func(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option)) *MockObserver_JobRuns_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 zerolog.Logger
+		if args[1] != nil {
+			arg1 = args[1].(zerolog.Logger)
+		}
+		var arg2 *gather.GitHubClient
+		if args[2] != nil {
+			arg2 = args[2].(*gather.GitHubClient)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
 		}
 		var arg5 int64
 		if args[5] != nil {
@@ -138,120 +252,19 @@ func (_c *MockObserver_CompareWorkflowRuns_Call) Run(run func(log zerolog.Logger
 	return _c
 }
 
-func (_c *MockObserver_CompareWorkflowRuns_Call) Return(comparison *observe.Comparison, err error) *MockObserver_CompareWorkflowRuns_Call {
-	_c.Call.Return(comparison, err)
-	return _c
-}
-
-func (_c *MockObserver_CompareWorkflowRuns_Call) RunAndReturn(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, leftID int64, rightID int64, opts ...observe.Option) (*observe.Comparison, error)) *MockObserver_CompareWorkflowRuns_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// JobRuns provides a mock function for the type MockObserver
-func (_mock *MockObserver) JobRuns(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) ([]*observe.Observation, error) {
-	var tmpRet mock.Arguments
-	if len(opts) > 0 {
-		tmpRet = _mock.Called(log, client, owner, repo, runID, opts)
-	} else {
-		tmpRet = _mock.Called(log, client, owner, repo, runID)
-	}
-	ret := tmpRet
-
-	if len(ret) == 0 {
-		panic("no return value specified for JobRuns")
-	}
-
-	var r0 []*observe.Observation
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) ([]*observe.Observation, error)); ok {
-		return returnFunc(log, client, owner, repo, runID, opts...)
-	}
-	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) []*observe.Observation); ok {
-		r0 = returnFunc(log, client, owner, repo, runID, opts...)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*observe.Observation)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) error); ok {
-		r1 = returnFunc(log, client, owner, repo, runID, opts...)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockObserver_JobRuns_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'JobRuns'
-type MockObserver_JobRuns_Call struct {
-	*mock.Call
-}
-
-// JobRuns is a helper method to define mock.On call
-//   - log zerolog.Logger
-//   - client *gather.GitHubClient
-//   - owner string
-//   - repo string
-//   - runID int64
-//   - opts ...observe.Option
-func (_e *MockObserver_Expecter) JobRuns(log interface{}, client interface{}, owner interface{}, repo interface{}, runID interface{}, opts ...interface{}) *MockObserver_JobRuns_Call {
-	return &MockObserver_JobRuns_Call{Call: _e.mock.On("JobRuns",
-		append([]interface{}{log, client, owner, repo, runID}, opts...)...)}
-}
-
-func (_c *MockObserver_JobRuns_Call) Run(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option)) *MockObserver_JobRuns_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 zerolog.Logger
-		if args[0] != nil {
-			arg0 = args[0].(zerolog.Logger)
-		}
-		var arg1 *gather.GitHubClient
-		if args[1] != nil {
-			arg1 = args[1].(*gather.GitHubClient)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 string
-		if args[3] != nil {
-			arg3 = args[3].(string)
-		}
-		var arg4 int64
-		if args[4] != nil {
-			arg4 = args[4].(int64)
-		}
-		var arg5 []observe.Option
-		var variadicArgs []observe.Option
-		if len(args) > 5 {
-			variadicArgs = args[5].([]observe.Option)
-		}
-		arg5 = variadicArgs
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-			arg4,
-			arg5...,
-		)
-	})
-	return _c
-}
-
 func (_c *MockObserver_JobRuns_Call) Return(observations []*observe.Observation, err error) *MockObserver_JobRuns_Call {
 	_c.Call.Return(observations, err)
 	return _c
 }
 
-func (_c *MockObserver_JobRuns_Call) RunAndReturn(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) ([]*observe.Observation, error)) *MockObserver_JobRuns_Call {
+func (_c *MockObserver_JobRuns_Call) RunAndReturn(run func(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) ([]*observe.Observation, error)) *MockObserver_JobRuns_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ListWorkflowRuns provides a mock function for the type MockObserver
-func (_mock *MockObserver) ListWorkflowRuns(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string) ([]*github.WorkflowRun, error) {
-	ret := _mock.Called(log, client, owner, repo, since, until, event)
+func (_mock *MockObserver) ListWorkflowRuns(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string) ([]*github.WorkflowRun, error) {
+	ret := _mock.Called(ctx, log, client, owner, repo, since, until, event)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListWorkflowRuns")
@@ -259,18 +272,18 @@ func (_mock *MockObserver) ListWorkflowRuns(log zerolog.Logger, client *gather.G
 
 	var r0 []*github.WorkflowRun
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) ([]*github.WorkflowRun, error)); ok {
-		return returnFunc(log, client, owner, repo, since, until, event)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) ([]*github.WorkflowRun, error)); ok {
+		return returnFunc(ctx, log, client, owner, repo, since, until, event)
 	}
-	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) []*github.WorkflowRun); ok {
-		r0 = returnFunc(log, client, owner, repo, since, until, event)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) []*github.WorkflowRun); ok {
+		r0 = returnFunc(ctx, log, client, owner, repo, since, until, event)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*github.WorkflowRun)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) error); ok {
-		r1 = returnFunc(log, client, owner, repo, since, until, event)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) error); ok {
+		r1 = returnFunc(ctx, log, client, owner, repo, since, until, event)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -283,6 +296,7 @@ type MockObserver_ListWorkflowRuns_Call struct {
 }
 
 // ListWorkflowRuns is a helper method to define mock.On call
+//   - ctx context.Context
 //   - log zerolog.Logger
 //   - client *gather.GitHubClient
 //   - owner string
@@ -290,39 +304,43 @@ type MockObserver_ListWorkflowRuns_Call struct {
 //   - since time.Time
 //   - until time.Time
 //   - event string
-func (_e *MockObserver_Expecter) ListWorkflowRuns(log interface{}, client interface{}, owner interface{}, repo interface{}, since interface{}, until interface{}, event interface{}) *MockObserver_ListWorkflowRuns_Call {
-	return &MockObserver_ListWorkflowRuns_Call{Call: _e.mock.On("ListWorkflowRuns", log, client, owner, repo, since, until, event)}
+func (_e *MockObserver_Expecter) ListWorkflowRuns(ctx interface{}, log interface{}, client interface{}, owner interface{}, repo interface{}, since interface{}, until interface{}, event interface{}) *MockObserver_ListWorkflowRuns_Call {
+	return &MockObserver_ListWorkflowRuns_Call{Call: _e.mock.On("ListWorkflowRuns", ctx, log, client, owner, repo, since, until, event)}
 }
 
-func (_c *MockObserver_ListWorkflowRuns_Call) Run(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string)) *MockObserver_ListWorkflowRuns_Call {
+func (_c *MockObserver_ListWorkflowRuns_Call) Run(run func(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string)) *MockObserver_ListWorkflowRuns_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 zerolog.Logger
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(zerolog.Logger)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 *gather.GitHubClient
+		var arg1 zerolog.Logger
 		if args[1] != nil {
-			arg1 = args[1].(*gather.GitHubClient)
+			arg1 = args[1].(zerolog.Logger)
 		}
-		var arg2 string
+		var arg2 *gather.GitHubClient
 		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg2 = args[2].(*gather.GitHubClient)
 		}
 		var arg3 string
 		if args[3] != nil {
 			arg3 = args[3].(string)
 		}
-		var arg4 time.Time
+		var arg4 string
 		if args[4] != nil {
-			arg4 = args[4].(time.Time)
+			arg4 = args[4].(string)
 		}
 		var arg5 time.Time
 		if args[5] != nil {
 			arg5 = args[5].(time.Time)
 		}
-		var arg6 string
+		var arg6 time.Time
 		if args[6] != nil {
-			arg6 = args[6].(string)
+			arg6 = args[6].(time.Time)
+		}
+		var arg7 string
+		if args[7] != nil {
+			arg7 = args[7].(string)
 		}
 		run(
 			arg0,
@@ -332,6 +350,7 @@ func (_c *MockObserver_ListWorkflowRuns_Call) Run(run func(log zerolog.Logger, c
 			arg4,
 			arg5,
 			arg6,
+			arg7,
 		)
 	})
 	return _c
@@ -342,18 +361,18 @@ func (_c *MockObserver_ListWorkflowRuns_Call) Return(workflowRuns []*github.Work
 	return _c
 }
 
-func (_c *MockObserver_ListWorkflowRuns_Call) RunAndReturn(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string) ([]*github.WorkflowRun, error)) *MockObserver_ListWorkflowRuns_Call {
+func (_c *MockObserver_ListWorkflowRuns_Call) RunAndReturn(run func(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string) ([]*github.WorkflowRun, error)) *MockObserver_ListWorkflowRuns_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // WorkflowRun provides a mock function for the type MockObserver
-func (_mock *MockObserver) WorkflowRun(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) (*observe.Observation, error) {
+func (_mock *MockObserver) WorkflowRun(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) (*observe.Observation, error) {
 	var tmpRet mock.Arguments
 	if len(opts) > 0 {
-		tmpRet = _mock.Called(log, client, owner, repo, runID, opts)
+		tmpRet = _mock.Called(ctx, log, client, owner, repo, runID, opts)
 	} else {
-		tmpRet = _mock.Called(log, client, owner, repo, runID)
+		tmpRet = _mock.Called(ctx, log, client, owner, repo, runID)
 	}
 	ret := tmpRet
 
@@ -363,18 +382,18 @@ func (_mock *MockObserver) WorkflowRun(log zerolog.Logger, client *gather.GitHub
 
 	var r0 *observe.Observation
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) (*observe.Observation, error)); ok {
-		return returnFunc(log, client, owner, repo, runID, opts...)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) (*observe.Observation, error)); ok {
+		return returnFunc(ctx, log, client, owner, repo, runID, opts...)
 	}
-	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) *observe.Observation); ok {
-		r0 = returnFunc(log, client, owner, repo, runID, opts...)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) *observe.Observation); ok {
+		r0 = returnFunc(ctx, log, client, owner, repo, runID, opts...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*observe.Observation)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) error); ok {
-		r1 = returnFunc(log, client, owner, repo, runID, opts...)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, zerolog.Logger, *gather.GitHubClient, string, string, int64, ...observe.Option) error); ok {
+		r1 = returnFunc(ctx, log, client, owner, repo, runID, opts...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -387,52 +406,58 @@ type MockObserver_WorkflowRun_Call struct {
 }
 
 // WorkflowRun is a helper method to define mock.On call
+//   - ctx context.Context
 //   - log zerolog.Logger
 //   - client *gather.GitHubClient
 //   - owner string
 //   - repo string
 //   - runID int64
 //   - opts ...observe.Option
-func (_e *MockObserver_Expecter) WorkflowRun(log interface{}, client interface{}, owner interface{}, repo interface{}, runID interface{}, opts ...interface{}) *MockObserver_WorkflowRun_Call {
+func (_e *MockObserver_Expecter) WorkflowRun(ctx interface{}, log interface{}, client interface{}, owner interface{}, repo interface{}, runID interface{}, opts ...interface{}) *MockObserver_WorkflowRun_Call {
 	return &MockObserver_WorkflowRun_Call{Call: _e.mock.On("WorkflowRun",
-		append([]interface{}{log, client, owner, repo, runID}, opts...)...)}
+		append([]interface{}{ctx, log, client, owner, repo, runID}, opts...)...)}
 }
 
-func (_c *MockObserver_WorkflowRun_Call) Run(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option)) *MockObserver_WorkflowRun_Call {
+func (_c *MockObserver_WorkflowRun_Call) Run(run func(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option)) *MockObserver_WorkflowRun_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 zerolog.Logger
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(zerolog.Logger)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 *gather.GitHubClient
+		var arg1 zerolog.Logger
 		if args[1] != nil {
-			arg1 = args[1].(*gather.GitHubClient)
+			arg1 = args[1].(zerolog.Logger)
 		}
-		var arg2 string
+		var arg2 *gather.GitHubClient
 		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg2 = args[2].(*gather.GitHubClient)
 		}
 		var arg3 string
 		if args[3] != nil {
 			arg3 = args[3].(string)
 		}
-		var arg4 int64
+		var arg4 string
 		if args[4] != nil {
-			arg4 = args[4].(int64)
+			arg4 = args[4].(string)
 		}
-		var arg5 []observe.Option
+		var arg5 int64
+		if args[5] != nil {
+			arg5 = args[5].(int64)
+		}
+		var arg6 []observe.Option
 		var variadicArgs []observe.Option
-		if len(args) > 5 {
-			variadicArgs = args[5].([]observe.Option)
+		if len(args) > 6 {
+			variadicArgs = args[6].([]observe.Option)
 		}
-		arg5 = variadicArgs
+		arg6 = variadicArgs
 		run(
 			arg0,
 			arg1,
 			arg2,
 			arg3,
 			arg4,
-			arg5...,
+			arg5,
+			arg6...,
 		)
 	})
 	return _c
@@ -443,7 +468,7 @@ func (_c *MockObserver_WorkflowRun_Call) Return(observation *observe.Observation
 	return _c
 }
 
-func (_c *MockObserver_WorkflowRun_Call) RunAndReturn(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) (*observe.Observation, error)) *MockObserver_WorkflowRun_Call {
+func (_c *MockObserver_WorkflowRun_Call) RunAndReturn(run func(ctx context.Context, log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) (*observe.Observation, error)) *MockObserver_WorkflowRun_Call {
 	_c.Call.Return(run)
 	return _c
 }

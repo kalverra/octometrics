@@ -83,10 +83,10 @@ func (g *ghaContext) newGitHubClient() *github.Client {
 // fetchJobSteps retrieves step timing for the current job from the GitHub Actions API.
 func fetchJobSteps(log zerolog.Logger, gha *ghaContext) ([]*github.TaskStep, error) {
 	if gha.Token == "" {
-		return nil, fmt.Errorf("GITHUB_TOKEN not set, cannot fetch job steps")
+		return nil, fmt.Errorf("github_token not set, cannot fetch job steps")
 	}
 	if gha.JobName == "" {
-		return nil, fmt.Errorf("GITHUB_JOB_NAME not set, cannot match job")
+		return nil, fmt.Errorf("github_job_name not set, cannot match job")
 	}
 
 	client := gha.newGitHubClient()

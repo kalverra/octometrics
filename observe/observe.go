@@ -236,14 +236,6 @@ func (o *Observation) Render(log zerolog.Logger, outputType string) (observation
 		buf   bytes.Buffer
 	)
 
-	if o.TimelineData != nil {
-		for _, td := range o.TimelineData {
-			if err := td.process(); err != nil {
-				return "", fmt.Errorf("failed to process timeline data: %w", err)
-			}
-		}
-	}
-
 	sort.Slice(o.TimelineData, func(i, j int) bool {
 		return o.TimelineData[i].StartTime.Before(o.TimelineData[j].StartTime)
 	})

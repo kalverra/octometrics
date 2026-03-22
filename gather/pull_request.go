@@ -88,7 +88,7 @@ func PullRequest(
 		Logger()
 
 	if client == nil {
-		return nil, fmt.Errorf("GitHub client is nil")
+		return nil, fmt.Errorf("github client is nil")
 	}
 
 	ctx, cancel := ghCtx()

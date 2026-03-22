@@ -19,6 +19,7 @@ import (
 // Observer defines the interface for building observations and comparisons.
 type Observer interface {
 	WorkflowRun(
+		ctx context.Context,
 		log zerolog.Logger,
 		client *gather.GitHubClient,
 		owner, repo string,
@@ -26,6 +27,7 @@ type Observer interface {
 		opts ...observe.Option,
 	) (*observe.Observation, error)
 	JobRuns(
+		ctx context.Context,
 		log zerolog.Logger,
 		client *gather.GitHubClient,
 		owner, repo string,
@@ -33,6 +35,7 @@ type Observer interface {
 		opts ...observe.Option,
 	) ([]*observe.Observation, error)
 	CompareWorkflowRuns(
+		ctx context.Context,
 		log zerolog.Logger,
 		client *gather.GitHubClient,
 		owner, repo string,
@@ -40,6 +43,7 @@ type Observer interface {
 		opts ...observe.Option,
 	) (*observe.Comparison, error)
 	ListWorkflowRuns(
+		ctx context.Context,
 		log zerolog.Logger,
 		client *gather.GitHubClient,
 		owner, repo string,
@@ -53,6 +57,7 @@ type DefaultObserver struct{}
 
 // WorkflowRun gathers and processes a workflow run into an observation.
 func (d *DefaultObserver) WorkflowRun(
+	_ context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -64,6 +69,7 @@ func (d *DefaultObserver) WorkflowRun(
 
 // JobRuns observes all job runs for a given workflow run.
 func (d *DefaultObserver) JobRuns(
+	_ context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -75,6 +81,7 @@ func (d *DefaultObserver) JobRuns(
 
 // CompareWorkflowRuns builds a comparison between two workflow runs.
 func (d *DefaultObserver) CompareWorkflowRuns(
+	_ context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -86,6 +93,7 @@ func (d *DefaultObserver) CompareWorkflowRuns(
 
 // ListWorkflowRuns lists workflow runs for a repository within a given time range.
 func (d *DefaultObserver) ListWorkflowRuns(
+	ctx context.Context,
 	_ zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -93,7 +101,7 @@ func (d *DefaultObserver) ListWorkflowRuns(
 	event string,
 ) ([]*github.WorkflowRun, error) {
 	if client == nil {
-		return nil, fmt.Errorf("GitHub client is nil")
+		return nil, fmt.Errorf("github client is nil")
 	}
 
 	if event == "all" {
@@ -112,23 +120,11 @@ func (d *DefaultObserver) ListWorkflowRuns(
 		}
 	)
 
-	for {
-		// Using a simplified context here as we don't have access to the internal ghCtx()
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		runs, resp, err := client.Rest.Actions.ListRepositoryWorkflowRuns(ctx, owner, repo, listOpts)
-		cancel()
+	for run, err := range client.Rest.Actions.ListRepositoryWorkflowRunsIter(ctx, owner, repo, listOpts) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to list workflow runs: %w", err)
 		}
-		if resp.StatusCode != 200 {
-			return nil, fmt.Errorf("unexpected status code %d listing workflow runs", resp.StatusCode)
-		}
-
-		allRuns = append(allRuns, runs.WorkflowRuns...)
-		if resp.NextPage == 0 {
-			break
-		}
-		listOpts.Page = resp.NextPage
+		allRuns = append(allRuns, run)
 	}
 
 	return allRuns, nil
@@ -209,7 +205,7 @@ func Server(log zerolog.Logger, client *gather.GitHubClient, obs Observer) error
 }
 
 func (h *serverHandler) handleGetWorkflowSummary(
-	_ context.Context,
+	ctx context.Context,
 	request mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
 	owner, err := request.RequireString("owner")
@@ -225,7 +221,7 @@ func (h *serverHandler) handleGetWorkflowSummary(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get run ID: %v", err)), nil
 	}
 
-	obs, err := h.observer.WorkflowRun(h.log, h.client, owner, repo, int64(runID))
+	obs, err := h.observer.WorkflowRun(ctx, h.log, h.client, owner, repo, int64(runID))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get workflow run: %v", err)), nil
 	}
@@ -250,7 +246,7 @@ func (h *serverHandler) handleGetWorkflowSummary(
 }
 
 func (h *serverHandler) handleGetJobTimeline(
-	_ context.Context,
+	ctx context.Context,
 	request mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
 	owner, err := request.RequireString("owner")
@@ -270,7 +266,7 @@ func (h *serverHandler) handleGetJobTimeline(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get job ID: %v", err)), nil
 	}
 
-	jobs, err := h.observer.JobRuns(h.log, h.client, owner, repo, int64(runID))
+	jobs, err := h.observer.JobRuns(ctx, h.log, h.client, owner, repo, int64(runID))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get jobs: %v", err)), nil
 	}
@@ -294,7 +290,7 @@ func (h *serverHandler) handleGetJobTimeline(
 		td := targetJob.TimelineData[0]
 		fmt.Fprintf(&b, "%s)\nStatus: %s\nSteps:\n", td.Duration, targetJob.State)
 		for _, item := range td.Items {
-			// We want relative offset. td.StartTime is normalized to 0 by process(),
+			// We want relative offset. td.StartTime is normalized to 0 by normalize(),
 			// so item.StartTime's time part is exactly the offset.
 			offset := item.StartTime.Sub(td.StartTime)
 			startStr := formatDurationCompact(offset)
@@ -314,7 +310,7 @@ func (h *serverHandler) handleGetJobTimeline(
 }
 
 func (h *serverHandler) handleGetPerformanceMetrics(
-	_ context.Context,
+	ctx context.Context,
 	request mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
 	owner, err := request.RequireString("owner")
@@ -334,7 +330,7 @@ func (h *serverHandler) handleGetPerformanceMetrics(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get job ID: %v", err)), nil
 	}
 
-	jobs, err := h.observer.JobRuns(h.log, h.client, owner, repo, int64(runID))
+	jobs, err := h.observer.JobRuns(ctx, h.log, h.client, owner, repo, int64(runID))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get jobs: %v", err)), nil
 	}
@@ -374,7 +370,7 @@ func (h *serverHandler) handleGetPerformanceMetrics(
 }
 
 func (h *serverHandler) handleCompareRuns(
-	_ context.Context,
+	ctx context.Context,
 	request mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
 	owner, err := request.RequireString("owner")
@@ -394,7 +390,7 @@ func (h *serverHandler) handleCompareRuns(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get right ID: %v", err)), nil
 	}
 
-	comp, err := h.observer.CompareWorkflowRuns(h.log, h.client, owner, repo, int64(leftID), int64(rightID))
+	comp, err := h.observer.CompareWorkflowRuns(ctx, h.log, h.client, owner, repo, int64(leftID), int64(rightID))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to compare runs: %v", err)), nil
 	}
@@ -450,7 +446,7 @@ func (h *serverHandler) handleCompareRuns(
 }
 
 func (h *serverHandler) handleListWorkflowRuns(
-	_ context.Context,
+	ctx context.Context,
 	request mcp.CallToolRequest,
 ) (*mcp.CallToolResult, error) {
 	owner, err := request.RequireString("owner")
@@ -480,7 +476,11 @@ func (h *serverHandler) handleListWorkflowRuns(
 		return mcp.NewToolResultError(fmt.Sprintf("Invalid to date format (expected YYYY-MM-DD): %v", err)), nil
 	}
 
-	runs, err := h.observer.ListWorkflowRuns(h.log, h.client, owner, repo, from, to, event)
+	if from.After(to) {
+		return mcp.NewToolResultError("'from' date must be on or before 'to' date"), nil
+	}
+
+	runs, err := h.observer.ListWorkflowRuns(ctx, h.log, h.client, owner, repo, from, to, event)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to list workflow runs: %v", err)), nil
 	}

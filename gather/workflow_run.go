@@ -207,7 +207,7 @@ func WorkflowRun(
 		Logger()
 
 	if client == nil {
-		return nil, "", fmt.Errorf("GitHub client is nil")
+		return nil, "", fmt.Errorf("github client is nil")
 	}
 
 	log.Debug().Msg("Fetching workflow run data from GitHub")

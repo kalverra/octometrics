@@ -131,12 +131,17 @@ func buildJobRunTimelineData(job *gather.JobData) (*Timeline, error) {
 		}
 		items = append(items, newItem)
 	}
-
-	return &Timeline{
+	timeline := &Timeline{
 		Items:        items,
 		SkippedItems: skippedItems,
 		QueuedItems:  queuedItems,
-	}, nil
+	}
+
+	if err := timeline.normalize(); err != nil {
+		return nil, fmt.Errorf("failed to normalize timeline: %w", err)
+	}
+
+	return timeline, nil
 }
 
 // jobMonitoringTimeWindow is the [start, end) time span of non-skipped steps with real durations,

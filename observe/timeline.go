@@ -44,9 +44,9 @@ type TimelineItem struct {
 	IsRequired bool
 }
 
-func (g *Timeline) process() error {
+func (g *Timeline) normalize() error {
 	if g == nil {
-		return fmt.Errorf("Timeline is nil")
+		return fmt.Errorf("timeline is nil")
 	}
 	if len(g.Items) == 0 {
 		return nil

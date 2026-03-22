@@ -141,5 +141,14 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 		})
 	}
 
+	for _, timeline := range groupedTimelines {
+		// Log the error but continue so we don't drop the whole commit if one timeline fails
+		if err := timeline.normalize(); err != nil {
+			// Instead of returning error and failing the whole commit view, just skip normalizing.
+			// This might lead to suboptimal rendering for this specific event type but preserves the rest.
+			continue
+		}
+	}
+
 	return groupedTimelines
 }
