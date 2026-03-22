@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -27,6 +28,8 @@ type Config struct {
 	Event             string    `mapstructure:"event"`
 	Since             time.Time `mapstructure:"since"`
 	Until             time.Time `mapstructure:"until"`
+	From              time.Time `mapstructure:"from"`
+	To                time.Time `mapstructure:"to"`
 	GatherCost        bool      `mapstructure:"gather_cost"`
 	DataDir           string    `mapstructure:"data_dir"`
 }
@@ -105,7 +108,13 @@ func Load(opts ...LoadOption) (*Config, error) {
 	}
 
 	cfg := &Config{}
-	if err := v.Unmarshal(cfg); err != nil {
+	if err := v.Unmarshal(cfg, func(dc *mapstructure.DecoderConfig) {
+		dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeHookFunc("2006-01-02"),
+			mapstructure.StringToTimeHookFunc(time.RFC3339),
+			mapstructure.StringToTimeDurationHookFunc(),
+		)
+	}); err != nil {
 		return nil, err
 	}
 
@@ -131,15 +140,24 @@ func (c *Config) ValidateGather() error {
 	if c.PullRequestNumber != 0 {
 		setCount++
 	}
-	if setCount > 1 {
-		return errors.New("only one of commit SHA, workflow run ID or pull request number can be provided")
-	}
-	if setCount == 0 {
-		return errors.New("one of commit SHA, workflow run ID or pull request number must be provided")
+	if !c.From.IsZero() || !c.To.IsZero() {
+		setCount++
 	}
 
-	if c.GitHubToken == "" {
-		fmt.Println("WARNING:GitHub token not provided, will likely hit rate limits quickly")
+	if setCount > 1 {
+		return errors.New(
+			"only one of commit SHA, workflow run ID, pull request number, or a time range can be provided",
+		)
+	}
+
+	if setCount == 0 {
+		return errors.New(
+			"one of commit SHA, workflow run ID, pull request number, or a time range (--from and --to) must be provided",
+		)
+	}
+
+	if !c.From.IsZero() && !c.To.IsZero() && c.From.After(c.To) {
+		return errors.New("from date must be before to date")
 	}
 
 	return nil

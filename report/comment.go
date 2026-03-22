@@ -21,7 +21,7 @@ func commentMarker(jobName string) string {
 // associated with a PR, it falls back to a commit comment on the HEAD SHA.
 func postComment(log zerolog.Logger, gha *ghaContext, markdown string) error {
 	if gha.Token == "" {
-		return fmt.Errorf("GITHUB_TOKEN not set, cannot post comment")
+		return fmt.Errorf("github_token not set, cannot post comment")
 	}
 
 	marker := commentMarker(gha.JobName)
@@ -82,22 +82,14 @@ func findExistingComment(
 		ListOptions: github.ListOptions{PerPage: 100},
 	}
 
-	for {
-		comments, resp, err := client.Issues.ListComments(ctx, owner, repo, prNumber, opts)
+	for comment, err := range client.Issues.ListCommentsIter(ctx, owner, repo, prNumber, opts) {
 		if err != nil {
 			return 0, fmt.Errorf("failed to list PR comments: %w", err)
 		}
 
-		for _, c := range comments {
-			if strings.Contains(c.GetBody(), marker) {
-				return c.GetID(), nil
-			}
+		if strings.Contains(comment.GetBody(), marker) {
+			return comment.GetID(), nil
 		}
-
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
 	}
 
 	return 0, nil

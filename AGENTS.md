@@ -6,16 +6,33 @@ Octometrics is a Go CLI that profiles GitHub Actions workflows. Read `design.md`
 
 ## Testing and Linting
 
-After making changes, always run:
-
-```sh
-golangci-lint run ./... --fix # Linting, do not bother running go vet or gofmt
-go test ./... # Testing
-```
+- Don't use `go vet`, `gofmt`, or `go fmt`.
+- `golangci-lint run ./... --fix` for linting
+- `go test ./...` for testing
+- `go generate ./...` to generate mocks
 
 Analyze the outputs and fix issues you introduced. **Do not change a test unless it is necessary to comply with new changes or implementations**.
 
 When validating UI changes, you can run the tool and bring up the whole UI with `go run . observe` and going to `http://localhost:8080`.
+
+## PR Review Instructions
+
+When performing a PR review, do your typical PR analysis, and:
+
+### 1. Risk Assessment
+
+Provide a **Risk Rating** at the top of the review summary:
+- **HIGH:** Changes to core logic, fundamental architectural patterns, or critical shared utilities.
+- **MEDIUM:** Significant feature additions or modifications to established business logic.
+- **LOW:** Documentation, styling, minor bug fixes in non-critical paths, or boilerplate.
+
+### 2. Targeted Review Areas
+
+Identify specific code blocks that could benefit from **scrupulous human review**. Focus on:
+- Complex conditional logic or concurrency-prone areas.
+- Potential breaking changes in internal or external APIs.
+- Logic that lacks sufficient unit test coverage within the PR.
+
 
 ## Coding Conventions
 
@@ -24,25 +41,3 @@ When validating UI changes, you can run the tool and bring up the whole UI with 
 - **Error handling**: Wrap errors with `fmt.Errorf("context: %w", err)`. Deferred `Close()` calls must check the error (see `errcheck` linter).
 - **GitHub API**: Use `github.com/google/go-github/v84`. Rate limiting is handled by `go-github-ratelimit`. See `gather/gather.go` for the client setup pattern.
 - **No unnecessary comments**: Do not add comments that merely narrate what the code does. Comments should explain non-obvious intent or constraints.
-
-## PR Review Instructions
-
-When performing a Pull Request review, do your typical PR analysis, and:
-
-### 1. Risk Assessment
-Provide a **Risk Rating** at the top of the review summary:
-- **HIGH:** Changes to core logic, fundamental architectural patterns, or critical shared utilities.
-- **MEDIUM:** Significant feature additions or modifications to established business logic.
-- **LOW:** Documentation, styling, minor bug fixes in non-critical paths, or boilerplate.
-
-### 2. Targeted Review Areas
-Identify and call out specific code blocks that require **scrupulous human review**. Focus on:
-- Complex conditional logic or concurrency-prone areas.
-- Potential breaking changes in internal or external APIs.
-- Logic that lacks sufficient unit test coverage within the PR.
-
-If you find any, list them and give a brief description of why they deserve extra attention.
-
-### 3. Reviewer Recommendations
-Analyze the git history (recent editors) to suggest the most qualified reviewers.
-- Prioritize individuals who have made significant recent contributions to the specific files modified.

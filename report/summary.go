@@ -214,7 +214,7 @@ func formatBytes(b uint64) string {
 // writeSummary appends the markdown report to the GITHUB_STEP_SUMMARY file.
 func writeSummary(summaryPath, markdown string) (err error) {
 	if summaryPath == "" {
-		return fmt.Errorf("GITHUB_STEP_SUMMARY path is empty")
+		return fmt.Errorf("github_step_summary path is empty")
 	}
 
 	//nolint:gosec // GHA controls this path

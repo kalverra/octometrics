@@ -65,7 +65,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 
 		if cfg.GitHubToken == "" {
 			logger.Warn().Msg("GitHub token not provided, will likely hit rate limits quickly")
-			fmt.Println("WARNING: GitHub token not provided, will likely hit rate limits quickly")
+			fmt.Fprintln(os.Stderr, "WARNING: GitHub token not provided, will likely hit rate limits quickly")
 		}
 
 		return nil

@@ -196,7 +196,7 @@ func Commit(
 		Logger()
 
 	if client == nil {
-		return nil, fmt.Errorf("GitHub client is nil")
+		return nil, fmt.Errorf("github client is nil")
 	}
 
 	ctx, cancel := ghCtx()
@@ -247,27 +247,16 @@ func checkRunsForCommit(
 				PerPage: 100,
 			},
 		}
-		resp *github.Response
-		err  error
 	)
 
-	for {
-		var checkRuns *github.ListCheckRunsResults
-		ctx, cancel := ghCtx()
-		checkRuns, resp, err = client.Rest.Checks.ListCheckRunsForRef(ctx, owner, repo, sha, listOpts)
-		cancel()
+	ctx, cancel := ghCtx()
+	defer cancel()
+
+	for checkRun, err := range client.Rest.Checks.ListCheckRunsForRefIter(ctx, owner, repo, sha, listOpts) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to gather check runs from GitHub for commit '%s': %w", sha, err)
 		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
-		}
-		allCheckRuns = append(allCheckRuns, checkRuns.CheckRuns...)
-
-		if resp.NextPage == 0 {
-			break
-		}
-		listOpts.Page = resp.NextPage
+		allCheckRuns = append(allCheckRuns, checkRun)
 	}
 
 	return allCheckRuns, nil

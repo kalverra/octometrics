@@ -58,7 +58,7 @@ func JobRuns(
 				ID:             fmt.Sprint(job.GetID()),
 				Name:           job.GetName(),
 				GitHubLink:     job.GetHTMLURL(),
-				TimelineData:   []*timelineData{jobRunTemplateData},
+				TimelineData:   []*Timeline{jobRunTemplateData},
 				Owner:          owner,
 				Repo:           repo,
 				DataType:       "job_run",
@@ -83,9 +83,9 @@ func JobRuns(
 	return observations, nil
 }
 
-func buildJobRunTimelineData(job *gather.JobData) (*timelineData, error) {
+func buildJobRunTimelineData(job *gather.JobData) (*Timeline, error) {
 	var (
-		items        = make([]timelineItem, 0, len(job.Steps))
+		items        = make([]TimelineItem, 0, len(job.Steps))
 		skippedItems = []string{}
 		queuedItems  = []string{}
 	)
@@ -117,7 +117,7 @@ func buildJobRunTimelineData(job *gather.JobData) (*timelineData, error) {
 			conclusion = "in_progress"
 		}
 
-		newItem := timelineItem{
+		newItem := TimelineItem{
 			Name:       step.GetName(),
 			ID:         step.GetName(),
 			StartTime:  startTime,
@@ -131,12 +131,17 @@ func buildJobRunTimelineData(job *gather.JobData) (*timelineData, error) {
 		}
 		items = append(items, newItem)
 	}
-
-	return &timelineData{
+	timeline := &Timeline{
 		Items:        items,
 		SkippedItems: skippedItems,
 		QueuedItems:  queuedItems,
-	}, nil
+	}
+
+	if err := timeline.normalize(); err != nil {
+		return nil, fmt.Errorf("failed to normalize timeline: %w", err)
+	}
+
+	return timeline, nil
 }
 
 // jobMonitoringTimeWindow is the [start, end) time span of non-skipped steps with real durations,

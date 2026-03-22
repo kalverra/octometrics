@@ -1,0 +1,15 @@
+{
+    "mcpServers": {
+        "octometrics": {
+            "command": "go",
+            "args": [
+                "run",
+                ".",
+                "mcp"
+            ],
+            "env": {
+                "GITHUB_TOKEN": "$GITHUB_TOKEN"
+            }
+        }
+    }
+}

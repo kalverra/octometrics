@@ -207,7 +207,7 @@ func WorkflowRun(
 		Logger()
 
 	if client == nil {
-		return nil, "", fmt.Errorf("GitHub client is nil")
+		return nil, "", fmt.Errorf("github client is nil")
 	}
 
 	log.Debug().Msg("Fetching workflow run data from GitHub")
@@ -352,31 +352,18 @@ func jobsData(
 				PerPage: 100,
 			},
 		}
-		resp *github.Response
 	)
 
-	for { // Paginate through all jobs
-		var (
-			err  error
-			jobs *github.Jobs
-		)
+	ctx, cancel := ghCtx()
+	defer cancel()
 
-		ctx, cancel := ghCtx()
-		jobs, resp, err = client.Rest.Actions.ListWorkflowJobs(ctx, owner, repo, workflowRunID, listOpts)
-		cancel()
+	for job, err := range client.Rest.Actions.ListWorkflowJobsIter(ctx, owner, repo, workflowRunID, listOpts) {
 		if err != nil {
 			return nil, err
 		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
-		}
-
-		workflowJobs = append(workflowJobs, jobs.Jobs...)
-		if resp.NextPage == 0 {
-			break
-		}
-		listOpts.Page = resp.NextPage
+		workflowJobs = append(workflowJobs, job)
 	}
+
 	sort.Slice(workflowJobs, func(i, j int) bool {
 		return workflowJobs[i].GetStartedAt().Before(workflowJobs[j].GetStartedAt().Time)
 	})

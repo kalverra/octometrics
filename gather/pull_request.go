@@ -88,7 +88,7 @@ func PullRequest(
 		Logger()
 
 	if client == nil {
-		return nil, fmt.Errorf("GitHub client is nil")
+		return nil, fmt.Errorf("github client is nil")
 	}
 
 	ctx, cancel := ghCtx()
@@ -166,29 +166,14 @@ func prCommits(
 		}
 	)
 
-	for {
-		ctx, cancel := ghCtx()
-		commitsPage, resp, err := client.Rest.PullRequests.ListCommits(ctx, owner, repo, pullRequestNumber, listOpts)
-		cancel()
+	ctx, cancel := ghCtx()
+	defer cancel()
+
+	for commit, err := range client.Rest.PullRequests.ListCommitsIter(ctx, owner, repo, pullRequestNumber, listOpts) {
 		if err != nil {
 			return nil, err
 		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf(
-				"unexpected status code getting pull request commits %d: %d",
-				pullRequestNumber,
-				resp.StatusCode,
-			)
-		}
-
-		for _, commit := range commitsPage {
-			commitsMap[commit.GetSHA()] = commit
-		}
-
-		if resp.NextPage == 0 {
-			break
-		}
-		listOpts.Page = resp.NextPage
+		commitsMap[commit.GetSHA()] = commit
 	}
 
 	// Get all commits that are only available through Merge Queue events

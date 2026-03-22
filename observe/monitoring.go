@@ -7,11 +7,12 @@ import (
 	"github.com/kalverra/octometrics/report"
 )
 
-type monitoringData struct {
+// Monitoring contains performance monitoring charts.
+type Monitoring struct {
 	Charts []report.MonitoringChart
 }
 
-func monitoring(analysis *monitor.Analysis, windowStart, windowEnd time.Time) (*monitoringData, error) {
+func monitoring(analysis *monitor.Analysis, windowStart, windowEnd time.Time) (*Monitoring, error) {
 	if analysis == nil {
 		return nil, nil
 	}
@@ -25,5 +26,5 @@ func monitoring(analysis *monitor.Analysis, windowStart, windowEnd time.Time) (*
 	if len(charts) == 0 {
 		return nil, nil
 	}
-	return &monitoringData{Charts: charts}, nil
+	return &Monitoring{Charts: charts}, nil
 }

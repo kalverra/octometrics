@@ -2,11 +2,11 @@
 
 A simple CLI tool to visualize and profile your GitHub Actions workflows. See all the processes that run as part of a PR, workflow, or job in a simple, interactive chart. It can also run [directly in your GitHub Actions flow](https://github.com/kalverra/octometrics-action), useful for debugging changes and performance issues.
 
-<center>
+<div align="center">
 
 ![Demo GIF](./octometrics-demo.gif)
 
-</center>
+</div>
 
 ## Run
 
@@ -40,7 +40,13 @@ octometrics compare -o kalverra -r octometrics --commits 51f80a592a2776c509e7a3c
 
 Run `monitor` directly in your GitHub action and it will post performance data as a comment and summary to the action run. [See the octometrics-action](https://github.com/kalverra/octometrics-action).
 
-Highly inspired by the [workflow-telemetry-action](https://github.com/catchpoint/workflow-telemetry-action/tree/master).
+## MCP Server
+
+Start an MCP server to be used with AI agents.
+
+```sh
+octometrics mcp
+```
 
 ## Contributing
 
@@ -48,3 +54,6 @@ Highly inspired by the [workflow-telemetry-action](https://github.com/catchpoint
 just lint # Run linters
 just test # Run tests
 ```
+---
+
+Highly inspired by the [workflow-telemetry-action](https://github.com/catchpoint/workflow-telemetry-action/tree/master).

@@ -12,3 +12,9 @@ test_race:
 
 bench:
 	go test -bench=. -benchmem -run=^$$ ./... -cpu=2,4,8
+
+mcp:
+	go run . mcp --github-token $GITHUB_TOKEN
+
+mocks:
+	go generate ./...

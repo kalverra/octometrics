@@ -7,18 +7,20 @@ import (
 	"time"
 )
 
-type postTimelineItem struct {
+// PostTimelineItem represents an item that occurred after the primary timeline.
+type PostTimelineItem struct {
 	Name string
 	Link string
 	Time time.Time
 }
 
-type timelineData struct {
+// Timeline contains the data for rendering a Gantt chart.
+type Timeline struct {
 	// Triggering event
 	Event string
 	// Items that happen after the specified timeline
-	PostTimelineItems []postTimelineItem
-	Items             []timelineItem
+	PostTimelineItems []PostTimelineItem
+	Items             []TimelineItem
 	SkippedItems      []string
 	QueuedItems       []string
 
@@ -31,7 +33,8 @@ type timelineData struct {
 	Duration     time.Duration
 }
 
-type timelineItem struct {
+// TimelineItem represents a single task or job in the timeline.
+type TimelineItem struct {
 	Name       string
 	ID         string
 	StartTime  time.Time
@@ -41,9 +44,9 @@ type timelineItem struct {
 	IsRequired bool
 }
 
-func (g *timelineData) process() error {
+func (g *Timeline) normalize() error {
 	if g == nil {
-		return fmt.Errorf("timelineData is nil")
+		return fmt.Errorf("timeline is nil")
 	}
 	if len(g.Items) == 0 {
 		return nil
@@ -102,8 +105,8 @@ func GanttFormatsForDuration(span time.Duration) (dateFormat, axisFormat, goDate
 }
 
 // ItemsByDuration returns items sorted by duration descending (longest first).
-func (g *timelineData) ItemsByDuration() []timelineItem {
-	sorted := make([]timelineItem, len(g.Items))
+func (g *Timeline) ItemsByDuration() []TimelineItem {
+	sorted := make([]TimelineItem, len(g.Items))
 	copy(sorted, g.Items)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Duration > sorted[j].Duration
