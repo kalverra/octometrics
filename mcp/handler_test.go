@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-github/v84/github"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -302,4 +303,52 @@ func TestHandleGetJobTimeline_NotFound(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, res.IsError)
 	assert.Contains(t, res.Content[0].(mcp.TextContent).Text, "Job ID 999 not found")
+}
+
+func TestHandleListWorkflowRuns(t *testing.T) {
+	t.Parallel()
+
+	obsMock := NewMockObserver(t)
+	h := &serverHandler{
+		log:      zerolog.Nop(),
+		client:   nil,
+		observer: obsMock,
+	}
+
+	from, _ := time.Parse("2006-01-02", "2025-01-01")
+	to, _ := time.Parse("2006-01-02", "2025-01-07")
+
+	sampleRuns := []*github.WorkflowRun{
+		{
+			ID:         new(int64(123)),
+			Name:       new("CI"),
+			Status:     new("completed"),
+			Conclusion: new("success"),
+			CreatedAt:  &github.Timestamp{Time: from},
+		},
+	}
+
+	obsMock.On("ListWorkflowRuns", mock.Anything, mock.Anything, "owner", "repo", from, to, "pull_request").
+		Return(sampleRuns, nil)
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "list_workflow_runs",
+			Arguments: map[string]any{
+				"owner": "owner",
+				"repo":  "repo",
+				"from":  "2025-01-01",
+				"to":    "2025-01-07",
+				"event": "pull_request",
+			},
+		},
+	}
+
+	res, err := h.handleListWorkflowRuns(context.Background(), req)
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	text := res.Content[0].(mcp.TextContent).Text
+	assert.Contains(t, text, "Found 1 workflow runs:")
+	assert.Contains(t, text, "- CI (ID: 123) [success]")
 }

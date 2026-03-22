@@ -24,7 +24,9 @@ var gatherCmd = &cobra.Command{
 
 Read workflow runtime data from GitHub to display in the browser.
 
-It can be used to gather data for a specific workflow run, pull request, or commit.
+It can be used to gather data for a specific workflow run, pull request, or commit,
+or all data within a certain time frame using --from and --to.
+Filter gathered data by event type (e.g. pull_request, push, merge_group) using --event.
 In-progress workflows are supported and will be displayed with an active status indicator.
 `,
 	Example: `
@@ -36,6 +38,12 @@ octometrics gather -o kalverra -r octometrics -c 94ad3f7e2f45852a99791326847ea12
 
 # To see a specific workflow run: https://github.com/kalverra/octometrics/actions/runs/22918636165
 octometrics gather -o kalverra -r octometrics -w 22918636165
+
+# To gather all data in a certain time frame:
+octometrics gather -o kalverra -r octometrics --from 2025-01-01 --to 2025-01-07
+
+# Filter gathered data by event type:
+octometrics gather -o kalverra -r octometrics --from 2025-01-01 --to 2025-01-07 --event pull_request
 
 # Use '-u' to force update local data if it already exists
 octometrics gather -o kalverra -r octometrics -p 33 -u
@@ -60,6 +68,8 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			logger = logger.With().Int64("workflow_run_id", cfg.WorkflowRunID).Logger()
 		} else if cfg.PullRequestNumber != 0 {
 			logger = logger.With().Int("pull_request_number", cfg.PullRequestNumber).Logger()
+		} else if !cfg.From.IsZero() && !cfg.To.IsZero() {
+			logger = logger.With().Time("from", cfg.From).Time("to", cfg.To).Logger()
 		}
 
 		logger.Info().Msg("Gathering data")
@@ -82,6 +92,8 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 				_, err = gather.PullRequest(logger, githubClient, cfg.Owner, cfg.Repo, cfg.PullRequestNumber, opts...)
 			} else if cfg.CommitSHA != "" {
 				_, err = gather.Commit(logger, githubClient, cfg.Owner, cfg.Repo, cfg.CommitSHA, opts...)
+			} else if !cfg.From.IsZero() && !cfg.To.IsZero() {
+				err = gather.Range(logger, githubClient, cfg.Owner, cfg.Repo, cfg.From, cfg.To, cfg.Event, opts...)
 			}
 		}
 
@@ -111,6 +123,8 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			pagePath = fmt.Sprintf("/%s/%s/pull_requests/%d.html", cfg.Owner, cfg.Repo, cfg.PullRequestNumber)
 		} else if cfg.CommitSHA != "" {
 			pagePath = fmt.Sprintf("/%s/%s/commits/%s.html", cfg.Owner, cfg.Repo, cfg.CommitSHA)
+		} else if !cfg.From.IsZero() && !cfg.To.IsZero() {
+			pagePath = fmt.Sprintf("/%s/%s/", cfg.Owner, cfg.Repo)
 		}
 
 		if err := os.RemoveAll(observe.OutputDir); err != nil {
@@ -129,6 +143,10 @@ func init() {
 	gatherCmd.Flags().StringP("commit-sha", "c", "", "Commit SHA")
 	gatherCmd.Flags().Int64P("workflow-run-id", "w", 0, "Workflow run ID")
 	gatherCmd.Flags().IntP("pull-request-number", "p", 0, "Pull request number")
+	gatherCmd.Flags().String("from", "", "Start date for gathering data (YYYY-MM-DD)")
+	gatherCmd.Flags().String("to", "", "End date for gathering data (YYYY-MM-DD)")
+	gatherCmd.Flags().
+		String("event", "all", "Filter gathered data by event type (all, pull_request, merge_group, push)")
 	gatherCmd.Flags().StringP("github-token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")
 	gatherCmd.Flags().
 		Bool("gather-cost", false, "Gather cost data for workflow runs (can significantly increase runtime)")

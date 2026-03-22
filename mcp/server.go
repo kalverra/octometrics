@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-github/v84/github"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/rs/zerolog"
@@ -38,6 +39,13 @@ type Observer interface {
 		leftID, rightID int64,
 		opts ...observe.Option,
 	) (*observe.Comparison, error)
+	ListWorkflowRuns(
+		log zerolog.Logger,
+		client *gather.GitHubClient,
+		owner, repo string,
+		since, until time.Time,
+		event string,
+	) ([]*github.WorkflowRun, error)
 }
 
 // DefaultObserver is the default implementation that calls the observe package.
@@ -74,6 +82,56 @@ func (d *DefaultObserver) CompareWorkflowRuns(
 	opts ...observe.Option,
 ) (*observe.Comparison, error) {
 	return observe.CompareWorkflowRuns(log, client, owner, repo, leftID, rightID, opts...)
+}
+
+// ListWorkflowRuns lists workflow runs for a repository within a given time range.
+func (d *DefaultObserver) ListWorkflowRuns(
+	_ zerolog.Logger,
+	client *gather.GitHubClient,
+	owner, repo string,
+	since, until time.Time,
+	event string,
+) ([]*github.WorkflowRun, error) {
+	if client == nil {
+		return nil, fmt.Errorf("GitHub client is nil")
+	}
+
+	if event == "all" {
+		event = ""
+	}
+
+	createdFilter := fmt.Sprintf("%s..%s", since.Format("2006-01-02"), until.Format("2006-01-02"))
+	var (
+		allRuns  []*github.WorkflowRun
+		listOpts = &github.ListWorkflowRunsOptions{
+			Created: createdFilter,
+			Event:   event,
+			ListOptions: github.ListOptions{
+				PerPage: 100,
+			},
+		}
+	)
+
+	for {
+		// Using a simplified context here as we don't have access to the internal ghCtx()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		runs, resp, err := client.Rest.Actions.ListRepositoryWorkflowRuns(ctx, owner, repo, listOpts)
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list workflow runs: %w", err)
+		}
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("unexpected status code %d listing workflow runs", resp.StatusCode)
+		}
+
+		allRuns = append(allRuns, runs.WorkflowRuns...)
+		if resp.NextPage == 0 {
+			break
+		}
+		listOpts.Page = resp.NextPage
+	}
+
+	return allRuns, nil
 }
 
 type serverHandler struct {
@@ -136,6 +194,16 @@ func Server(log zerolog.Logger, client *gather.GitHubClient, obs Observer) error
 		mcp.WithNumber("left_id", mcp.Required(), mcp.Description("Left Workflow run ID")),
 		mcp.WithNumber("right_id", mcp.Required(), mcp.Description("Right Workflow run ID")),
 	), h.handleCompareRuns)
+
+	// Tool: list_workflow_runs
+	s.AddTool(mcp.NewTool("list_workflow_runs",
+		mcp.WithDescription("List workflow runs within a certain time frame."),
+		mcp.WithString("owner", mcp.Required(), mcp.Description("Repository owner")),
+		mcp.WithString("repo", mcp.Required(), mcp.Description("Repository name")),
+		mcp.WithString("from", mcp.Required(), mcp.Description("Start date (YYYY-MM-DD)")),
+		mcp.WithString("to", mcp.Required(), mcp.Description("End date (YYYY-MM-DD)")),
+		mcp.WithString("event", mcp.Description("Filter by event (all, pull_request, merge_group, push)")),
+	), h.handleListWorkflowRuns)
 
 	return server.ServeStdio(s)
 }
@@ -376,6 +444,64 @@ func (h *serverHandler) handleCompareRuns(
 			}
 		}
 		fmt.Fprintln(&b)
+	}
+
+	return mcp.NewToolResultText(b.String()), nil
+}
+
+func (h *serverHandler) handleListWorkflowRuns(
+	_ context.Context,
+	request mcp.CallToolRequest,
+) (*mcp.CallToolResult, error) {
+	owner, err := request.RequireString("owner")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get owner: %v", err)), nil
+	}
+	repo, err := request.RequireString("repo")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get repo: %v", err)), nil
+	}
+	fromStr, err := request.RequireString("from")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get from date: %v", err)), nil
+	}
+	toStr, err := request.RequireString("to")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get to date: %v", err)), nil
+	}
+	event := request.GetString("event", "all")
+
+	from, err := time.Parse("2006-01-02", fromStr)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid from date format (expected YYYY-MM-DD): %v", err)), nil
+	}
+	to, err := time.Parse("2006-01-02", toStr)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid to date format (expected YYYY-MM-DD): %v", err)), nil
+	}
+
+	runs, err := h.observer.ListWorkflowRuns(h.log, h.client, owner, repo, from, to, event)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to list workflow runs: %v", err)), nil
+	}
+
+	if len(runs) == 0 {
+		return mcp.NewToolResultText("No workflow runs found in this range."), nil
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Found %d workflow runs:\n\n", len(runs))
+	for _, run := range runs {
+		conclusion := run.GetConclusion()
+		if conclusion == "" {
+			conclusion = run.GetStatus()
+		}
+		fmt.Fprintf(&b, "  - %s (ID: %d) [%s] - Created: %s\n",
+			run.GetName(),
+			run.GetID(),
+			conclusion,
+			run.GetCreatedAt().Format("2006-01-02 15:04"),
+		)
 	}
 
 	return mcp.NewToolResultText(b.String()), nil

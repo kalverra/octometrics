@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
+	"golang.org/x/sync/errgroup"
 )
 
 // GitHub API constants for authentication, timeouts, and data storage.
@@ -149,6 +150,75 @@ func NewGitHubClient(
 	client.GraphQL = githubv4.NewClient(graphqlClient)
 
 	return client, nil
+}
+
+// Range gathers all workflow runs for a repository within a given time range.
+func Range(
+	log zerolog.Logger,
+	client *GitHubClient,
+	owner, repo string,
+	since, until time.Time,
+	event string,
+	opts ...Option,
+) error {
+	if client == nil {
+		return fmt.Errorf("GitHub client is nil")
+	}
+
+	log.Info().
+		Time("since", since).
+		Time("until", until).
+		Str("event", event).
+		Msg("Gathering workflow runs in range")
+
+	// GitHub API expects created filter in format YYYY-MM-DD..YYYY-MM-DD
+	createdFilter := fmt.Sprintf("%s..%s", since.Format("2006-01-02"), until.Format("2006-01-02"))
+
+	if event == "all" {
+		event = ""
+	}
+
+	var (
+		allRuns  []*github.WorkflowRun
+		listOpts = &github.ListWorkflowRunsOptions{
+			Created: createdFilter,
+			Event:   event,
+			ListOptions: github.ListOptions{
+				PerPage: 100,
+			},
+		}
+	)
+
+	ctx, cancel := ghCtx()
+	defer cancel()
+
+	for run, err := range client.Rest.Actions.ListRepositoryWorkflowRunsIter(ctx, owner, repo, listOpts) {
+		if err != nil {
+			return fmt.Errorf("failed to list workflow runs: %w", err)
+		}
+		allRuns = append(allRuns, run)
+	}
+
+	log.Info().Int("count", len(allRuns)).Msg("Found workflow runs to gather")
+
+	var eg errgroup.Group
+	// Limit concurrency to avoid hitting rate limits too fast even with the rate limiter
+	eg.SetLimit(10)
+
+	for _, run := range allRuns {
+		runID := run.GetID()
+		eg.Go(func() error {
+			_, _, err := WorkflowRun(log, client, owner, repo, runID, opts...)
+			if err != nil {
+				log.Error().Err(err).Int64("workflow_run_id", runID).Msg("Failed to gather workflow run")
+				// We don't return error here to allow other runs to be gathered
+				return nil
+			}
+			return nil
+		})
+	}
+
+	return eg.Wait()
 }
 
 // gitHubClientRoundTripper returns a RoundTripper that logs requests and responses to the GitHub API.

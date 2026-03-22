@@ -8,6 +8,7 @@ require (
 	charm.land/huh/v2 v2.0.3
 	github.com/caarlos0/env/v11 v11.4.0
 	github.com/charmbracelet/fang v1.0.0
+	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gofri/go-github-ratelimit/v2 v2.0.2
 	github.com/google/go-github/v84 v84.0.0
 	github.com/mark3labs/mcp-go v0.45.0
@@ -46,7 +47,6 @@ require (
 	github.com/fatih/color v1.17.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/go-github/v73 v73.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect

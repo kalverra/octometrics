@@ -5,6 +5,9 @@
 package mcp
 
 import (
+	"time"
+
+	"github.com/google/go-github/v84/github"
 	"github.com/kalverra/octometrics/gather"
 	"github.com/kalverra/octometrics/observe"
 	"github.com/rs/zerolog"
@@ -242,6 +245,104 @@ func (_c *MockObserver_JobRuns_Call) Return(observations []*observe.Observation,
 }
 
 func (_c *MockObserver_JobRuns_Call) RunAndReturn(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, runID int64, opts ...observe.Option) ([]*observe.Observation, error)) *MockObserver_JobRuns_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListWorkflowRuns provides a mock function for the type MockObserver
+func (_mock *MockObserver) ListWorkflowRuns(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string) ([]*github.WorkflowRun, error) {
+	ret := _mock.Called(log, client, owner, repo, since, until, event)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListWorkflowRuns")
+	}
+
+	var r0 []*github.WorkflowRun
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) ([]*github.WorkflowRun, error)); ok {
+		return returnFunc(log, client, owner, repo, since, until, event)
+	}
+	if returnFunc, ok := ret.Get(0).(func(zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) []*github.WorkflowRun); ok {
+		r0 = returnFunc(log, client, owner, repo, since, until, event)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*github.WorkflowRun)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(zerolog.Logger, *gather.GitHubClient, string, string, time.Time, time.Time, string) error); ok {
+		r1 = returnFunc(log, client, owner, repo, since, until, event)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockObserver_ListWorkflowRuns_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListWorkflowRuns'
+type MockObserver_ListWorkflowRuns_Call struct {
+	*mock.Call
+}
+
+// ListWorkflowRuns is a helper method to define mock.On call
+//   - log zerolog.Logger
+//   - client *gather.GitHubClient
+//   - owner string
+//   - repo string
+//   - since time.Time
+//   - until time.Time
+//   - event string
+func (_e *MockObserver_Expecter) ListWorkflowRuns(log interface{}, client interface{}, owner interface{}, repo interface{}, since interface{}, until interface{}, event interface{}) *MockObserver_ListWorkflowRuns_Call {
+	return &MockObserver_ListWorkflowRuns_Call{Call: _e.mock.On("ListWorkflowRuns", log, client, owner, repo, since, until, event)}
+}
+
+func (_c *MockObserver_ListWorkflowRuns_Call) Run(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string)) *MockObserver_ListWorkflowRuns_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 zerolog.Logger
+		if args[0] != nil {
+			arg0 = args[0].(zerolog.Logger)
+		}
+		var arg1 *gather.GitHubClient
+		if args[1] != nil {
+			arg1 = args[1].(*gather.GitHubClient)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 time.Time
+		if args[4] != nil {
+			arg4 = args[4].(time.Time)
+		}
+		var arg5 time.Time
+		if args[5] != nil {
+			arg5 = args[5].(time.Time)
+		}
+		var arg6 string
+		if args[6] != nil {
+			arg6 = args[6].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+			arg6,
+		)
+	})
+	return _c
+}
+
+func (_c *MockObserver_ListWorkflowRuns_Call) Return(workflowRuns []*github.WorkflowRun, err error) *MockObserver_ListWorkflowRuns_Call {
+	_c.Call.Return(workflowRuns, err)
+	return _c
+}
+
+func (_c *MockObserver_ListWorkflowRuns_Call) RunAndReturn(run func(log zerolog.Logger, client *gather.GitHubClient, owner string, repo string, since time.Time, until time.Time, event string) ([]*github.WorkflowRun, error)) *MockObserver_ListWorkflowRuns_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -99,28 +99,20 @@ func fetchJobSteps(log zerolog.Logger, gha *ghaContext) ([]*github.TaskStep, err
 	}
 
 	var allJobNames []string
-	for {
-		jobs, resp, err := client.Actions.ListWorkflowJobs(ctx, gha.Owner, gha.Repo, gha.RunID, opts)
+	for job, err := range client.Actions.ListWorkflowJobsIter(ctx, gha.Owner, gha.Repo, gha.RunID, opts) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to list workflow jobs: %w", err)
 		}
 
-		for _, job := range jobs.Jobs {
-			if job.GetName() == gha.JobName {
-				log.Debug().
-					Str("job_name", gha.JobName).
-					Int("step_count", len(job.Steps)).
-					Msg("Found matching job")
-				return job.Steps, nil
-			}
-			allJobNames = append(allJobNames, job.GetName())
+		if job.GetName() == gha.JobName {
+			log.Debug().
+				Str("job_name", gha.JobName).
+				Int("step_count", len(job.Steps)).
+				Msg("Found matching job")
+			return job.Steps, nil
 		}
-
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
+		allJobNames = append(allJobNames, job.GetName())
 	}
 
-	return nil, fmt.Errorf("job %q not found among %d workflow jobs", gha.JobName, len(allJobNames))
+	return nil, fmt.Errorf("job %q not found in run %d. Available jobs: %v", gha.JobName, gha.RunID, allJobNames)
 }
