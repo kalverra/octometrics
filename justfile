@@ -12,3 +12,6 @@ test_race:
 
 bench:
 	go test -bench=. -benchmem -run=^$$ ./... -cpu=2,4,8
+
+mocks:
+	go generate ./...

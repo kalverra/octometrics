@@ -50,15 +50,15 @@ func WorkflowRun(
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate timeline: %w", err)
 	}
-	observationData.TimelineData = []*timelineData{workflowRunTimelineData}
+	observationData.TimelineData = []*Timeline{workflowRunTimelineData}
 
 	return observationData, nil
 }
 
-func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelineData, error) {
+func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*Timeline, error) {
 	var (
-		items             = make([]timelineItem, 0, len(workflowRun.Jobs))
-		postTimelineItems = []postTimelineItem{}
+		items             = make([]TimelineItem, 0, len(workflowRun.Jobs))
+		postTimelineItems = []PostTimelineItem{}
 		skippedItems      = []string{}
 		queuedItems       = []string{}
 
@@ -90,7 +90,7 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 
 		if workflowRun.GetEvent() == "pull_request" && !workflowRun.CorrespondingPRCloseTime.IsZero() {
 			if startedAt.After(workflowRun.CorrespondingPRCloseTime) {
-				postTimelineItems = append(postTimelineItems, postTimelineItem{
+				postTimelineItems = append(postTimelineItems, PostTimelineItem{
 					Name: job.GetName(),
 					Link: job.GetHTMLURL(),
 					Time: startedAt,
@@ -104,7 +104,7 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 			conclusion = "in_progress"
 		}
 
-		newTask := timelineItem{
+		newTask := TimelineItem{
 			Name:       job.GetName(),
 			ID:         fmt.Sprint(job.GetID()),
 			StartTime:  startedAt,
@@ -123,7 +123,7 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*timelin
 		items = append(items, newTask)
 	}
 
-	templateData := &timelineData{
+	templateData := &Timeline{
 		Event:             workflowRun.GetEvent(),
 		Items:             items,
 		SkippedItems:      skippedItems,

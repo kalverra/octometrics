@@ -186,8 +186,8 @@ type Observation struct {
 	BranchProtectionWarning bool
 
 	// Data used to show job, workflow, and commit runs
-	TimelineData   []*timelineData
-	MonitoringData *monitoringData
+	TimelineData   []*Timeline
+	MonitoringData *Monitoring
 
 	// Data used to render a Pull Request with multiple commits
 	CommitData []*gather.CommitData
@@ -237,8 +237,8 @@ func (o *Observation) Render(log zerolog.Logger, outputType string) (observation
 	)
 
 	if o.TimelineData != nil {
-		for _, timelineData := range o.TimelineData {
-			if err := timelineData.process(); err != nil {
+		for _, td := range o.TimelineData {
+			if err := td.process(); err != nil {
 				return "", fmt.Errorf("failed to process timeline data: %w", err)
 			}
 		}

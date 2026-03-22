@@ -57,7 +57,7 @@ func Commit(
 
 }
 
-func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gather.WorkflowRunData) []*timelineData {
+func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gather.WorkflowRunData) []*Timeline {
 	owner := commitData.GetOwner()
 	repo := commitData.GetRepo()
 
@@ -68,14 +68,14 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 		eventGroups[event] = append(eventGroups[event], workflowRun)
 	}
 
-	// Build a timelineData for each event group
-	var groupedTimelines []*timelineData
+	// Build a Timeline for each event group
+	var groupedTimelines []*Timeline
 	for event, runs := range eventGroups {
 		var (
-			items             = make([]timelineItem, 0, len(runs))
+			items             = make([]TimelineItem, 0, len(runs))
 			skippedItems      = []string{}
 			queuedItems       = []string{}
-			postTimelineItems = []postTimelineItem{}
+			postTimelineItems = []PostTimelineItem{}
 		)
 
 		for _, workflowRun := range runs {
@@ -103,7 +103,7 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 
 			if workflowRun.GetEvent() == "pull_request" && !workflowRun.CorrespondingPRCloseTime.IsZero() {
 				if startTime.After(workflowRun.CorrespondingPRCloseTime) {
-					postTimelineItems = append(postTimelineItems, postTimelineItem{
+					postTimelineItems = append(postTimelineItems, PostTimelineItem{
 						Name: workflowRun.GetName(),
 						Link: workflowRun.GetHTMLURL(),
 						Time: startTime,
@@ -117,7 +117,7 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 				conclusion = "in_progress"
 			}
 
-			newItem := timelineItem{
+			newItem := TimelineItem{
 				Name:       workflowRun.GetName(),
 				ID:         fmt.Sprint(workflowRun.GetID()),
 				StartTime:  workflowRun.GetRunStartedAt().Time,
@@ -132,7 +132,7 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 			}
 			items = append(items, newItem)
 		}
-		groupedTimelines = append(groupedTimelines, &timelineData{
+		groupedTimelines = append(groupedTimelines, &Timeline{
 			Event:             event,
 			Items:             items,
 			SkippedItems:      skippedItems,

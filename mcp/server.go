@@ -15,13 +15,75 @@ import (
 	"github.com/kalverra/octometrics/observe"
 )
 
+// Observer defines the interface for building observations and comparisons.
+type Observer interface {
+	WorkflowRun(
+		log zerolog.Logger,
+		client *gather.GitHubClient,
+		owner, repo string,
+		runID int64,
+		opts ...observe.Option,
+	) (*observe.Observation, error)
+	JobRuns(
+		log zerolog.Logger,
+		client *gather.GitHubClient,
+		owner, repo string,
+		runID int64,
+		opts ...observe.Option,
+	) ([]*observe.Observation, error)
+	CompareWorkflowRuns(
+		log zerolog.Logger,
+		client *gather.GitHubClient,
+		owner, repo string,
+		leftID, rightID int64,
+		opts ...observe.Option,
+	) (*observe.Comparison, error)
+}
+
+// DefaultObserver is the default implementation that calls the observe package.
+type DefaultObserver struct{}
+
+// WorkflowRun gathers and processes a workflow run into an observation.
+func (d *DefaultObserver) WorkflowRun(
+	log zerolog.Logger,
+	client *gather.GitHubClient,
+	owner, repo string,
+	runID int64,
+	opts ...observe.Option,
+) (*observe.Observation, error) {
+	return observe.WorkflowRun(log, client, owner, repo, runID, opts...)
+}
+
+// JobRuns observes all job runs for a given workflow run.
+func (d *DefaultObserver) JobRuns(
+	log zerolog.Logger,
+	client *gather.GitHubClient,
+	owner, repo string,
+	runID int64,
+	opts ...observe.Option,
+) ([]*observe.Observation, error) {
+	return observe.JobRuns(log, client, owner, repo, runID, opts...)
+}
+
+// CompareWorkflowRuns builds a comparison between two workflow runs.
+func (d *DefaultObserver) CompareWorkflowRuns(
+	log zerolog.Logger,
+	client *gather.GitHubClient,
+	owner, repo string,
+	leftID, rightID int64,
+	opts ...observe.Option,
+) (*observe.Comparison, error) {
+	return observe.CompareWorkflowRuns(log, client, owner, repo, leftID, rightID, opts...)
+}
+
 type serverHandler struct {
-	log    zerolog.Logger
-	client *gather.GitHubClient
+	log      zerolog.Logger
+	client   *gather.GitHubClient
+	observer Observer
 }
 
 // Server starts the MCP server over stdio.
-func Server(log zerolog.Logger, client *gather.GitHubClient) error {
+func Server(log zerolog.Logger, client *gather.GitHubClient, obs Observer) error {
 	s := server.NewMCPServer(
 		"octometrics",
 		"1.0.0",
@@ -29,8 +91,9 @@ func Server(log zerolog.Logger, client *gather.GitHubClient) error {
 	)
 
 	h := &serverHandler{
-		log:    log,
-		client: client,
+		log:      log,
+		client:   client,
+		observer: obs,
 	}
 
 	// Tool: get_workflow_summary
@@ -94,7 +157,7 @@ func (h *serverHandler) handleGetWorkflowSummary(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get run ID: %v", err)), nil
 	}
 
-	obs, err := observe.WorkflowRun(h.log, h.client, owner, repo, int64(runID))
+	obs, err := h.observer.WorkflowRun(h.log, h.client, owner, repo, int64(runID))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get workflow run: %v", err)), nil
 	}
@@ -139,7 +202,7 @@ func (h *serverHandler) handleGetJobTimeline(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get job ID: %v", err)), nil
 	}
 
-	jobs, err := observe.JobRuns(h.log, h.client, owner, repo, int64(runID))
+	jobs, err := h.observer.JobRuns(h.log, h.client, owner, repo, int64(runID))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get jobs: %v", err)), nil
 	}
@@ -203,7 +266,7 @@ func (h *serverHandler) handleGetPerformanceMetrics(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get job ID: %v", err)), nil
 	}
 
-	jobs, err := observe.JobRuns(h.log, h.client, owner, repo, int64(runID))
+	jobs, err := h.observer.JobRuns(h.log, h.client, owner, repo, int64(runID))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get jobs: %v", err)), nil
 	}
@@ -263,7 +326,7 @@ func (h *serverHandler) handleCompareRuns(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get right ID: %v", err)), nil
 	}
 
-	comp, err := observe.CompareWorkflowRuns(h.log, h.client, owner, repo, int64(leftID), int64(rightID))
+	comp, err := h.observer.CompareWorkflowRuns(h.log, h.client, owner, repo, int64(leftID), int64(rightID))
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to compare runs: %v", err)), nil
 	}

@@ -41,12 +41,12 @@ type MonitoringPair struct {
 	RightDiagram string
 }
 
-// EventPair groups the left and right timelineData for the same triggering event.
+// EventPair groups the left and right Timeline for the same triggering event.
 // Either side may be nil when the event only appears in one observation.
 type EventPair struct {
 	Event         string
-	Left          *timelineData
-	Right         *timelineData
+	Left          *Timeline
+	Right         *Timeline
 	IsTypical     bool // true for common events (pull_request, push, merge_group)
 	LeftDuration  time.Duration
 	RightDuration time.Duration
@@ -265,12 +265,12 @@ func buildComparison(left, right *Observation, owner, repo, compareType string) 
 }
 
 // matchItems computes matched, only-left, and only-right items for two sets of timeline items.
-func matchItems(leftItems, rightItems []timelineItem) ([]ComparisonItem, []ComparisonOnlyItem, []ComparisonOnlyItem) {
-	leftByName := make(map[string]timelineItem, len(leftItems))
+func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []ComparisonOnlyItem, []ComparisonOnlyItem) {
+	leftByName := make(map[string]TimelineItem, len(leftItems))
 	for _, item := range leftItems {
 		leftByName[item.Name] = item
 	}
-	rightByName := make(map[string]timelineItem, len(rightItems))
+	rightByName := make(map[string]TimelineItem, len(rightItems))
 	for _, item := range rightItems {
 		rightByName[item.Name] = item
 	}
@@ -325,9 +325,9 @@ func matchItems(leftItems, rightItems []timelineItem) ([]ComparisonItem, []Compa
 	return matched, onlyLeft, onlyRight
 }
 
-// wallClockDuration computes the wall-clock span across all timeline items
+// wallClockDuration computes the wall-clock span across all Timeline items
 // (earliest start to latest end), accounting for parallel execution.
-func wallClockDuration(timelines []*timelineData) time.Duration {
+func wallClockDuration(timelines []*Timeline) time.Duration {
 	var earliest, latest time.Time
 	first := true
 	for _, td := range timelines {
@@ -359,13 +359,13 @@ func absDur(d time.Duration) time.Duration {
 var compareGanttEpoch = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // buildCompareGantt builds a single Gantt chart with one section per non-empty side.
-// Each side is shifted so its timeline start aligns with compareGanttEpoch, making
+// Each side is shifted so its Timeline start aligns with compareGanttEpoch, making
 // parallel structure and relative timing easy to compare across runs.
-func buildCompareGantt(left, right *timelineData) *CompareGanttData {
+func buildCompareGantt(left, right *Timeline) *CompareGanttData {
 	var sections []CompareGanttSection
 	maxEnd := compareGanttEpoch
 
-	appendSide := func(label string, side *timelineData, idPrefix string) {
+	appendSide := func(label string, side *Timeline, idPrefix string) {
 		if side == nil || len(side.Items) == 0 {
 			return
 		}
@@ -410,12 +410,12 @@ func buildCompareGantt(left, right *timelineData) *CompareGanttData {
 	}
 }
 
-func buildEventPairs(left, right []*timelineData, owner, repo, compareType string) []EventPair {
-	leftByEvent := make(map[string]*timelineData, len(left))
+func buildEventPairs(left, right []*Timeline, owner, repo, compareType string) []EventPair {
+	leftByEvent := make(map[string]*Timeline, len(left))
 	for _, td := range left {
 		leftByEvent[td.Event] = td
 	}
-	rightByEvent := make(map[string]*timelineData, len(right))
+	rightByEvent := make(map[string]*Timeline, len(right))
 	for _, td := range right {
 		rightByEvent[td.Event] = td
 	}
@@ -430,7 +430,7 @@ func buildEventPairs(left, right []*timelineData, owner, repo, compareType strin
 			Right:     rightByEvent[td.Event],
 			IsTypical: typicalEvents[td.Event],
 		}
-		var rightItems []timelineItem
+		var rightItems []TimelineItem
 		if pair.Right != nil {
 			rightItems = pair.Right.Items
 		}
@@ -438,10 +438,10 @@ func buildEventPairs(left, right []*timelineData, owner, repo, compareType strin
 
 		var leftDur, rightDur time.Duration
 		if pair.Left != nil {
-			leftDur = wallClockDuration([]*timelineData{pair.Left})
+			leftDur = wallClockDuration([]*Timeline{pair.Left})
 		}
 		if pair.Right != nil {
-			rightDur = wallClockDuration([]*timelineData{pair.Right})
+			rightDur = wallClockDuration([]*Timeline{pair.Right})
 		}
 		pair.LeftDuration = leftDur
 		pair.RightDuration = rightDur
@@ -464,7 +464,7 @@ func buildEventPairs(left, right []*timelineData, owner, repo, compareType strin
 		}
 		pair.Items, pair.OnlyLeft, pair.OnlyRight = matchItems(nil, td.Items)
 
-		rightDur := wallClockDuration([]*timelineData{pair.Right})
+		rightDur := wallClockDuration([]*Timeline{pair.Right})
 		pair.RightDuration = rightDur
 		pair.DurationDelta = rightDur
 

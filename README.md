@@ -40,6 +40,14 @@ octometrics compare -o kalverra -r octometrics --commits 51f80a592a2776c509e7a3c
 
 Run `monitor` directly in your GitHub action and it will post performance data as a comment and summary to the action run. [See the octometrics-action](https://github.com/kalverra/octometrics-action).
 
+## MCP Server
+
+Start an MCP server to be used with AI agents.
+
+```sh
+octometrics mcp
+```
+
 ## Contributing
 
 ```sh

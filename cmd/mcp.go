@@ -24,7 +24,7 @@ var mcpCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(_ *cobra.Command, _ []string) error {
-		return mcp.Server(logger, githubClient)
+		return mcp.Server(logger, githubClient, &mcp.DefaultObserver{})
 	},
 }
 
