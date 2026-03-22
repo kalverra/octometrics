@@ -51,13 +51,17 @@ func Commit(
 		workflowRuns = append(workflowRuns, workflowRun)
 	}
 
-	observation.TimelineData = buildCommitTimelineData(commit, workflowRuns)
+	observation.TimelineData = buildCommitTimelineData(log, commit, workflowRuns)
 
 	return observation, nil
 
 }
 
-func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gather.WorkflowRunData) []*Timeline {
+func buildCommitTimelineData(
+	log zerolog.Logger,
+	commitData *gather.CommitData,
+	workflowRuns []*gather.WorkflowRunData,
+) []*Timeline {
 	owner := commitData.GetOwner()
 	repo := commitData.GetRepo()
 
@@ -146,6 +150,7 @@ func buildCommitTimelineData(commitData *gather.CommitData, workflowRuns []*gath
 		if err := timeline.normalize(); err != nil {
 			// Instead of returning error and failing the whole commit view, just skip normalizing.
 			// This might lead to suboptimal rendering for this specific event type but preserves the rest.
+			log.Error().Err(err).Str("event", timeline.Event).Msg("Failed to normalize timeline")
 			continue
 		}
 	}
