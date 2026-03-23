@@ -140,98 +140,134 @@ func (w *WorkflowRunData) GetUsage() *github.WorkflowRunUsage {
 	return w.Usage
 }
 
-// WorkflowRun gathers all metrics for a workflow run.
-// In-progress runs are supported: billing and monitoring data are skipped,
-// and the result is not cached locally so fresh data is always fetched.
+// WorkflowRun gathers and processes a workflow run from GitHub or local disk.
 func WorkflowRun(
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 	options ...Option,
-) (workflowRunData *WorkflowRunData, targetFile string, err error) {
+) (*WorkflowRunData, string, error) {
 	opts := defaultOptions()
 	for _, opt := range options {
 		opt(opts)
 	}
 
-	var (
-		targetDir  = filepath.Join(opts.DataDir, owner, repo, WorkflowRunsDataDir)
-		fileExists = false
-	)
-	workflowRunData = &WorkflowRunData{}
-	targetFile = filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
+	targetDir := filepath.Join(opts.DataDir, owner, repo, WorkflowRunsDataDir)
+	targetFile := filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
 
-	if opts.pullRequestData != nil {
-		workflowRunData.CorrespondingPRNum = opts.pullRequestData.GetNumber()
-		workflowRunData.CorrespondingPRCloseTime = opts.pullRequestData.GetClosedAt().Time
-	}
-
-	if opts.commitData != nil {
-		workflowRunData.CorrespondingCommitSHA = opts.commitData.GetSHA()
-	}
-
-	log = log.With().
-		Str("target_file", targetFile).
-		Int64("workflow_run_id", workflowRunID).
-		Logger()
-
-	err = os.MkdirAll(targetDir, 0700)
-	if err != nil {
+	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		return nil, "", fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
 	}
 
-	if _, err := os.Stat(targetFile); err == nil {
-		fileExists = true
-	}
-
+	log = log.With().Str("target_file", targetFile).Int64("workflow_run_id", workflowRunID).Logger()
 	startTime := time.Now()
 
-	if !opts.ForceUpdate && fileExists {
-		log = log.With().
-			Str("source", "local file").
-			Logger()
-		workflowFileBytes, err := os.ReadFile(filepath.Clean(targetFile))
-		if err != nil {
-			return nil, "", fmt.Errorf("failed to open workflow run file: %w", err)
+	// 1. Try loading from disk first
+	if !opts.ForceUpdate {
+		if data, err := loadWorkflowRunFromDisk(targetFile); err == nil {
+			log.Debug().
+				Str("duration", time.Since(startTime).String()).
+				Str("source", "local file").
+				Msg("Gathered workflow run data")
+			return data, targetFile, nil
 		}
-		err = json.Unmarshal(workflowFileBytes, &workflowRunData)
-		log.Debug().
-			Str("duration", time.Since(startTime).String()).
-			Msg("Gathered workflow run data")
-		return workflowRunData, targetFile, err
 	}
 
-	log = log.With().
-		Str("source", "GitHub API").
-		Logger()
-
+	// 2. Fetch from GitHub
 	if client == nil {
 		return nil, "", fmt.Errorf("github client is nil")
 	}
 
+	workflowRunData, err := fetchWorkflowRunFromGitHub(log, client, owner, repo, workflowRunID, opts, targetDir)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// 3. Save to disk
+	if err := saveWorkflowRunToDisk(workflowRunData, targetFile); err != nil {
+		return nil, "", fmt.Errorf("failed to save workflow run data for '%d': %w", workflowRunID, err)
+	}
+
+	log.Debug().
+		Str("duration", time.Since(startTime).String()).
+		Str("source", "GitHub API").
+		Msg("Gathered workflow run data")
+	return workflowRunData, targetFile, nil
+}
+
+// loadWorkflowRunFromDisk loads a workflow run from local disk.
+func loadWorkflowRunFromDisk(targetFile string) (*WorkflowRunData, error) {
+	if _, err := os.Stat(targetFile); err != nil {
+		return nil, err
+	}
+
+	workflowFileBytes, err := os.ReadFile(filepath.Clean(targetFile))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open workflow run file: %w", err)
+	}
+
+	var data WorkflowRunData
+	if err := json.Unmarshal(workflowFileBytes, &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal workflow run data: %w", err)
+	}
+
+	return &data, nil
+}
+
+// saveWorkflowRunToDisk saves a workflow run to local disk.
+func saveWorkflowRunToDisk(data *WorkflowRunData, targetFile string) error {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal workflow run data to json: %w", err)
+	}
+
+	if err := os.WriteFile(targetFile, jsonData, 0600); err != nil {
+		return fmt.Errorf("failed to write workflow run data to file: %w", err)
+	}
+
+	return nil
+}
+
+// fetchWorkflowRunFromGitHub fetches a workflow run from GitHub.
+func fetchWorkflowRunFromGitHub(
+	log zerolog.Logger,
+	client *GitHubClient,
+	owner, repo string,
+	workflowRunID int64,
+	opts *options,
+	targetDir string,
+) (*WorkflowRunData, error) {
 	log.Debug().Msg("Fetching workflow run data from GitHub")
 
 	ctx, cancel := ghCtx()
 	workflowRun, resp, err := client.Rest.Actions.GetWorkflowRunByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, "", fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
-	if workflowRun == nil {
-		return nil, "", fmt.Errorf("workflow run '%d' not found on GitHub", workflowRunID)
+
+	data := &WorkflowRunData{
+		WorkflowRun: workflowRun,
 	}
+
+	if opts.pullRequestData != nil {
+		data.CorrespondingPRNum = opts.pullRequestData.GetNumber()
+		data.CorrespondingPRCloseTime = opts.pullRequestData.GetClosedAt().Time
+	}
+	if opts.commitData != nil {
+		data.CorrespondingCommitSHA = opts.commitData.GetSHA()
+	}
+
 	completed := workflowRun.GetStatus() == "completed"
 	if !completed {
 		log.Warn().
 			Str("status", workflowRun.GetStatus()).
 			Msg("Workflow run is not yet completed; billing and monitoring data will be unavailable")
 	}
-
-	workflowRunData.WorkflowRun = workflowRun
 
 	var (
 		eg                  errgroup.Group
@@ -251,7 +287,6 @@ func WorkflowRun(
 			if !opts.gatherCost {
 				return nil
 			}
-
 			var billingErr error
 			workflowBillingData, billingErr = billingData(client, owner, repo, workflowRunID)
 			return billingErr
@@ -265,21 +300,31 @@ func WorkflowRun(
 	})
 
 	if err := eg.Wait(); err != nil {
-		return nil, "", fmt.Errorf(
-			"failed to collect job, billing, and/or monitoring data for workflow run '%d': %w",
-			workflowRunID,
-			err,
-		)
+		return nil, fmt.Errorf("failed to collect workflow data for '%d': %w", workflowRunID, err)
 	}
-	workflowRunData.Usage = workflowBillingData
 
-	for _, job := range workflowRunJobs {
+	data.Usage = workflowBillingData
+	processJobs(log, data, workflowRunJobs, workflowBillingData, opts.gatherCost)
+	processAnalyses(log, data, analyses)
+
+	return data, nil
+}
+
+// processJobs processes the jobs for a workflow run.
+func processJobs(
+	log zerolog.Logger,
+	data *WorkflowRunData,
+	jobs []*github.WorkflowJob,
+	billingData *github.WorkflowRunUsage,
+	gatherCost bool,
+) {
+	completed := data.GetStatus() == "completed"
+
+	for _, job := range jobs {
 		completedAt := job.GetCompletedAt().Time
 		if !completedAt.IsZero() {
-			if workflowRunData.RunCompletedAt.IsZero() {
-				workflowRunData.RunCompletedAt = completedAt
-			} else if completedAt.After(workflowRunData.RunCompletedAt) {
-				workflowRunData.RunCompletedAt = completedAt
+			if data.RunCompletedAt.IsZero() || completedAt.After(data.RunCompletedAt) {
+				data.RunCompletedAt = completedAt
 			}
 		}
 
@@ -287,58 +332,50 @@ func WorkflowRun(
 			runner string
 			cost   int64
 		)
-		if completed && opts.gatherCost {
+
+		if completed && gatherCost {
 			var billingErr error
-			runner, cost, billingErr = calculateJobRunBilling(job.GetID(), workflowBillingData)
+			runner, cost, billingErr = calculateJobRunBilling(job.GetID(), billingData)
 			if billingErr != nil {
-				return nil, "", fmt.Errorf("failed to calculate cost for job '%d': %w", job.GetID(), billingErr)
+				log.Warn().Err(billingErr).Int64("job_id", job.GetID()).Msg("failed to calculate cost for job")
 			}
 		}
-		workflowRunData.Cost += cost
-		workflowRunData.Jobs = append(workflowRunData.Jobs, &JobData{
+
+		if runner == "" {
+			runner = job.GetRunnerName()
+		}
+		if runner == "" {
+			runner = getRunnerFromLabels(job.Labels)
+		}
+
+		data.Cost += cost
+		data.Jobs = append(data.Jobs, &JobData{
 			WorkflowJob: job,
 			Runner:      runner,
 			Cost:        cost,
 		})
 	}
-
-	if completed {
-	nextAnalysisLoop:
-		for _, analysis := range analyses {
-			for _, job := range workflowRunData.Jobs {
-				if analysis.JobName == job.GetName() {
-					job.Analysis = analysis
-					continue nextAnalysisLoop
-				}
-			}
-			log.Warn().Str("monitoring_data_job_name", analysis.JobName).Msg("Found monitoring data for job but found no job name matches")
-		}
-	}
-
-	data, err := json.Marshal(workflowRunData)
-	if err != nil {
-		return nil, "", fmt.Errorf(
-			"failed to marshal workflow run data to json for workflow run '%d': %w",
-			workflowRunID,
-			err,
-		)
-	}
-	err = os.WriteFile(targetFile, data, 0600)
-	if err != nil {
-		return nil, "", fmt.Errorf(
-			"failed to write workflow run data to file for workflow run '%d': %w",
-			workflowRunID,
-			err,
-		)
-	}
-
-	log.Debug().
-		Str("duration", time.Since(startTime).String()).
-		Msg("Gathered workflow run data")
-	return workflowRunData, targetFile, nil
 }
 
-// jobsData fetches all jobs for a workflow run from GitHub
+// processAnalyses processes the analyses for a workflow run.
+func processAnalyses(log zerolog.Logger, data *WorkflowRunData, analyses []*monitor.Analysis) {
+	if data.GetStatus() != "completed" {
+		return
+	}
+
+nextAnalysisLoop:
+	for _, analysis := range analyses {
+		for _, job := range data.Jobs {
+			if analysis.JobName == job.GetName() {
+				job.Analysis = analysis
+				continue nextAnalysisLoop
+			}
+		}
+		log.Warn().Str("monitoring_data_job_name", analysis.JobName).Msg("Found monitoring data for job but found no job name matches")
+	}
+}
+
+// jobsData fetches all jobs for a workflow run from GitHub.
 func jobsData(
 	client *GitHubClient,
 	owner, repo string,
@@ -612,4 +649,27 @@ func downloadAndAnalyzeArtifact(
 		log.Error().Str("path", tmpPath).Err(err).Msg("failed to remove monitor data temp file")
 	}
 	return analysis, nil
+}
+
+func getRunnerFromLabels(labels []string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+	// Try to find a common runner label
+	for _, label := range labels {
+		l := strings.ToLower(label)
+		if strings.Contains(l, "ubuntu") || strings.Contains(l, "windows") || strings.Contains(l, "macos") ||
+			strings.Contains(l, "self-hosted") {
+			return label
+		}
+	}
+	// Fallback to the most descriptive label (usually the longest one if not a common one)
+	// or just the first one if all else fails.
+	best := labels[0]
+	for _, label := range labels {
+		if len(label) > len(best) {
+			best = label
+		}
+	}
+	return best
 }

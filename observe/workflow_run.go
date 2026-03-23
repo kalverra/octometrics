@@ -111,6 +111,7 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*Timelin
 			Conclusion: conclusionToGanttStatus(conclusion),
 			Duration:   duration,
 			Link:       jobRunLink(owner, repo, job.GetID()) + ".html",
+			Runner:     job.GetRunner(),
 		}
 		if inProgress {
 			newTask.Name = fmt.Sprintf("%s (in progress)", job.GetName())

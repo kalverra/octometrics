@@ -205,6 +205,7 @@ type Observation struct {
 	DataType   string
 	State      string
 	Actor      string
+	Runner     string
 	Cost       int64 // Cost in tenths of a cent
 
 	// Branch protection: required status checks for the default branch

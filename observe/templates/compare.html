@@ -63,7 +63,7 @@
                 {{ template "compare_gantt_html" .CombinedGantt }}
                 {{ else }}
                 {{ if .Left }}
-                <h3>Left &mdash; {{ .Left.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Left.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Left.Duration }})</h3>
+                <h3>Left &mdash; {{ if not .Left.RealStartTime.IsZero }}{{ .Left.RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Left.StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .Left.RealEndTime.IsZero }}{{ .Left.RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Left.EndTime.Format "2006-01-02T15:04:05" }}{{ end }} ({{ .Left.Duration }})</h3>
                 {{ template "timeline_html" .Left }}
                 {{ else }}
                 <h3>Left</h3>
@@ -71,7 +71,7 @@
                 {{ end }}
 
                 {{ if .Right }}
-                <h3>Right &mdash; {{ .Right.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Right.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Right.Duration }})</h3>
+                <h3>Right &mdash; {{ if not .Right.RealStartTime.IsZero }}{{ .Right.RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Right.StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .Right.RealEndTime.IsZero }}{{ .Right.RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Right.EndTime.Format "2006-01-02T15:04:05" }}{{ end }} ({{ .Right.Duration }})</h3>
                 {{ template "timeline_html" .Right }}
                 {{ else }}
                 <h3>Right</h3>
@@ -86,6 +86,8 @@
                         <thead>
                             <tr>
                                 <th class="ct-name">Name</th>
+                                <th class="ct-runner">Left Runner</th>
+                                <th class="ct-runner">Right Runner</th>
                                 <th class="ct-duration">Left Duration</th>
                                 <th class="ct-duration">Right Duration</th>
                                 <th class="ct-duration">Delta</th>
@@ -95,8 +97,10 @@
                         </thead>
                         <tbody>
                             {{ range .Items }}
-                            <tr{{ if .StatusChanged }} class="status-changed"{{ end }}>
+                            <tr{{ if or .StatusChanged .RunnerChanged }} class="{{ if .StatusChanged }}status-changed{{ end }} {{ if .RunnerChanged }}runner-changed{{ end }}"{{ end }}>
                                 <td class="ct-name">{{ .Name }}</td>
+                                <td class="ct-runner">{{ .LeftRunner }}</td>
+                                <td class="ct-runner">{{ .RightRunner }}</td>
                                 <td class="ct-duration">{{ .LeftDuration }}</td>
                                 <td class="ct-duration">{{ .RightDuration }}</td>
                                 <td class="ct-duration {{ deltaClass .DurationDelta }}">{{ formatDelta .DurationDelta }}</td>
@@ -116,6 +120,7 @@
                         <thead>
                             <tr>
                                 <th class="ct-name">Name</th>
+                                <th class="ct-runner">Runner</th>
                                 <th class="ct-duration">Duration</th>
                                 <th class="ct-status">Status</th>
                             </tr>
@@ -124,6 +129,7 @@
                             {{ range .OnlyLeft }}
                             <tr>
                                 <td class="ct-name">{{ .Name }}</td>
+                                <td class="ct-runner">{{ .Runner }}</td>
                                 <td class="ct-duration">{{ .Duration }}</td>
                                 <td class="ct-status">{{ conclusionBadge .Conclusion }}</td>
                             </tr>
@@ -140,6 +146,7 @@
                         <thead>
                             <tr>
                                 <th class="ct-name">Name</th>
+                                <th class="ct-runner">Runner</th>
                                 <th class="ct-duration">Duration</th>
                                 <th class="ct-status">Status</th>
                             </tr>
@@ -148,6 +155,7 @@
                             {{ range .OnlyRight }}
                             <tr>
                                 <td class="ct-name">{{ .Name }}</td>
+                                <td class="ct-runner">{{ .Runner }}</td>
                                 <td class="ct-duration">{{ .Duration }}</td>
                                 <td class="ct-status">{{ conclusionBadge .Conclusion }}</td>
                             </tr>

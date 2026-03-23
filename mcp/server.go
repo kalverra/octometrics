@@ -238,7 +238,11 @@ func (h *serverHandler) handleGetWorkflowSummary(
 		fmt.Fprintf(&b, "Total Duration: %s\n\n", td.Duration)
 		fmt.Fprintf(&b, "Jobs:\n")
 		for _, item := range td.Items {
-			fmt.Fprintf(&b, "  - %s (ID: %s) [%s]: %s\n", item.Name, item.ID, item.Conclusion, item.Duration)
+			runner := ""
+			if item.Runner != "" {
+				runner = fmt.Sprintf(" [%s]", item.Runner)
+			}
+			fmt.Fprintf(&b, "  - %s (ID: %s)%s [%s]: %s\n", item.Name, item.ID, runner, item.Conclusion, item.Duration)
 		}
 	}
 
@@ -416,27 +420,42 @@ func (h *serverHandler) handleCompareRuns(
 				if item.StatusChanged {
 					statusNote = fmt.Sprintf(" [STATUS: %s -> %s]", item.LeftConclusion, item.RightConclusion)
 				}
+				runnerNote := ""
+				if item.RunnerChanged {
+					runnerNote = fmt.Sprintf(" [RUNNER: %s -> %s]", item.LeftRunner, item.RightRunner)
+				} else if item.LeftRunner != "" {
+					runnerNote = fmt.Sprintf(" [%s]", item.LeftRunner)
+				}
 				fmt.Fprintf(
 					&b,
-					"    - %s: %s -> %s (Delta: %s)%s\n",
+					"    - %s: %s -> %s (Delta: %s)%s%s\n",
 					item.Name,
 					item.LeftDuration,
 					item.RightDuration,
 					formatDelta(item.DurationDelta),
 					statusNote,
+					runnerNote,
 				)
 			}
 		}
 		if len(pair.OnlyLeft) > 0 {
 			fmt.Fprintf(&b, "  Only in Left:\n")
 			for _, item := range pair.OnlyLeft {
-				fmt.Fprintf(&b, "    - %s (%s) [%s]\n", item.Name, item.Duration, item.Conclusion)
+				runner := ""
+				if item.Runner != "" {
+					runner = fmt.Sprintf(" [%s]", item.Runner)
+				}
+				fmt.Fprintf(&b, "    - %s (%s) [%s]%s\n", item.Name, item.Duration, item.Conclusion, runner)
 			}
 		}
 		if len(pair.OnlyRight) > 0 {
 			fmt.Fprintf(&b, "  Only in Right:\n")
 			for _, item := range pair.OnlyRight {
-				fmt.Fprintf(&b, "    - %s (%s) [%s]\n", item.Name, item.Duration, item.Conclusion)
+				runner := ""
+				if item.Runner != "" {
+					runner = fmt.Sprintf(" [%s]", item.Runner)
+				}
+				fmt.Fprintf(&b, "    - %s (%s) [%s]%s\n", item.Name, item.Duration, item.Conclusion, runner)
 			}
 		}
 		fmt.Fprintln(&b)

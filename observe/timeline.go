@@ -25,12 +25,14 @@ type Timeline struct {
 	QueuedItems       []string
 
 	// Set by the renderer
-	StartTime    time.Time
-	EndTime      time.Time
-	GoDateFormat string
-	DateFormat   string
-	AxisFormat   string
-	Duration     time.Duration
+	StartTime     time.Time
+	EndTime       time.Time
+	RealStartTime time.Time
+	RealEndTime   time.Time
+	GoDateFormat  string
+	DateFormat    string
+	AxisFormat    string
+	Duration      time.Duration
 }
 
 // TimelineItem represents a single task or job in the timeline.
@@ -42,6 +44,7 @@ type TimelineItem struct {
 	Conclusion string
 	Link       string
 	IsRequired bool
+	Runner     string
 }
 
 func (g *Timeline) normalize() error {
@@ -70,6 +73,10 @@ func (g *Timeline) normalize() error {
 			endTime = item.StartTime.Add(item.Duration)
 		}
 	}
+
+	// Capture the actual (not shifted) start and end times for display
+	g.RealStartTime = startTime
+	g.RealEndTime = endTime
 
 	// Adjust the start time of each item so that the full timeline starts at 0
 	newStartTime := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, startTime.Location())

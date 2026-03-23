@@ -28,6 +28,7 @@
         <thead>
             <tr>
                 <th class="rt-name">Name</th>
+                <th class="rt-runner">Runner</th>
                 <th class="rt-duration">Duration</th>
                 <th class="rt-status">Status</th>
             </tr>
@@ -36,6 +37,7 @@
             {{ range .ItemsByDuration }}
             <tr>
                 <td class="rt-name">{{ if .Link }}<a href="{{ .Link }}">{{ .Name }}</a>{{ else }}{{ .Name }}{{ end }}</td>
+                <td class="rt-runner">{{ .Runner }}</td>
                 <td class="rt-duration">{{ .Duration }}</td>
                 <td class="rt-status">
                     {{ if eq .Conclusion "crit" }}<span class="rt-badge rt-failure">failure</span>

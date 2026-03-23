@@ -81,6 +81,7 @@ type CompareGanttTask struct {
 	Duration   time.Duration
 	Conclusion string
 	Link       string
+	Runner     string
 }
 
 var typicalEvents = map[string]bool{
@@ -100,6 +101,9 @@ type ComparisonItem struct {
 	LeftConclusion  string        // Gantt status: "", "crit", "done", "active"
 	RightConclusion string
 	StatusChanged   bool
+	LeftRunner      string
+	RightRunner     string
+	RunnerChanged   bool
 }
 
 // ComparisonOnlyItem represents an item present in only one observation.
@@ -107,6 +111,7 @@ type ComparisonOnlyItem struct {
 	Name       string
 	Duration   time.Duration
 	Conclusion string
+	Runner     string
 }
 
 // ComparisonSummary holds aggregate comparison metrics.
@@ -290,6 +295,9 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 				LeftConclusion:  li.Conclusion,
 				RightConclusion: ri.Conclusion,
 				StatusChanged:   li.Conclusion != ri.Conclusion,
+				LeftRunner:      li.Runner,
+				RightRunner:     ri.Runner,
+				RunnerChanged:   li.Runner != ri.Runner,
 			})
 			seen[name] = true
 		}
@@ -305,6 +313,7 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 				Name:       name,
 				Duration:   item.Duration,
 				Conclusion: item.Conclusion,
+				Runner:     item.Runner,
 			})
 		}
 	}
@@ -317,6 +326,7 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 				Name:       name,
 				Duration:   item.Duration,
 				Conclusion: item.Conclusion,
+				Runner:     item.Runner,
 			})
 		}
 	}
@@ -381,6 +391,7 @@ func buildCompareGantt(left, right *Timeline) *CompareGanttData {
 				Duration:   it.Duration,
 				Conclusion: it.Conclusion,
 				Link:       it.Link,
+				Runner:     it.Runner,
 			})
 			end := ns.Add(it.Duration)
 			if end.After(maxEnd) {

@@ -7,13 +7,13 @@ Octometrics is a Go CLI that profiles GitHub Actions workflows. Read `design.md`
 ## Testing and Linting
 
 - Don't use `go vet`, `gofmt`, or `go fmt`.
-- `golangci-lint run ./... --fix` for linting
-- `go test ./...` for testing
 - `go generate ./...` to generate mocks
 
-Analyze the outputs and fix issues you introduced. **Do not change a test unless it is necessary to comply with new changes or implementations**.
+Run these commands after each change
+- `golangci-lint run ./... --fix` for linting
+- `go test ./...` for testing
 
-When validating UI changes, you can run the tool and bring up the whole UI with `go run . observe` and going to `http://localhost:8080`.
+Analyze the outputs and fix issues you introduced. **Do not change a test unless it is necessary to comply with new changes or implementations**.
 
 ## PR Review Instructions
 

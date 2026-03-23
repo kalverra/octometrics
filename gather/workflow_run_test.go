@@ -215,9 +215,63 @@ func TestGatherWorkflowRun(t *testing.T) {
 			}
 		}
 
+		if expectedRunner == "" {
+			expectedRunner = getRunnerFromLabels(expectedJob.Labels)
+		}
+
 		require.Equal(t, expectedJob.GetName(), job.GetName(), "job name should match")
 		require.Equal(t, expectedRunner, job.GetRunner(), "job runner should match")
 		require.Equal(t, expectedCost, job.GetCost(), "job cost should match")
+	}
+}
+
+func TestGetRunnerFromLabels(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		labels []string
+		want   string
+	}{
+		{
+			name:   "empty labels",
+			labels: []string{},
+			want:   "",
+		},
+		{
+			name:   "ubuntu label",
+			labels: []string{"ubuntu-latest", "other"},
+			want:   "ubuntu-latest",
+		},
+		{
+			name:   "windows label",
+			labels: []string{"windows-2022", "other"},
+			want:   "windows-2022",
+		},
+		{
+			name:   "macos label",
+			labels: []string{"macos-13", "other"},
+			want:   "macos-13",
+		},
+		{
+			name:   "self-hosted label",
+			labels: []string{"self-hosted", "linux", "x64"},
+			want:   "self-hosted",
+		},
+		{
+			name:   "no common label",
+			labels: []string{"my-custom-runner", "another"},
+			want:   "my-custom-runner",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := getRunnerFromLabels(tt.labels)
+			require.Equal(t, tt.want, got)
+		})
 	}
 }
 
@@ -263,6 +317,7 @@ var (
 			StartedAt:   new(github.Timestamp{Time: startTime}),
 			CompletedAt: new(github.Timestamp{Time: endTime}),
 			Name:        new("mocked-job-1"),
+			Labels:      []string{"ubuntu-latest"},
 			Steps: []*github.TaskStep{
 				{
 					Name:        new("mocked-step-1"),
@@ -284,6 +339,7 @@ var (
 			StartedAt:   new(github.Timestamp{Time: startTime}),
 			CompletedAt: new(github.Timestamp{Time: endTime}),
 			Name:        new("mocked-job-2"),
+			Labels:      []string{"ubuntu-latest"},
 			Steps: []*github.TaskStep{
 				{
 					Name:        new("mocked-step-1"),
@@ -312,6 +368,7 @@ var (
 			StartedAt:   new(github.Timestamp{Time: startTime}),
 			CompletedAt: new(github.Timestamp{Time: endTime}),
 			Name:        new("mocked-job-3"),
+			Labels:      []string{"ubuntu-latest"},
 			Steps: []*github.TaskStep{
 				{
 					Name:        new("mocked-step-1"),
@@ -347,6 +404,7 @@ var (
 			StartedAt:   new(github.Timestamp{Time: startTime}),
 			CompletedAt: new(github.Timestamp{Time: endTime}),
 			Name:        new("mocked-job-4"),
+			Labels:      []string{"macos-latest"},
 			Steps: []*github.TaskStep{
 				{
 					Name:        new("mocked-step-1"),

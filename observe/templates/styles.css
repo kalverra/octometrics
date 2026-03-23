@@ -529,6 +529,12 @@ h3 {
     white-space: nowrap;
 }
 
+.runtime-table .rt-runner {
+    color: var(--color-text-secondary);
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
 .runtime-table .rt-status {
     text-align: center;
     white-space: nowrap;
@@ -726,6 +732,10 @@ h3 {
 
 .compare-table tr.status-changed {
     background: var(--color-accent-yellow-bg);
+}
+
+.compare-table tr.runner-changed {
+    background: var(--color-accent-blue-bg);
 }
 
 .delta-faster {

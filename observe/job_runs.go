@@ -64,6 +64,7 @@ func JobRuns(
 				DataType:       "job_run",
 				State:          jobState,
 				Actor:          workflowRun.GetActor().GetLogin(),
+				Runner:         job.GetRunner(),
 				MonitoringData: jobRunMonitoringData,
 				Cost:           job.GetCost(),
 			}
