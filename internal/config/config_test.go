@@ -35,9 +35,9 @@ func TestLoad_Flags(t *testing.T) {
 	// simulate parsed flags
 	err := flags.Set("log-level", "debug")
 	require.NoError(t, err)
-	err = flags.Set("from", "2025-01-01")
+	err = flags.Set("from", time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339))
 	require.NoError(t, err)
-	err = flags.Set("to", "2025-01-07")
+	err = flags.Set("to", time.Date(2025, 1, 7, 0, 0, 0, 0, time.UTC).Format(time.RFC3339))
 	require.NoError(t, err)
 
 	cfg, err := Load(WithFlags(flags))

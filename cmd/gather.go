@@ -143,8 +143,10 @@ func init() {
 	gatherCmd.Flags().StringP("commit-sha", "c", "", "Commit SHA")
 	gatherCmd.Flags().Int64P("workflow-run-id", "w", 0, "Workflow run ID")
 	gatherCmd.Flags().IntP("pull-request-number", "p", 0, "Pull request number")
-	gatherCmd.Flags().String("from", "", "Start date for gathering data (YYYY-MM-DD)")
-	gatherCmd.Flags().String("to", "", "End date for gathering data (YYYY-MM-DD)")
+	gatherCmd.Flags().
+		Time("from", time.Time{}, []string{"2006-01-02", "2006-01-02T15:04:05Z"}, "Start date for gathering data (YYYY-MM-DD)")
+	gatherCmd.Flags().
+		Time("to", time.Time{}, []string{"2006-01-02", "2006-01-02T15:04:05Z"}, "End date for gathering data (YYYY-MM-DD)")
 	gatherCmd.Flags().
 		String("event", "all", "Filter gathered data by event type (all, pull_request, merge_group, push)")
 	gatherCmd.Flags().StringP("github-token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")
