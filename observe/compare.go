@@ -660,7 +660,7 @@ func ensureCompareObservationLinks(
 				compKey := fmt.Sprintf("comp:%s/%s/%s_vs_%s", c.Owner, c.Repo, childC.Left.ID, childC.Right.ID)
 				if _, ok := seen[compKey]; !ok {
 					seen[compKey] = struct{}{}
-					if _, err := childC.Render(log); err != nil {
+					if _, err := childC.Render(log, "html"); err != nil {
 						return fmt.Errorf("failed to render nested comparison for %s: %w", item.Name, err)
 					}
 					if err := ensureCompareObservationLinks(log, client, childC, seen, opts...); err != nil {
@@ -700,21 +700,23 @@ func renderWorkflowRunAndJobs(
 	return nil
 }
 
-// Render writes the comparison to an HTML file and returns the URL path for the browser.
-func (c *Comparison) Render(log zerolog.Logger) (string, error) {
-	c.EventPairs = buildEventPairs(c.Left.TimelineData, c.Right.TimelineData, c.Owner, c.Repo, c.CompareType)
+// Render writes the comparison to a file in the given format ("html" or "md") and returns
+// the output file path. For HTML the path is a URL-style path suitable for the browser;
+// for markdown it is a filesystem path.
+func (c *Comparison) Render(log zerolog.Logger, outputType string) (string, error) {
+	if len(c.EventPairs) == 0 {
+		c.EventPairs = buildEventPairs(c.Left.TimelineData, c.Right.TimelineData, c.Owner, c.Repo, c.CompareType)
+	}
 
-	targetFile := filepath.Join(
-		htmlOutputDir,
-		c.Owner,
-		c.Repo,
-		comparisonsOutputDir,
-		fmt.Sprintf("%s_vs_%s.html", c.Left.ID, c.Right.ID),
-	)
+	tmpl, _, compareName := templateForFormat(outputType)
+	baseDir := outputDirForFormat(outputType)
+	fileName := fmt.Sprintf("%s_vs_%s.%s", c.Left.ID, c.Right.ID, outputType)
+
+	targetFile := filepath.Join(baseDir, c.Owner, c.Repo, comparisonsOutputDir, fileName)
 
 	var buf bytes.Buffer
-	if err := htmlTemplate.ExecuteTemplate(&buf, "compare_html", c); err != nil {
-		return "", fmt.Errorf("failed to render comparison: %w", err)
+	if err := tmpl.ExecuteTemplate(&buf, compareName, c); err != nil {
+		return "", fmt.Errorf("failed to render comparison %s: %w", outputType, err)
 	}
 
 	if err := os.MkdirAll(filepath.Dir(targetFile), 0750); err != nil {
@@ -724,8 +726,10 @@ func (c *Comparison) Render(log zerolog.Logger) (string, error) {
 		return "", fmt.Errorf("failed to write comparison file: %w", err)
 	}
 
-	log.Info().Str("file", targetFile).Msg("Rendered comparison")
+	log.Info().Str("file", targetFile).Str("format", outputType).Msg("Rendered comparison")
 
-	return path.Join("/", c.Owner, c.Repo, comparisonsOutputDir,
-		fmt.Sprintf("%s_vs_%s.html", c.Left.ID, c.Right.ID)), nil
+	if outputType == "html" {
+		return path.Join("/", c.Owner, c.Repo, comparisonsOutputDir, fileName), nil
+	}
+	return targetFile, nil
 }

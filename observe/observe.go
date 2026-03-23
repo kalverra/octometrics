@@ -41,56 +41,82 @@ var (
 	mdTemplate *template.Template
 )
 
-func init() {
-	var err error
-	// Initialize HTML template
-	htmlTemplate, err = template.New("observation_html").Funcs(template.FuncMap{
+func sharedFuncMap() template.FuncMap {
+	return template.FuncMap{
 		"sanitizeMermaidName": sanitizeMermaidName,
 		"commitRunLink":       commitRunLink,
-		"divideBy1000": func(v int64) float64 {
-			return float64(v) / 1000.0
-		},
-		"joinStrings": strings.Join,
-		"mermaidDiagram": func(s string) template.HTML {
-			return template.HTML(s)
-		},
-		"formatDelta": formatDelta,
-		"shortSHA": func(sha string) string {
-			if len(sha) >= 7 {
-				return sha[:7]
-			}
-			return sha
-		},
-		"deltaClass": func(d time.Duration) string {
-			if d > 0 {
-				return "delta-slower"
-			}
-			if d < 0 {
-				return "delta-faster"
-			}
-			return ""
-		},
-		"conclusionBadge": func(conclusion string) template.HTML {
-			switch conclusion {
-			case "crit":
-				return template.HTML(`<span class="rt-badge rt-failure">failure</span>`)
-			case "done":
-				return template.HTML(`<span class="rt-badge rt-cancelled">cancelled</span>`)
-			case "active":
-				return template.HTML(`<span class="rt-badge rt-in-progress">in progress</span>`)
-			default:
-				return template.HTML(`<span class="rt-badge rt-success">success</span>`)
-			}
-		},
-	}).ParseFS(templateFS, "templates/*.html", "templates/*.css")
+		"divideBy1000":        func(v int64) float64 { return float64(v) / 1000.0 },
+		"joinStrings":         strings.Join,
+		"formatDelta":         formatDelta,
+		"conclusionText":      conclusionText,
+		"shortSHA":            shortSHA,
+	}
+}
+
+func shortSHA(sha string) string {
+	if len(sha) >= 7 {
+		return sha[:7]
+	}
+	return sha
+}
+
+func conclusionText(conclusion string) string {
+	switch conclusion {
+	case "crit":
+		return "failure"
+	case "done":
+		return "cancelled"
+	case "active":
+		return "in progress"
+	default:
+		return "success"
+	}
+}
+
+func templateForFormat(outputType string) (tmpl *template.Template, observationName, compareName string) {
+	switch outputType {
+	case "md":
+		return mdTemplate, "observation_md", "compare_md"
+	default:
+		return htmlTemplate, "observation_html", "compare_html"
+	}
+}
+
+func outputDirForFormat(outputType string) string {
+	if outputType == "md" {
+		return markdownOutputDir
+	}
+	return htmlOutputDir
+}
+
+func init() {
+	var err error
+
+	htmlFuncs := sharedFuncMap()
+	htmlFuncs["mermaidDiagram"] = func(s string) template.HTML { return template.HTML(s) }
+	htmlFuncs["deltaClass"] = func(d time.Duration) string {
+		if d > 0 {
+			return "delta-slower"
+		}
+		if d < 0 {
+			return "delta-faster"
+		}
+		return ""
+	}
+	htmlFuncs["conclusionBadge"] = func(conclusion string) template.HTML {
+		text := conclusionText(conclusion)
+		cssClass := strings.ReplaceAll(text, " ", "-")
+		return template.HTML(fmt.Sprintf(`<span class="rt-badge rt-%s">%s</span>`, cssClass, text))
+	}
+
+	htmlTemplate, err = template.New("observation_html").Funcs(htmlFuncs).
+		ParseFS(templateFS, "templates/*.html", "templates/*.css")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
 	}
 
-	// Initialize Markdown template
-	mdTemplate, err = template.New("observation_md").Funcs(template.FuncMap{
-		"sanitizeMermaidName": sanitizeMermaidName,
-	}).ParseFS(templateFS, "templates/*.md")
+	mdTemplate, err = template.New("observation_md").Funcs(sharedFuncMap()).
+		ParseFS(templateFS, "templates/*.md")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse Markdown templates: %w", err))
 	}
@@ -195,13 +221,7 @@ type Observation struct {
 
 // Render writes the observation to a file in the specified output format (html or md).
 func (o *Observation) Render(log zerolog.Logger, outputType string) (observationFile string, err error) {
-	var baseDir string
-	switch outputType {
-	case "html":
-		baseDir = htmlOutputDir
-	case "md":
-		baseDir = markdownOutputDir
-	}
+	baseDir := outputDirForFormat(outputType)
 	if o.ID == "" {
 		log.Warn().Msg("Observation ID is empty, skipping rendering")
 		return "", nil
@@ -240,12 +260,7 @@ func (o *Observation) Render(log zerolog.Logger, outputType string) (observation
 		return o.TimelineData[i].StartTime.Before(o.TimelineData[j].StartTime)
 	})
 
-	switch outputType {
-	case "html":
-		buf, err = o.renderHTML()
-	case "md":
-		buf, err = o.renderMarkdown()
-	}
+	buf, err = o.renderToFormat(outputType)
 	if err != nil {
 		return "", fmt.Errorf("failed to render observation to %s: %w", outputType, err)
 	}
@@ -264,27 +279,11 @@ func (o *Observation) Render(log zerolog.Logger, outputType string) (observation
 	return observationFile, nil
 }
 
-// renderHTML renders the observation to an HTML format
-func (o *Observation) renderHTML() (bytes.Buffer, error) {
+func (o *Observation) renderToFormat(outputType string) (bytes.Buffer, error) {
+	tmpl, name, _ := templateForFormat(outputType)
 	var buf bytes.Buffer
-
-	err := htmlTemplate.ExecuteTemplate(&buf, "observation_html", o)
-	if err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, name, o); err != nil {
 		return buf, err
-	}
-	return buf, nil
-}
-
-// renderMarkdown renders the observation to a Markdown format
-func (o *Observation) renderMarkdown() (bytes.Buffer, error) {
-	var buf bytes.Buffer
-
-	err := mdTemplate.ExecuteTemplate(&buf, "observation_md", o)
-	if err != nil {
-		return buf, err
-	}
-	if buf.Len() == 0 {
-		return buf, fmt.Errorf("no data to render")
 	}
 	return buf, nil
 }
@@ -293,17 +292,19 @@ func (o *Observation) renderMarkdown() (bytes.Buffer, error) {
 // If initialPath is non-empty, the browser opens directly to that path (e.g. "/owner/repo/workflow_runs/123.html").
 func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath string) error {
 	startTime := time.Now()
-	err := All(log, client, []string{"html"})
+	err := All(log, client, []string{"html", "md"})
 	if err != nil {
-		return fmt.Errorf("failed to generate all HTML observe data: %w", err)
+		return fmt.Errorf("failed to generate observe data: %w", err)
 	}
 
 	log.Info().
 		Str("url", "http://localhost:8080"+initialPath).
 		Str("built_observations_dur", time.Since(startTime).String()).
-		Str("dir", htmlOutputDir).
+		Str("html_dir", htmlOutputDir).
+		Str("md_dir", markdownOutputDir).
 		Msg("Observing data...")
 	fmt.Println("Observe data at http://localhost:8080")
+	fmt.Printf("Markdown files written to %s/\n", markdownOutputDir)
 
 	return ServeHTML(log, initialPath)
 }

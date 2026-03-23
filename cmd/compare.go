@@ -104,9 +104,14 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 			return spinnerErr
 		}
 
-		pagePath, err := comparison.Render(logger)
+		pagePath, err := comparison.Render(logger, "html")
 		if err != nil {
 			return fmt.Errorf("failed to render comparison: %w", err)
+		}
+
+		mdFile, err := comparison.Render(logger, "md")
+		if err != nil {
+			return fmt.Errorf("failed to render comparison markdown: %w", err)
 		}
 
 		if err := observe.EnsureCompareObservationLinks(logger, githubClient, comparison, opts...); err != nil {
@@ -116,8 +121,10 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 		logger.Info().
 			Str("duration", time.Since(startTime).String()).
 			Str("page", pagePath).
+			Str("markdown", mdFile).
 			Msg("Comparison built")
 		fmt.Printf("Comparison built (%s)\n", time.Since(startTime).String())
+		fmt.Printf("Markdown written to %s\n", mdFile)
 
 		return observe.ServeHTML(logger, pagePath)
 	},
