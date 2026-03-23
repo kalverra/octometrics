@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"slices"
 	"strings"
 	"time"
 
@@ -26,8 +25,6 @@ type Config struct {
 	ForceUpdate       bool      `mapstructure:"force_update"`
 	NoObserve         bool      `mapstructure:"no_observe"`
 	Event             string    `mapstructure:"event"`
-	Since             time.Time `mapstructure:"since"`
-	Until             time.Time `mapstructure:"until"`
 	From              time.Time `mapstructure:"from"`
 	To                time.Time `mapstructure:"to"`
 	GatherCost        bool      `mapstructure:"gather_cost"`
@@ -39,13 +36,6 @@ const (
 	DefaultLogLevel = "silent"
 	// DefaultDataDir is the default data directory.
 	DefaultDataDir = "data"
-)
-
-var (
-	// DefaultSince is the default start date for survey.
-	DefaultSince = time.Now().AddDate(0, 0, -7)
-	// DefaultUntil is the default end date for survey.
-	DefaultUntil = time.Now()
 )
 
 // LoadOption is a function that can be used to load configuration.
@@ -78,8 +68,6 @@ func Load(opts ...LoadOption) (*Config, error) {
 	v := viper.New()
 
 	v.SetDefault("log_level", DefaultLogLevel)
-	v.SetDefault("since", DefaultSince)
-	v.SetDefault("until", DefaultUntil)
 	v.SetDefault("data_dir", DefaultDataDir)
 
 	// Bind all configuration fields to environment variables
@@ -108,13 +96,13 @@ func Load(opts ...LoadOption) (*Config, error) {
 	}
 
 	cfg := &Config{}
-	if err := v.Unmarshal(cfg, func(dc *mapstructure.DecoderConfig) {
-		dc.DecodeHook = mapstructure.ComposeDecodeHookFunc(
-			mapstructure.StringToTimeHookFunc("2006-01-02"),
-			mapstructure.StringToTimeHookFunc(time.RFC3339),
+	if err := v.Unmarshal(cfg, viper.DecodeHook(
+		mapstructure.ComposeDecodeHookFunc(
 			mapstructure.StringToTimeDurationHookFunc(),
-		)
-	}); err != nil {
+			mapstructure.StringToSliceHookFunc(","),
+			stringToTimeHookFunc(),
+		),
+	)); err != nil {
 		return nil, err
 	}
 
@@ -174,30 +162,22 @@ func (c *Config) ValidateCompare() error {
 	return nil
 }
 
-// ValidateSurvey validates the configuration for the survey command.
-func (c *Config) ValidateSurvey() error {
-	if c.Owner == "" {
-		return errors.New("owner is required")
-	}
-	if c.Repo == "" {
-		return errors.New("repo is required")
-	}
+var timeLayouts = []string{time.RFC3339, "2006-01-02"}
 
-	validEvents := []string{"all", "pull_request", "merge_group", "push"}
-	if !slices.Contains(validEvents, c.Event) {
-		return fmt.Errorf("invalid event %q: must be one of %s", c.Event, strings.Join(validEvents, ", "))
+func stringToTimeHookFunc() mapstructure.DecodeHookFuncType {
+	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
+		if f.Kind() != reflect.String || t != reflect.TypeFor[time.Time]() {
+			return data, nil
+		}
+		str, ok := data.(string)
+		if !ok || str == "" {
+			return time.Time{}, nil
+		}
+		for _, layout := range timeLayouts {
+			if parsed, err := time.Parse(layout, str); err == nil {
+				return parsed, nil
+			}
+		}
+		return nil, fmt.Errorf("unable to parse time %q, expected formats: %v", str, timeLayouts)
 	}
-
-	if c.Since.IsZero() {
-		return errors.New("since is required")
-	}
-	if c.Until.IsZero() {
-		return errors.New("until is required")
-	}
-
-	if c.Since.After(c.Until) {
-		return errors.New("since must be before until")
-	}
-
-	return nil
 }
