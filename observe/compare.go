@@ -44,16 +44,17 @@ type MonitoringPair struct {
 // EventPair groups the left and right Timeline for the same triggering event.
 // Either side may be nil when the event only appears in one observation.
 type EventPair struct {
-	Event         string
-	Left          *Timeline
-	Right         *Timeline
-	IsTypical     bool // true for common events (pull_request, push, merge_group)
-	LeftDuration  time.Duration
-	RightDuration time.Duration
-	DurationDelta time.Duration
-	Items         []ComparisonItem
-	OnlyLeft      []ComparisonOnlyItem
-	OnlyRight     []ComparisonOnlyItem
+	Event                string
+	Left                 *Timeline
+	Right                *Timeline
+	IsTypical            bool // true for common events (pull_request, push, merge_group)
+	LeftDuration         time.Duration
+	RightDuration        time.Duration
+	DurationDelta        time.Duration
+	DurationDeltaPercent float64
+	Items                []ComparisonItem
+	OnlyLeft             []ComparisonOnlyItem
+	OnlyRight            []ComparisonOnlyItem
 
 	// CombinedGantt is a single Mermaid Gantt with Left/Right sections, aligned to the same start time.
 	CombinedGantt *CompareGanttData
@@ -92,18 +93,19 @@ var typicalEvents = map[string]bool{
 
 // ComparisonItem represents a matched item present in both observations.
 type ComparisonItem struct {
-	Name            string
-	LeftID          string
-	RightID         string
-	LeftDuration    time.Duration
-	RightDuration   time.Duration
-	DurationDelta   time.Duration // Right - Left; positive means right is slower
-	LeftConclusion  string        // Gantt status: "", "crit", "done", "active"
-	RightConclusion string
-	StatusChanged   bool
-	LeftRunner      string
-	RightRunner     string
-	RunnerChanged   bool
+	Name                 string
+	LeftID               string
+	RightID              string
+	LeftDuration         time.Duration
+	RightDuration        time.Duration
+	DurationDelta        time.Duration // Right - Left; positive means right is slower
+	DurationDeltaPercent float64
+	LeftConclusion       string // Gantt status: "", "crit", "done", "active"
+	RightConclusion      string
+	StatusChanged        bool
+	LeftRunner           string
+	RightRunner          string
+	RunnerChanged        bool
 }
 
 // ComparisonOnlyItem represents an item present in only one observation.

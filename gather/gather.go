@@ -23,7 +23,7 @@ import (
 const (
 	//nolint:gosec // This is a mock token for testing purposes
 	MockGitHubToken = "mock_github_token"
-	timeoutDur      = 10 * time.Second
+	timeoutDur      = 30 * time.Second
 	DataDir         = "data"
 )
 
@@ -32,8 +32,10 @@ var (
 )
 
 // ghCtx returns a standard context to use for GitHub API calls.
+// The per-request timeout is applied at the transport layer (loggingTransport.RoundTrip)
+// so that paginated iterators get a fresh timeout for each page.
 func ghCtx() (context.Context, func()) {
-	ctx, cancel := context.WithTimeoutCause(context.Background(), timeoutDur, errGitHubTimeout)
+	ctx, cancel := context.WithCancel(context.Background())
 	return context.WithValue(
 		ctx,
 		github.BypassRateLimitCheck,
@@ -242,7 +244,12 @@ type loggingTransport struct {
 }
 
 // RoundTrip logs the request and response details.
+// Each request gets its own timeout so paginated iterators don't share a single deadline.
 func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	ctx, cancel := context.WithTimeoutCause(req.Context(), timeoutDur, errGitHubTimeout)
+	defer cancel()
+	req = req.WithContext(ctx)
+
 	start := time.Now()
 
 	logger := lt.logger.With().
@@ -255,13 +262,16 @@ func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	resp, err := lt.transport.RoundTrip(req)
 	duration := time.Since(start)
 
+	if err != nil {
+		return resp, err
+	}
+
 	logger = logger.With().
 		Int("status", resp.StatusCode).
 		Str("duration", duration.String()).
 		Logger()
 
-	if err != nil || resp.StatusCode != http.StatusOK {
-		// Probably a rate limit error, let the rate limit library handle it
+	if resp.StatusCode != http.StatusOK {
 		return resp, err
 	}
 
