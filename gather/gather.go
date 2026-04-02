@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -243,11 +244,24 @@ type loggingTransport struct {
 	clientType string
 }
 
+// cancelOnClose wraps a ReadCloser to cancel a context when the body is closed.
+// This ensures per-request timeouts in RoundTrip don't cancel while go-github
+// is still reading the response body.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (c *cancelOnClose) Close() error {
+	err := c.ReadCloser.Close()
+	c.cancel()
+	return err
+}
+
 // RoundTrip logs the request and response details.
 // Each request gets its own timeout so paginated iterators don't share a single deadline.
 func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx, cancel := context.WithTimeoutCause(req.Context(), timeoutDur, errGitHubTimeout)
-	defer cancel()
 	req = req.WithContext(ctx)
 
 	start := time.Now()
@@ -263,8 +277,11 @@ func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	duration := time.Since(start)
 
 	if err != nil {
+		cancel()
 		return resp, err
 	}
+
+	resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
 
 	logger = logger.With().
 		Int("status", resp.StatusCode).
