@@ -51,7 +51,7 @@ flowchart TD
     ObsCompareWF --> ServeHTML
     ObsCompareCmt --> ServeHTML
 
-    GatherCommit --> JSON[(data/owner/repo/*.json)]
+    GatherCommit --> JSON[("~cache~/octometrics/owner/repo/*.json")]
     GatherPR --> JSON
     GatherWF --> JSON
     GatherSurvey --> JSON
@@ -196,7 +196,7 @@ The `compare` command renders comparisons recursively "all the way down". For ma
 
 ## Key Design Decisions
 
-- **Local JSON cache**: All gathered data is stored as JSON in `data/` and re-read on subsequent runs, avoiding redundant API calls. `ForceUpdate` bypasses the cache.
+- **Local JSON cache**: All gathered data is stored as JSON in the OS user cache directory (e.g. `~/Library/Caches/octometrics` on macOS, `~/.cache/octometrics` on Linux) and re-read on subsequent runs, avoiding redundant API calls. Override with `--data-dir`, `DATA_DIR` env, or `data_dir` in config. `ForceUpdate` bypasses the cache.
 - **Rate limit awareness**: The REST client uses `go-github-ratelimit` to automatically sleep when rate-limited. Survey's two-phase design reduces total API calls from O(commits x workflows x jobs) to O(listing_pages + 3 x detail_calls).
 - **Real representative commits for percentiles**: Rather than constructing synthetic "average" timelines, the survey picks actual commits whose CI duration falls at each percentile. This shows real job distributions and integrates with existing Gantt visualization.
 - **Mermaid Gantt for timelines**: Workflow/job/step timing is rendered as Mermaid Gantt charts, giving a visual representation of parallelism and duration without requiring a charting library.

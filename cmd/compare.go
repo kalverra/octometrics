@@ -67,9 +67,14 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 		workflowRuns, _ := cmd.Flags().GetInt64Slice("workflow-runs")
 		commits, _ := cmd.Flags().GetStringSlice("commits")
 
-		var opts []observe.Option
+		gatherOpts := []gather.Option{
+			gather.CustomDataFolder(cfg.DataDir),
+		}
 		if cfg.ForceUpdate {
-			opts = append(opts, observe.WithGatherOptions(gather.ForceUpdate()))
+			gatherOpts = append(gatherOpts, gather.ForceUpdate())
+		}
+		opts := []observe.Option{
+			observe.WithGatherOptions(gatherOpts...),
 		}
 
 		var (

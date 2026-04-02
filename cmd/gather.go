@@ -74,7 +74,9 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 
 		logger.Info().Msg("Gathering data")
 
-		opts := []gather.Option{}
+		opts := []gather.Option{
+			gather.CustomDataFolder(cfg.DataDir),
+		}
 
 		if cfg.ForceUpdate {
 			opts = append(opts, gather.ForceUpdate())
@@ -130,7 +132,7 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 		if err := os.RemoveAll(observe.OutputDir); err != nil {
 			return fmt.Errorf("failed to clean observe output: %w", err)
 		}
-		return observe.Interactive(logger, githubClient, pagePath)
+		return observe.Interactive(logger, githubClient, pagePath, cfg.DataDir)
 	},
 }
 

@@ -74,6 +74,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 
 func init() {
 	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "Level for detailed logging")
+	rootCmd.PersistentFlags().
+		String("data-dir", config.DefaultDataDir(), "Directory for cached GitHub data (env: DATA_DIR)")
 }
 
 // Execute runs the root command for octometrics.

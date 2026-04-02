@@ -26,7 +26,7 @@ Display the gathered Workflow/Job/Step data in your browser.`,
 		return os.RemoveAll(observe.OutputDir)
 	},
 	RunE: func(_ *cobra.Command, _ []string) error {
-		return observe.Interactive(logger, githubClient, "")
+		return observe.Interactive(logger, githubClient, "", cfg.DataDir)
 	},
 }
 

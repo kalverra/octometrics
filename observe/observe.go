@@ -291,9 +291,9 @@ func (o *Observation) renderToFormat(outputType string) (bytes.Buffer, error) {
 
 // Interactive generates all downloaded data in HTML and serves it on a local server.
 // If initialPath is non-empty, the browser opens directly to that path (e.g. "/owner/repo/workflow_runs/123.html").
-func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath string) error {
+func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath, dataDir string) error {
 	startTime := time.Now()
-	err := All(log, client, []string{"html", "md"})
+	err := All(log, client, []string{"html", "md"}, dataDir)
 	if err != nil {
 		return fmt.Errorf("failed to generate observe data: %w", err)
 	}
@@ -362,7 +362,7 @@ func openBrowser(url string) error {
 }
 
 // All generates observations for all gathered data in the specified output formats.
-func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) error {
+func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string, dataDir string) error {
 	var (
 		startTime = time.Now()
 		err       error
@@ -370,7 +370,7 @@ func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) 
 	spinnerErr := spinner.New().
 		Title("Building observations").
 		Action(func() {
-			err = generateAllObserveData(log, client, outputTypes)
+			err = generateAllObserveData(log, client, outputTypes, dataDir)
 		}).
 		Run()
 	if err != nil {
@@ -388,11 +388,16 @@ type categoryKey struct {
 	owner, repo, category string
 }
 
-func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string) error {
+func generateAllObserveData(
+	log zerolog.Logger,
+	client *gather.GitHubClient,
+	outputTypes []string,
+	dataDir string,
+) error {
 	collected := make(map[categoryKey][]IndexItem)
 	bpCache := make(map[string]*gather.BranchProtectionResult)
 
-	err := filepath.WalkDir(gather.DataDir, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -411,20 +416,24 @@ func generateAllObserveData(log zerolog.Logger, client *gather.GitHubClient, out
 			return fmt.Errorf("file %s is not a JSON file", path)
 		}
 
-		pathComponents := strings.Split(path, string(filepath.Separator))
-		if len(pathComponents) != 5 {
-			return fmt.Errorf("unexpected path format: %s", path)
+		relPath, relErr := filepath.Rel(dataDir, path)
+		if relErr != nil {
+			return fmt.Errorf("failed to compute relative path for %s: %w", path, relErr)
+		}
+		pathComponents := strings.Split(relPath, string(filepath.Separator))
+		if len(pathComponents) != 4 {
+			return fmt.Errorf("unexpected path format: %s (expected owner/repo/category/file.json)", path)
 		}
 		var (
-			owner        = pathComponents[1]
-			repo         = pathComponents[2]
-			dataDir      = pathComponents[3]
-			dataName     = strings.TrimSuffix(pathComponents[4], ".json")
+			owner        = pathComponents[0]
+			repo         = pathComponents[1]
+			dataCat      = pathComponents[2]
+			dataName     = strings.TrimSuffix(pathComponents[3], ".json")
 			observation  *Observation
 			observations []*Observation
 		)
 
-		switch dataDir {
+		switch dataCat {
 		case gather.WorkflowRunsDataDir:
 			var workflowRunID int64
 			workflowRunID, err = strconv.ParseInt(dataName, 10, 64)

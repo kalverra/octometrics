@@ -4,6 +4,8 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -31,12 +33,20 @@ type Config struct {
 	DataDir           string    `mapstructure:"data_dir"`
 }
 
-const (
-	// DefaultLogLevel is the default log level.
-	DefaultLogLevel = "silent"
-	// DefaultDataDir is the default data directory.
-	DefaultDataDir = "data"
-)
+// DefaultLogLevel is the default log level.
+const DefaultLogLevel = "silent"
+
+// DefaultDataDir returns the default data directory for cached GitHub data.
+// It uses the OS-standard user cache directory (e.g. ~/Library/Caches/octometrics
+// on macOS, ~/.cache/octometrics on Linux) and falls back to a local "data/"
+// directory if the cache directory cannot be determined.
+func DefaultDataDir() string {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "data"
+	}
+	return filepath.Join(cacheDir, "octometrics")
+}
 
 // LoadOption is a function that can be used to load configuration.
 type LoadOption func(*viper.Viper) error
@@ -68,7 +78,7 @@ func Load(opts ...LoadOption) (*Config, error) {
 	v := viper.New()
 
 	v.SetDefault("log_level", DefaultLogLevel)
-	v.SetDefault("data_dir", DefaultDataDir)
+	v.SetDefault("data_dir", DefaultDataDir())
 
 	// Bind all configuration fields to environment variables
 	typ := reflect.TypeFor[Config]()

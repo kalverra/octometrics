@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,12 +22,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// GitHub API constants for authentication, timeouts, and data storage.
+// GitHub API constants for authentication and timeouts.
 const (
 	//nolint:gosec // This is a mock token for testing purposes
 	MockGitHubToken = "mock_github_token"
 	timeoutDur      = 30 * time.Second
-	DataDir         = "data"
 )
 
 var (
@@ -59,10 +60,18 @@ type options struct {
 	gatherCost      bool
 }
 
+func defaultDataDir() string {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "data"
+	}
+	return filepath.Join(cacheDir, "octometrics")
+}
+
 func defaultOptions() *options {
 	return &options{
 		ForceUpdate: false,
-		DataDir:     DataDir,
+		DataDir:     defaultDataDir(),
 		gatherCost:  false,
 	}
 }
