@@ -3,6 +3,7 @@ package observe
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -51,7 +52,15 @@ func Commit(
 		workflowRuns = append(workflowRuns, workflowRun)
 	}
 
-	observation.TimelineData = buildCommitTimelineData(log, commit, workflowRuns)
+	filtered := make([]*gather.WorkflowRunData, 0, len(workflowRuns))
+	for _, wr := range workflowRuns {
+		if slices.Contains(options.excludeWorkflows, wr.GetName()) {
+			continue
+		}
+		filtered = append(filtered, wr)
+	}
+
+	observation.TimelineData = buildCommitTimelineData(log, commit, filtered)
 
 	return observation, nil
 

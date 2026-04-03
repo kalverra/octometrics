@@ -31,6 +31,7 @@ type Config struct {
 	To                time.Time `mapstructure:"to"`
 	GatherCost        bool      `mapstructure:"gather_cost"`
 	DataDir           string    `mapstructure:"data_dir"`
+	ExcludeWorkflows  []string  `mapstructure:"exclude_workflows"`
 }
 
 // DefaultLogLevel is the default log level.

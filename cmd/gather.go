@@ -132,7 +132,10 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 		if err := os.RemoveAll(observe.OutputDir); err != nil {
 			return fmt.Errorf("failed to clean observe output: %w", err)
 		}
-		return observe.Interactive(logger, githubClient, pagePath, cfg.DataDir)
+		observeOpts := []observe.Option{
+			observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
+		}
+		return observe.Interactive(logger, githubClient, pagePath, cfg.DataDir, observeOpts...)
 	},
 }
 
@@ -154,6 +157,8 @@ func init() {
 	gatherCmd.Flags().StringP("github-token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")
 	gatherCmd.Flags().
 		Bool("gather-cost", false, "Gather cost data for workflow runs (can significantly increase runtime)")
+	gatherCmd.Flags().StringSlice("exclude-workflows", nil,
+		"Omit workflow display names from observations after gather (comma-separated or repeat flag)")
 
 	rootCmd.AddCommand(gatherCmd)
 }

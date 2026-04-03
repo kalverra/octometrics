@@ -75,6 +75,7 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 		}
 		opts := []observe.Option{
 			observe.WithGatherOptions(gatherOpts...),
+			observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
 		}
 
 		var (
@@ -142,6 +143,8 @@ func init() {
 	compareCmd.Flags().BoolP("force-update", "u", false, "Force update of existing data")
 	compareCmd.Flags().Int64Slice("workflow-runs", nil, "Two workflow run IDs to compare (comma-separated)")
 	compareCmd.Flags().StringSlice("commits", nil, "Two commit SHAs to compare (comma-separated)")
+	compareCmd.Flags().StringSlice("exclude-workflows", nil,
+		"Omit workflow display names from observations (comma-separated or repeat flag)")
 
 	rootCmd.AddCommand(compareCmd)
 }

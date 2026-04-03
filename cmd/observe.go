@@ -26,10 +26,15 @@ Display the gathered Workflow/Job/Step data in your browser.`,
 		return os.RemoveAll(observe.OutputDir)
 	},
 	RunE: func(_ *cobra.Command, _ []string) error {
-		return observe.Interactive(logger, githubClient, "", cfg.DataDir)
+		observeOpts := []observe.Option{
+			observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
+		}
+		return observe.Interactive(logger, githubClient, "", cfg.DataDir, observeOpts...)
 	},
 }
 
 func init() {
+	observeCmd.Flags().StringSlice("exclude-workflows", nil,
+		"Omit workflow display names from observations (comma-separated or repeat flag)")
 	rootCmd.AddCommand(observeCmd)
 }

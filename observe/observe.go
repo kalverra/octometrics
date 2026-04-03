@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -127,8 +128,9 @@ type Option func(*options)
 
 // options contains the options for the observe command
 type options struct {
-	outputDir     string
-	gatherOptions []gather.Option
+	outputDir        string
+	gatherOptions    []gather.Option
+	excludeWorkflows []string
 }
 
 func defaultOptions() *options {
@@ -151,6 +153,13 @@ func WithCustomOutputDir(outputDir string) Option {
 func WithGatherOptions(opts ...gather.Option) Option {
 	return func(o *options) {
 		o.gatherOptions = opts
+	}
+}
+
+// ExcludeWorkflows sets workflow display names to omit from observations.
+func ExcludeWorkflows(names []string) Option {
+	return func(o *options) {
+		o.excludeWorkflows = names
 	}
 }
 
@@ -291,9 +300,9 @@ func (o *Observation) renderToFormat(outputType string) (bytes.Buffer, error) {
 
 // Interactive generates all downloaded data in HTML and serves it on a local server.
 // If initialPath is non-empty, the browser opens directly to that path (e.g. "/owner/repo/workflow_runs/123.html").
-func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath, dataDir string) error {
+func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath, dataDir string, opts ...Option) error {
 	startTime := time.Now()
-	err := All(log, client, []string{"html", "md"}, dataDir)
+	err := All(log, client, []string{"html", "md"}, dataDir, opts...)
 	if err != nil {
 		return fmt.Errorf("failed to generate observe data: %w", err)
 	}
@@ -362,7 +371,7 @@ func openBrowser(url string) error {
 }
 
 // All generates observations for all gathered data in the specified output formats.
-func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string, dataDir string) error {
+func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string, dataDir string, opts ...Option) error {
 	var (
 		startTime = time.Now()
 		err       error
@@ -370,7 +379,7 @@ func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string, 
 	spinnerErr := spinner.New().
 		Title("Building observations").
 		Action(func() {
-			err = generateAllObserveData(log, client, outputTypes, dataDir)
+			err = generateAllObserveData(log, client, outputTypes, dataDir, opts...)
 		}).
 		Run()
 	if err != nil {
@@ -393,7 +402,13 @@ func generateAllObserveData(
 	client *gather.GitHubClient,
 	outputTypes []string,
 	dataDir string,
+	opts ...Option,
 ) error {
+	observeOpts := defaultOptions()
+	for _, opt := range opts {
+		opt(observeOpts)
+	}
+
 	collected := make(map[categoryKey][]IndexItem)
 	bpCache := make(map[string]*gather.BranchProtectionResult)
 
@@ -440,14 +455,21 @@ func generateAllObserveData(
 			if err != nil {
 				return fmt.Errorf("failed to parse workflow run ID: %w", err)
 			}
-			observation, err = WorkflowRun(log, client, owner, repo, workflowRunID)
-			observations = append(observations, observation)
+			observation, err = WorkflowRun(log, client, owner, repo, workflowRunID, opts...)
 			if err != nil {
 				return fmt.Errorf("failed to generate workflow run observation: %w", err)
 			}
-			jobRuns, err := JobRuns(log, client, owner, repo, workflowRunID)
-			if err != nil {
-				return fmt.Errorf("failed to generate job runs: %w", err)
+			if slices.Contains(observeOpts.excludeWorkflows, observation.Name) {
+				log.Debug().
+					Str("workflow", observation.Name).
+					Int64("workflow_run_id", workflowRunID).
+					Msg("Excluding workflow from visualization")
+				return nil
+			}
+			observations = append(observations, observation)
+			jobRuns, jobErr := JobRuns(log, client, owner, repo, workflowRunID, opts...)
+			if jobErr != nil {
+				return fmt.Errorf("failed to generate job runs: %w", jobErr)
 			}
 			observations = append(observations, jobRuns...)
 		case gather.PullRequestsDataDir:
@@ -456,12 +478,12 @@ func generateAllObserveData(
 			if err != nil {
 				return fmt.Errorf("failed to parse pull request number: %w", err)
 			}
-			observation, err = PullRequest(log, client, owner, repo, int(pullRequestNumber))
+			observation, err = PullRequest(log, client, owner, repo, int(pullRequestNumber), opts...)
 			observations = append(observations, observation)
 		case gather.CommitsDataDir:
 			var commitSHA string
 			commitSHA = dataName
-			observation, err = Commit(log, client, owner, repo, commitSHA)
+			observation, err = Commit(log, client, owner, repo, commitSHA, opts...)
 			observations = append(observations, observation)
 		}
 
