@@ -14,7 +14,7 @@ require (
 	github.com/mark3labs/mcp-go v0.45.0
 	github.com/migueleliasweb/go-github-mock v1.5.0
 	github.com/rs/zerolog v1.34.0
-	github.com/shirou/gopsutil/v4 v4.26.2
+	github.com/shirou/gopsutil/v4 v4.26.3
 	github.com/shurcooL/githubv4 v0.0.0-20260209031235-2402fdf4a9ed
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
