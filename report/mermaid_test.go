@@ -2,6 +2,7 @@ package report
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,7 +129,7 @@ func TestMonitoringMermaidCharts(t *testing.T) {
 		assert.Contains(t, cpuChart(analysis), charts[0].Diagram)
 	})
 
-	t.Run("multi-core adds per-CPU charts after aggregate", func(t *testing.T) {
+	t.Run("multi-core adds combined per-core chart after aggregate", func(t *testing.T) {
 		t.Parallel()
 		base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
 		analysis := &monitor.Analysis{
@@ -144,12 +145,11 @@ func TestMonitoringMermaidCharts(t *testing.T) {
 			},
 		}
 		charts := MonitoringMermaidCharts(analysis)
-		require.Len(t, charts, 3)
+		require.Len(t, charts, 2)
 		assert.Equal(t, "CPU Usage", charts[0].Title)
-		assert.Equal(t, "CPU 0 Usage (%)", charts[1].Title)
-		assert.Equal(t, "CPU 1 Usage (%)", charts[2].Title)
+		assert.Equal(t, "CPU per core (%)", charts[1].Title)
 		assert.Contains(t, charts[1].Diagram, "xychart-beta")
-		assert.Contains(t, charts[2].Diagram, "xychart-beta")
+		assert.Equal(t, 2, strings.Count(charts[1].Diagram, "\n    line ["))
 	})
 }
 
@@ -227,7 +227,7 @@ func TestMonitoringMermaidChartsWithWindow(t *testing.T) {
 		assert.Contains(t, charts[0].Diagram, `x-axis "Minutes" 0 --> 3`)
 	})
 
-	t.Run("multi-core windowed adds per-CPU charts", func(t *testing.T) {
+	t.Run("multi-core windowed adds combined per-core chart", func(t *testing.T) {
 		t.Parallel()
 		winStart := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
 		winEnd := winStart.Add(10 * time.Second)
@@ -244,10 +244,10 @@ func TestMonitoringMermaidChartsWithWindow(t *testing.T) {
 			},
 		}
 		charts := MonitoringMermaidChartsWithWindow(analysis, winStart, winEnd)
-		require.Len(t, charts, 3)
+		require.Len(t, charts, 2)
 		assert.Equal(t, "CPU Usage", charts[0].Title)
-		assert.Equal(t, "CPU 0 Usage (%)", charts[1].Title)
-		assert.Equal(t, "CPU 1 Usage (%)", charts[2].Title)
+		assert.Equal(t, "CPU per core (%)", charts[1].Title)
+		assert.Equal(t, 2, strings.Count(charts[1].Diagram, "\n    line ["))
 	})
 }
 

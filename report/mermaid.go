@@ -124,7 +124,9 @@ func MonitoringMermaidCharts(analysis *monitor.Analysis) []MonitoringChart {
 	if d := cpuChartDiagram(analysis); d != "" {
 		charts = append(charts, MonitoringChart{Title: "CPU Usage", Diagram: d})
 	}
-	charts = append(charts, cpuPerCoreChartDiagrams(analysis)...)
+	if d := cpuPerCoreCombinedDiagram(analysis); d != "" {
+		charts = append(charts, MonitoringChart{Title: "CPU per core (%)", Diagram: d})
+	}
 	if d := memoryChartDiagram(analysis); d != "" {
 		charts = append(charts, MonitoringChart{Title: "Memory Usage", Diagram: d})
 	}
@@ -153,7 +155,9 @@ func MonitoringMermaidChartsWithWindow(analysis *monitor.Analysis, windowStart, 
 	if d := cpuChartDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
 		charts = append(charts, MonitoringChart{Title: "CPU Usage", Diagram: d})
 	}
-	charts = append(charts, cpuPerCoreChartDiagramsWindowed(analysis, windowStart, axisEnd)...)
+	if d := cpuPerCoreCombinedDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
+		charts = append(charts, MonitoringChart{Title: "CPU per core (%)", Diagram: d})
+	}
 	if d := memoryChartDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
 		charts = append(charts, MonitoringChart{Title: "Memory Usage", Diagram: d})
 	}
@@ -259,50 +263,78 @@ func cpuCoreTimeValues(measurements []*monitor.CPUMeasurement) []timeValue {
 	return points
 }
 
-// cpuPerCoreChartDiagrams returns one chart per CPU when there are multiple cores; skipped for a single series.
-func cpuPerCoreChartDiagrams(analysis *monitor.Analysis) []MonitoringChart {
+// cpuPerCoreCombinedDiagram returns one xychart-beta with a line per CPU when there are multiple cores.
+func cpuPerCoreCombinedDiagram(analysis *monitor.Analysis) string {
 	if analysis == nil || len(analysis.CPUMeasurements) <= 1 {
-		return nil
+		return ""
 	}
-	var charts []MonitoringChart
+	var (
+		downsampledSeries [][]timeValue
+		t0, t1            time.Time
+		first             = true
+	)
 	for _, cpuNum := range sortedCPUNums(analysis.CPUMeasurements) {
 		points := cpuCoreTimeValues(analysis.CPUMeasurements[cpuNum])
 		if len(points) == 0 {
 			continue
 		}
-		downsampled := downsample(points, defaultTargetPoints, maxAggregator)
-		title := fmt.Sprintf("CPU %d Usage (%%)", cpuNum)
-		d := buildXYChartDiagram(title, "Usage %", 0, 100, downsampled)
-		if d == "" {
+		down := downsample(points, defaultTargetPoints, maxAggregator)
+		if len(down) == 0 {
 			continue
 		}
-		charts = append(charts, MonitoringChart{Title: title, Diagram: d})
+		downsampledSeries = append(downsampledSeries, down)
+		d0, d1 := down[0].Time, down[len(down)-1].Time
+		if first {
+			t0, t1 = d0, d1
+			first = false
+		} else {
+			if d0.Before(t0) {
+				t0 = d0
+			}
+			if d1.After(t1) {
+				t1 = d1
+			}
+		}
 	}
-	return charts
+	if len(downsampledSeries) < 2 || !t1.After(t0) {
+		return ""
+	}
+	n := defaultTargetPoints
+	lineStrs := make([][]string, 0, len(downsampledSeries))
+	for _, down := range downsampledSeries {
+		lineStrs = append(lineStrs, resampleLineValues(down, t0, t1, n))
+	}
+	return buildXYChartDiagramMultiLine("CPU per core (%)", "Usage %", 0, 100, lineStrs, t0, t1)
 }
 
-func cpuPerCoreChartDiagramsWindowed(
+func cpuPerCoreCombinedDiagramWindowed(
 	analysis *monitor.Analysis,
 	windowStart, axisEnd time.Time,
-) []MonitoringChart {
+) string {
 	if analysis == nil || len(analysis.CPUMeasurements) <= 1 || !axisEnd.After(windowStart) {
-		return nil
+		return ""
 	}
-	var charts []MonitoringChart
+	var downsampledSeries [][]timeValue
 	for _, cpuNum := range sortedCPUNums(analysis.CPUMeasurements) {
 		points := cpuCoreTimeValues(analysis.CPUMeasurements[cpuNum])
 		if len(points) == 0 {
 			continue
 		}
-		downsampled := downsample(points, defaultTargetPoints, maxAggregator)
-		title := fmt.Sprintf("CPU %d Usage (%%)", cpuNum)
-		d := buildXYChartDiagramWindowed(title, "Usage %", 0, 100, downsampled, windowStart, axisEnd)
-		if d == "" {
+		down := downsample(points, defaultTargetPoints, maxAggregator)
+		if len(down) == 0 {
 			continue
 		}
-		charts = append(charts, MonitoringChart{Title: title, Diagram: d})
+		downsampledSeries = append(downsampledSeries, down)
 	}
-	return charts
+	if len(downsampledSeries) < 2 {
+		return ""
+	}
+	n := defaultTargetPoints
+	lineStrs := make([][]string, 0, len(downsampledSeries))
+	for _, down := range downsampledSeries {
+		lineStrs = append(lineStrs, resampleLineValues(down, windowStart, axisEnd, n))
+	}
+	return buildXYChartDiagramMultiLineWindowed("CPU per core (%)", "Usage %", 0, 100, lineStrs, windowStart, axisEnd)
 }
 
 // memoryChart builds a Mermaid xychart-beta line chart for memory usage.
@@ -752,6 +784,91 @@ func buildXYChartDiagramWindowed(
 	fmt.Fprintf(&b, "    y-axis %q %.0f --> %.0f\n", yLabel, yMin, math.Ceil(yMax))
 	fmt.Fprintf(&b, "    line [%s]\n", strings.Join(valueStrs, ", "))
 
+	return b.String()
+}
+
+// buildXYChartDiagramMultiLine emits one xychart-beta with multiple line series (same x grid, equal-length value slices).
+func buildXYChartDiagramMultiLine(
+	title, yLabel string,
+	yMin, yMax float64,
+	lines [][]string,
+	t0, t1 time.Time,
+) string {
+	if len(lines) == 0 || !t1.After(t0) {
+		return ""
+	}
+	width := len(lines[0])
+	if width == 0 {
+		return ""
+	}
+	for _, ln := range lines {
+		if len(ln) != width {
+			return ""
+		}
+	}
+
+	duration := t1.Sub(t0)
+	var b strings.Builder
+	b.WriteString("xychart-beta\n")
+	fmt.Fprintf(&b, "    title %q\n", title)
+	if duration >= 2*time.Minute {
+		fmt.Fprintf(&b, "    x-axis \"Minutes\" 0 --> %.0f\n", math.Ceil(duration.Minutes()))
+	} else {
+		fmt.Fprintf(&b, "    x-axis \"Seconds\" 0 --> %.0f\n", math.Ceil(duration.Seconds()))
+	}
+	fmt.Fprintf(&b, "    y-axis %q %.0f --> %.0f\n", yLabel, yMin, math.Ceil(yMax))
+	for _, ln := range lines {
+		fmt.Fprintf(&b, "    line [%s]\n", strings.Join(ln, ", "))
+	}
+	return b.String()
+}
+
+// buildXYChartDiagramMultiLineWindowed is the windowed variant aligned with buildXYChartDiagramWindowed.
+func buildXYChartDiagramMultiLineWindowed(
+	title, yLabel string,
+	yMin, yMax float64,
+	lines [][]string,
+	windowStart, axisEnd time.Time,
+) string {
+	if len(lines) == 0 || !axisEnd.After(windowStart) {
+		return ""
+	}
+	width := len(lines[0])
+	if width == 0 {
+		return ""
+	}
+	for _, ln := range lines {
+		if len(ln) != width {
+			return ""
+		}
+	}
+
+	duration := axisEnd.Sub(windowStart)
+	var xMax float64
+	if duration >= 2*time.Minute {
+		xMax = math.Ceil(duration.Minutes())
+		if xMax < 1 {
+			xMax = 1
+		}
+	} else {
+		xMax = math.Ceil(duration.Seconds())
+		if xMax < 1 {
+			xMax = 1
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("xychart-beta\n")
+	fmt.Fprintf(&b, "    title %q\n", title)
+	if duration >= 2*time.Minute {
+		fmt.Fprintf(&b, "    x-axis \"Minutes\" 0 --> %.0f\n", xMax)
+	} else {
+		fmt.Fprintf(&b, "    x-axis \"Seconds\" 0 --> %.0f\n", xMax)
+	}
+	fmt.Fprintf(&b, "    y-axis %q %.0f --> %.0f\n", yLabel, yMin, math.Ceil(yMax))
+	for _, ln := range lines {
+		fmt.Fprintf(&b, "    line [%s]\n", strings.Join(ln, ", "))
+	}
 	return b.String()
 }
 

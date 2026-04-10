@@ -86,7 +86,7 @@ func TestBuildReportCPUPerCore(t *testing.T) {
 	result := buildReport(analysis, nil, nil)
 	assert.Contains(t, result, "### CPU Usage")
 	assert.Contains(t, result, "#### CPU per core")
-	assert.Equal(t, 3, strings.Count(result, "```mermaid"), "aggregate CPU plus two per-core blocks")
+	assert.Equal(t, 2, strings.Count(result, "```mermaid"), "aggregate CPU plus one multi-line per-core block")
 }
 
 func TestBuildReportEmptyAnalysis(t *testing.T) {
