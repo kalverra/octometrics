@@ -3,6 +3,7 @@ package report
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -123,6 +124,7 @@ func MonitoringMermaidCharts(analysis *monitor.Analysis) []MonitoringChart {
 	if d := cpuChartDiagram(analysis); d != "" {
 		charts = append(charts, MonitoringChart{Title: "CPU Usage", Diagram: d})
 	}
+	charts = append(charts, cpuPerCoreChartDiagrams(analysis)...)
 	if d := memoryChartDiagram(analysis); d != "" {
 		charts = append(charts, MonitoringChart{Title: "Memory Usage", Diagram: d})
 	}
@@ -151,6 +153,7 @@ func MonitoringMermaidChartsWithWindow(analysis *monitor.Analysis, windowStart, 
 	if d := cpuChartDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
 		charts = append(charts, MonitoringChart{Title: "CPU Usage", Diagram: d})
 	}
+	charts = append(charts, cpuPerCoreChartDiagramsWindowed(analysis, windowStart, axisEnd)...)
 	if d := memoryChartDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
 		charts = append(charts, MonitoringChart{Title: "Memory Usage", Diagram: d})
 	}
@@ -231,6 +234,75 @@ func cpuChartDiagramWindowed(analysis *monitor.Analysis, windowStart, axisEnd ti
 	}
 	downsampled := downsample(points, defaultTargetPoints, maxAggregator)
 	return buildXYChartDiagramWindowed("CPU Usage (%)", "Usage %", 0, 100, downsampled, windowStart, axisEnd)
+}
+
+func sortedCPUNums(m map[int][]*monitor.CPUMeasurement) []int {
+	keys := make([]int, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	return keys
+}
+
+func cpuCoreTimeValues(measurements []*monitor.CPUMeasurement) []timeValue {
+	if len(measurements) == 0 {
+		return nil
+	}
+	points := make([]timeValue, 0, len(measurements))
+	for _, m := range measurements {
+		if m == nil {
+			continue
+		}
+		points = append(points, timeValue{Time: m.Time, Value: m.UsedPercent})
+	}
+	return points
+}
+
+// cpuPerCoreChartDiagrams returns one chart per CPU when there are multiple cores; skipped for a single series.
+func cpuPerCoreChartDiagrams(analysis *monitor.Analysis) []MonitoringChart {
+	if analysis == nil || len(analysis.CPUMeasurements) <= 1 {
+		return nil
+	}
+	var charts []MonitoringChart
+	for _, cpuNum := range sortedCPUNums(analysis.CPUMeasurements) {
+		points := cpuCoreTimeValues(analysis.CPUMeasurements[cpuNum])
+		if len(points) == 0 {
+			continue
+		}
+		downsampled := downsample(points, defaultTargetPoints, maxAggregator)
+		title := fmt.Sprintf("CPU %d Usage (%%)", cpuNum)
+		d := buildXYChartDiagram(title, "Usage %", 0, 100, downsampled)
+		if d == "" {
+			continue
+		}
+		charts = append(charts, MonitoringChart{Title: title, Diagram: d})
+	}
+	return charts
+}
+
+func cpuPerCoreChartDiagramsWindowed(
+	analysis *monitor.Analysis,
+	windowStart, axisEnd time.Time,
+) []MonitoringChart {
+	if analysis == nil || len(analysis.CPUMeasurements) <= 1 || !axisEnd.After(windowStart) {
+		return nil
+	}
+	var charts []MonitoringChart
+	for _, cpuNum := range sortedCPUNums(analysis.CPUMeasurements) {
+		points := cpuCoreTimeValues(analysis.CPUMeasurements[cpuNum])
+		if len(points) == 0 {
+			continue
+		}
+		downsampled := downsample(points, defaultTargetPoints, maxAggregator)
+		title := fmt.Sprintf("CPU %d Usage (%%)", cpuNum)
+		d := buildXYChartDiagramWindowed(title, "Usage %", 0, 100, downsampled, windowStart, axisEnd)
+		if d == "" {
+			continue
+		}
+		charts = append(charts, MonitoringChart{Title: title, Diagram: d})
+	}
+	return charts
 }
 
 // memoryChart builds a Mermaid xychart-beta line chart for memory usage.

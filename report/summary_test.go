@@ -3,6 +3,7 @@ package report
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +65,28 @@ func TestBuildReport(t *testing.T) {
 	assert.Contains(t, result, "| Memory |")
 	assert.Contains(t, result, "| Disk |")
 	assert.Contains(t, result, "| Net Sent |")
+}
+
+func TestBuildReportCPUPerCore(t *testing.T) {
+	t.Parallel()
+	base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+	analysis := &monitor.Analysis{
+		JobName: "CI",
+		CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+			0: {
+				{Time: base, UsedPercent: 10},
+				{Time: base.Add(time.Second), UsedPercent: 20},
+			},
+			1: {
+				{Time: base, UsedPercent: 5},
+				{Time: base.Add(time.Second), UsedPercent: 15},
+			},
+		},
+	}
+	result := buildReport(analysis, nil, nil)
+	assert.Contains(t, result, "### CPU Usage")
+	assert.Contains(t, result, "#### CPU per core")
+	assert.Equal(t, 3, strings.Count(result, "```mermaid"), "aggregate CPU plus two per-core blocks")
 }
 
 func TestBuildReportEmptyAnalysis(t *testing.T) {

@@ -33,6 +33,14 @@ func buildReport(analysis *monitor.Analysis, steps []*github.TaskStep, _ *ghaCon
 		b.WriteString("\n")
 	}
 
+	if perCore := cpuPerCoreChartDiagrams(analysis); len(perCore) > 0 {
+		b.WriteString("#### CPU per core\n\n")
+		for _, c := range perCore {
+			b.WriteString(markdownMermaidBlock(c.Diagram))
+			b.WriteString("\n")
+		}
+	}
+
 	if chart := memoryChart(analysis); chart != "" {
 		b.WriteString("### Memory Usage\n\n")
 		b.WriteString(chart)

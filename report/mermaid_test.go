@@ -127,6 +127,30 @@ func TestMonitoringMermaidCharts(t *testing.T) {
 		assert.NotContains(t, charts[0].Diagram, "```")
 		assert.Contains(t, cpuChart(analysis), charts[0].Diagram)
 	})
+
+	t.Run("multi-core adds per-CPU charts after aggregate", func(t *testing.T) {
+		t.Parallel()
+		base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		analysis := &monitor.Analysis{
+			CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+				0: {
+					{Time: base, UsedPercent: 50.0},
+					{Time: base.Add(time.Second), UsedPercent: 75.0},
+				},
+				1: {
+					{Time: base, UsedPercent: 40.0},
+					{Time: base.Add(time.Second), UsedPercent: 60.0},
+				},
+			},
+		}
+		charts := MonitoringMermaidCharts(analysis)
+		require.Len(t, charts, 3)
+		assert.Equal(t, "CPU Usage", charts[0].Title)
+		assert.Equal(t, "CPU 0 Usage (%)", charts[1].Title)
+		assert.Equal(t, "CPU 1 Usage (%)", charts[2].Title)
+		assert.Contains(t, charts[1].Diagram, "xychart-beta")
+		assert.Contains(t, charts[2].Diagram, "xychart-beta")
+	})
 }
 
 func TestMonitoringMermaidChartsWithWindow(t *testing.T) {
@@ -201,6 +225,29 @@ func TestMonitoringMermaidChartsWithWindow(t *testing.T) {
 		charts := MonitoringMermaidChartsWithWindow(analysis, winStart, winEnd)
 		require.Len(t, charts, 1)
 		assert.Contains(t, charts[0].Diagram, `x-axis "Minutes" 0 --> 3`)
+	})
+
+	t.Run("multi-core windowed adds per-CPU charts", func(t *testing.T) {
+		t.Parallel()
+		winStart := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+		winEnd := winStart.Add(10 * time.Second)
+		analysis := &monitor.Analysis{
+			CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+				0: {
+					{Time: winStart, UsedPercent: 10},
+					{Time: winEnd, UsedPercent: 20},
+				},
+				1: {
+					{Time: winStart, UsedPercent: 5},
+					{Time: winEnd, UsedPercent: 15},
+				},
+			},
+		}
+		charts := MonitoringMermaidChartsWithWindow(analysis, winStart, winEnd)
+		require.Len(t, charts, 3)
+		assert.Equal(t, "CPU Usage", charts[0].Title)
+		assert.Equal(t, "CPU 0 Usage (%)", charts[1].Title)
+		assert.Equal(t, "CPU 1 Usage (%)", charts[2].Title)
 	})
 }
 
