@@ -12,7 +12,12 @@ import (
 	"github.com/kalverra/octometrics/monitor"
 )
 
-const defaultTargetPoints = 500
+const (
+	defaultTargetPoints = 500
+	// maxMermaidDiagramChars keeps xychart-beta source under common Mermaid renderer limits
+	// (e.g. "maximum text size in diagram exceeded" on GitHub).
+	maxMermaidDiagramChars = 45000
+)
 
 // timeValue is a single data point with a timestamp.
 type timeValue struct {
@@ -124,8 +129,8 @@ func MonitoringMermaidCharts(analysis *monitor.Analysis) []MonitoringChart {
 	if d := cpuChartDiagram(analysis); d != "" {
 		charts = append(charts, MonitoringChart{Title: "CPU Usage", Diagram: d})
 	}
-	if d := cpuPerCoreCombinedDiagram(analysis); d != "" {
-		charts = append(charts, MonitoringChart{Title: "CPU per core (%)", Diagram: d})
+	if title, d := cpuPerCoreCombinedDiagram(analysis); d != "" {
+		charts = append(charts, MonitoringChart{Title: title, Diagram: d})
 	}
 	if d := memoryChartDiagram(analysis); d != "" {
 		charts = append(charts, MonitoringChart{Title: "Memory Usage", Diagram: d})
@@ -155,8 +160,8 @@ func MonitoringMermaidChartsWithWindow(analysis *monitor.Analysis, windowStart, 
 	if d := cpuChartDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
 		charts = append(charts, MonitoringChart{Title: "CPU Usage", Diagram: d})
 	}
-	if d := cpuPerCoreCombinedDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
-		charts = append(charts, MonitoringChart{Title: "CPU per core (%)", Diagram: d})
+	if title, d := cpuPerCoreCombinedDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
+		charts = append(charts, MonitoringChart{Title: title, Diagram: d})
 	}
 	if d := memoryChartDiagramWindowed(analysis, windowStart, axisEnd); d != "" {
 		charts = append(charts, MonitoringChart{Title: "Memory Usage", Diagram: d})
@@ -263,16 +268,16 @@ func cpuCoreTimeValues(measurements []*monitor.CPUMeasurement) []timeValue {
 	return points
 }
 
-// cpuPerCoreCombinedDiagram returns one xychart-beta with a line per CPU when there are multiple cores.
-func cpuPerCoreCombinedDiagram(analysis *monitor.Analysis) string {
+// cpuPerCoreChartTitle is the stable MonitoringChart title and Mermaid chart title (includes core count).
+func cpuPerCoreChartTitle(numCores int) string {
+	return fmt.Sprintf("CPU per core (%d cores)", numCores)
+}
+
+func collectPerCoreDownsampledSeries(analysis *monitor.Analysis) [][]timeValue {
 	if analysis == nil || len(analysis.CPUMeasurements) <= 1 {
-		return ""
+		return nil
 	}
-	var (
-		downsampledSeries [][]timeValue
-		t0, t1            time.Time
-		first             = true
-	)
+	var out [][]timeValue
 	for _, cpuNum := range sortedCPUNums(analysis.CPUMeasurements) {
 		points := cpuCoreTimeValues(analysis.CPUMeasurements[cpuNum])
 		if len(points) == 0 {
@@ -282,7 +287,23 @@ func cpuPerCoreCombinedDiagram(analysis *monitor.Analysis) string {
 		if len(down) == 0 {
 			continue
 		}
-		downsampledSeries = append(downsampledSeries, down)
+		out = append(out, down)
+	}
+	if len(out) < 2 {
+		return nil
+	}
+	return out
+}
+
+func globalTimeBoundsFromSeries(series [][]timeValue) (t0, t1 time.Time, ok bool) {
+	if len(series) < 2 {
+		return time.Time{}, time.Time{}, false
+	}
+	first := true
+	for _, down := range series {
+		if len(down) == 0 {
+			return time.Time{}, time.Time{}, false
+		}
 		d0, d1 := down[0].Time, down[len(down)-1].Time
 		if first {
 			t0, t1 = d0, d1
@@ -296,45 +317,87 @@ func cpuPerCoreCombinedDiagram(analysis *monitor.Analysis) string {
 			}
 		}
 	}
-	if len(downsampledSeries) < 2 || !t1.After(t0) {
+	return t0, t1, true
+}
+
+// buildCPUPerCoreMultiLineDiagram resamples each series to n points; shrinks n until the Mermaid source fits maxMermaidDiagramChars.
+func buildCPUPerCoreMultiLineDiagram(
+	series [][]timeValue,
+	chartTitle string,
+	windowed bool,
+	windowStart, axisEnd time.Time,
+	t0, t1 time.Time,
+) string {
+	if len(series) < 2 {
 		return ""
 	}
-	n := defaultTargetPoints
-	lineStrs := make([][]string, 0, len(downsampledSeries))
-	for _, down := range downsampledSeries {
-		lineStrs = append(lineStrs, resampleLineValues(down, t0, t1, n))
+	if windowed && !axisEnd.After(windowStart) {
+		return ""
 	}
-	return buildXYChartDiagramMultiLine("CPU per core (%)", "Usage %", 0, 100, lineStrs, t0, t1)
+	if !windowed && !t1.After(t0) {
+		return ""
+	}
+
+	numLines := len(series)
+	n := defaultTargetPoints
+	if capN := (maxMermaidDiagramChars - 512) / max(numLines*8, 1); capN >= 2 && n > capN {
+		n = capN
+	}
+
+	for {
+		lineStrs := make([][]string, numLines)
+		for i, down := range series {
+			if windowed {
+				lineStrs[i] = resampleLineValues(down, windowStart, axisEnd, n)
+			} else {
+				lineStrs[i] = resampleLineValues(down, t0, t1, n)
+			}
+		}
+		var d string
+		if windowed {
+			d = buildXYChartDiagramMultiLineWindowed(chartTitle, "Usage %", 0, 100, lineStrs, windowStart, axisEnd)
+		} else {
+			d = buildXYChartDiagramMultiLine(chartTitle, "Usage %", 0, 100, lineStrs, t0, t1)
+		}
+		if d == "" {
+			return ""
+		}
+		if len(d) <= maxMermaidDiagramChars || n <= 2 {
+			return d
+		}
+		n = max(n/2, 2)
+	}
+}
+
+// cpuPerCoreCombinedDiagram returns title and one xychart-beta with a line per CPU when there are multiple cores.
+func cpuPerCoreCombinedDiagram(analysis *monitor.Analysis) (title string, diagram string) {
+	series := collectPerCoreDownsampledSeries(analysis)
+	if len(series) < 2 {
+		return "", ""
+	}
+	t0, t1, ok := globalTimeBoundsFromSeries(series)
+	if !ok || !t1.After(t0) {
+		return "", ""
+	}
+	title = cpuPerCoreChartTitle(len(series))
+	diagram = buildCPUPerCoreMultiLineDiagram(series, title, false, time.Time{}, time.Time{}, t0, t1)
+	return title, diagram
 }
 
 func cpuPerCoreCombinedDiagramWindowed(
 	analysis *monitor.Analysis,
 	windowStart, axisEnd time.Time,
-) string {
-	if analysis == nil || len(analysis.CPUMeasurements) <= 1 || !axisEnd.After(windowStart) {
-		return ""
+) (title string, diagram string) {
+	if analysis == nil || !axisEnd.After(windowStart) {
+		return "", ""
 	}
-	var downsampledSeries [][]timeValue
-	for _, cpuNum := range sortedCPUNums(analysis.CPUMeasurements) {
-		points := cpuCoreTimeValues(analysis.CPUMeasurements[cpuNum])
-		if len(points) == 0 {
-			continue
-		}
-		down := downsample(points, defaultTargetPoints, maxAggregator)
-		if len(down) == 0 {
-			continue
-		}
-		downsampledSeries = append(downsampledSeries, down)
+	series := collectPerCoreDownsampledSeries(analysis)
+	if len(series) < 2 {
+		return "", ""
 	}
-	if len(downsampledSeries) < 2 {
-		return ""
-	}
-	n := defaultTargetPoints
-	lineStrs := make([][]string, 0, len(downsampledSeries))
-	for _, down := range downsampledSeries {
-		lineStrs = append(lineStrs, resampleLineValues(down, windowStart, axisEnd, n))
-	}
-	return buildXYChartDiagramMultiLineWindowed("CPU per core (%)", "Usage %", 0, 100, lineStrs, windowStart, axisEnd)
+	title = cpuPerCoreChartTitle(len(series))
+	diagram = buildCPUPerCoreMultiLineDiagram(series, title, true, windowStart, axisEnd, time.Time{}, time.Time{})
+	return title, diagram
 }
 
 // memoryChart builds a Mermaid xychart-beta line chart for memory usage.

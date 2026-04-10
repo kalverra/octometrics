@@ -27,14 +27,18 @@ func buildReport(analysis *monitor.Analysis, steps []*github.TaskStep, _ *ghaCon
 		b.WriteString("\n")
 	}
 
+	if host := machineInfoMarkdown(analysis); host != "" {
+		b.WriteString(host)
+	}
+
 	if chart := cpuChart(analysis); chart != "" {
 		b.WriteString("### CPU Usage\n\n")
 		b.WriteString(chart)
 		b.WriteString("\n")
 	}
 
-	if d := cpuPerCoreCombinedDiagram(analysis); d != "" {
-		b.WriteString("#### CPU per core\n\n")
+	if title, d := cpuPerCoreCombinedDiagram(analysis); d != "" {
+		fmt.Fprintf(&b, "#### %s\n\n", title)
 		b.WriteString(markdownMermaidBlock(d))
 		b.WriteString("\n")
 	}

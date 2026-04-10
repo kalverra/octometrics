@@ -147,8 +147,9 @@ func TestMonitoringMermaidCharts(t *testing.T) {
 		charts := MonitoringMermaidCharts(analysis)
 		require.Len(t, charts, 2)
 		assert.Equal(t, "CPU Usage", charts[0].Title)
-		assert.Equal(t, "CPU per core (%)", charts[1].Title)
+		assert.Equal(t, "CPU per core (2 cores)", charts[1].Title)
 		assert.Contains(t, charts[1].Diagram, "xychart-beta")
+		assert.Contains(t, charts[1].Diagram, "CPU per core (2 cores)")
 		assert.Equal(t, 2, strings.Count(charts[1].Diagram, "\n    line ["))
 	})
 }
@@ -246,9 +247,31 @@ func TestMonitoringMermaidChartsWithWindow(t *testing.T) {
 		charts := MonitoringMermaidChartsWithWindow(analysis, winStart, winEnd)
 		require.Len(t, charts, 2)
 		assert.Equal(t, "CPU Usage", charts[0].Title)
-		assert.Equal(t, "CPU per core (%)", charts[1].Title)
+		assert.Equal(t, "CPU per core (2 cores)", charts[1].Title)
+		assert.Contains(t, charts[1].Diagram, "CPU per core (2 cores)")
 		assert.Equal(t, 2, strings.Count(charts[1].Diagram, "\n    line ["))
 	})
+}
+
+func TestCpuPerCoreDiagramFitsMermaidSizeLimit(t *testing.T) {
+	t.Parallel()
+	base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+	m := make(map[int][]*monitor.CPUMeasurement)
+	for cpu := range 80 {
+		var pts []*monitor.CPUMeasurement
+		for s := range 600 {
+			pts = append(pts, &monitor.CPUMeasurement{
+				Time:        base.Add(time.Duration(s) * time.Millisecond * 100),
+				Num:         cpu,
+				UsedPercent: float64(cpu%10) * 10,
+			})
+		}
+		m[cpu] = pts
+	}
+	analysis := &monitor.Analysis{CPUMeasurements: m}
+	_, d := cpuPerCoreCombinedDiagram(analysis)
+	require.NotEmpty(t, d)
+	assert.LessOrEqual(t, len(d), maxMermaidDiagramChars, "diagram should shrink to stay under Mermaid text limit")
 }
 
 func TestCPUChart(t *testing.T) {
