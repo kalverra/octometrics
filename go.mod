@@ -6,7 +6,7 @@ tool gotest.tools/gotestsum
 
 require (
 	charm.land/huh/v2 v2.0.3
-	github.com/caarlos0/env/v11 v11.4.0
+	github.com/caarlos0/env/v11 v11.4.1
 	github.com/charmbracelet/fang v1.0.0
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/gofri/go-github-ratelimit/v2 v2.0.2
