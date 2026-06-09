@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v88/github"
 
 	"github.com/kalverra/octometrics/monitor"
 )

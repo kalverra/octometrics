@@ -2,15 +2,18 @@ package gather
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kalverra/octometrics/internal/testhelpers"
@@ -498,6 +501,49 @@ var (
 		},
 	}
 )
+
+func TestJobsData_RetryOn502(t *testing.T) {
+	t.Parallel()
+
+	log, _ := testhelpers.Setup(t)
+
+	var attempts atomic.Int32
+	jobsResponse, err := json.Marshal(&github.Jobs{
+		TotalCount: new(1),
+		Jobs:       []*github.WorkflowJob{mockJobs[0]},
+	})
+	require.NoError(t, err)
+
+	mockedHTTPClient := mock.NewMockedHTTPClient(
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsRunsJobsByOwnerByRepoByRunId,
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "50", r.URL.Query().Get("per_page"))
+				if attempts.Add(1) == 1 {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusBadGateway)
+					_, _ = w.Write([]byte(`{"message":"Server Error"}`))
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write(jobsResponse)
+			}),
+		),
+	)
+
+	oldDelay := workflowJobsRetryDelay
+	workflowJobsRetryDelay = func(int) time.Duration { return 0 }
+	t.Cleanup(func() { workflowJobsRetryDelay = oldDelay })
+
+	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
+	require.NoError(t, err)
+
+	jobs, err := jobsData(client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID())
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	require.Equal(t, int32(2), attempts.Load())
+}
 
 func TestReadAllLimited(t *testing.T) {
 	t.Parallel()

@@ -15,7 +15,7 @@ import (
 	"github.com/gofri/go-github-ratelimit/v2/github_ratelimit"
 	"github.com/gofri/go-github-ratelimit/v2/github_ratelimit/github_primary_ratelimit"
 	"github.com/gofri/go-github-ratelimit/v2/github_ratelimit/github_secondary_ratelimit"
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
@@ -149,9 +149,10 @@ func NewGitHubClient(
 		}),
 	)
 
-	client.Rest = github.NewClient(rateLimiter)
-	if githubToken != "" {
-		client.Rest = client.Rest.WithAuthToken(githubToken)
+	var err error
+	client.Rest, err = github.NewClient(github.WithAuthToken(githubToken), github.WithTransport(rateLimiter.Transport))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub client: %w", err)
 	}
 
 	src := oauth2.StaticTokenSource(

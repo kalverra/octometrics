@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 )
 
@@ -40,7 +40,10 @@ func postComment(log zerolog.Logger, gha *ghaContext, markdown string) error {
 
 // upsertPRComment creates or updates an octometrics report comment on a PR.
 func upsertPRComment(log zerolog.Logger, gha *ghaContext, prNumber int, marker, body string) error {
-	client := gha.newGitHubClient()
+	client, err := gha.newGitHubClient()
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -97,11 +100,14 @@ func findExistingComment(
 
 // createCommitComment posts the report as a commit comment on the HEAD SHA.
 func createCommitComment(log zerolog.Logger, gha *ghaContext, body string) error {
-	client := gha.newGitHubClient()
+	client, err := gha.newGitHubClient()
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, _, err := client.Repositories.CreateComment(ctx, gha.Owner, gha.Repo, gha.SHA, &github.RepositoryComment{
+	_, _, err = client.Repositories.CreateComment(ctx, gha.Owner, gha.Repo, gha.SHA, &github.RepositoryComment{
 		Body: new(body),
 	})
 	if err != nil {

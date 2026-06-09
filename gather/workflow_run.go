@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
@@ -375,21 +375,37 @@ nextAnalysisLoop:
 	}
 }
 
-// jobsData fetches all jobs for a workflow run from GitHub.
-func jobsData(
+const (
+	workflowJobsPerPage    = 50
+	workflowJobsMaxRetries = 3
+)
+
+// workflowJobsRetryDelay controls backoff between retries; overridden in tests.
+var workflowJobsRetryDelay = func(attempt int) time.Duration {
+	return time.Duration(1<<attempt) * 500 * time.Millisecond
+}
+
+func isRetryableGitHubAPIError(err error) bool {
+	errResp, ok := errors.AsType[*github.ErrorResponse](err)
+	if !ok || errResp.Response == nil {
+		return false
+	}
+
+	switch errResp.Response.StatusCode {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+func listWorkflowJobsOnce(
 	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
+	listOpts *github.ListWorkflowJobsOptions,
 ) ([]*github.WorkflowJob, error) {
-	var (
-		workflowJobs = []*github.WorkflowJob{}
-		listOpts     = &github.ListWorkflowJobsOptions{
-			Filter: "all",
-			ListOptions: github.ListOptions{
-				PerPage: 100,
-			},
-		}
-	)
+	workflowJobs := []*github.WorkflowJob{}
 
 	ctx, cancel := ghCtx()
 	defer cancel()
@@ -405,6 +421,37 @@ func jobsData(
 		return workflowJobs[i].GetStartedAt().Before(workflowJobs[j].GetStartedAt().Time)
 	})
 	return workflowJobs, nil
+}
+
+// jobsData fetches all jobs for a workflow run from GitHub.
+func jobsData(
+	client *GitHubClient,
+	owner, repo string,
+	workflowRunID int64,
+) ([]*github.WorkflowJob, error) {
+	listOpts := &github.ListWorkflowJobsOptions{
+		Filter: "all",
+		ListOptions: github.ListOptions{
+			PerPage: workflowJobsPerPage,
+		},
+	}
+
+	var lastErr error
+	for attempt := range workflowJobsMaxRetries {
+		jobs, err := listWorkflowJobsOnce(client, owner, repo, workflowRunID, listOpts)
+		if err == nil {
+			return jobs, nil
+		}
+
+		lastErr = err
+		if !isRetryableGitHubAPIError(err) || attempt == workflowJobsMaxRetries-1 {
+			return nil, err
+		}
+
+		time.Sleep(workflowJobsRetryDelay(attempt))
+	}
+
+	return nil, lastErr
 }
 
 // billingData fetches the billing data for a workflow run from GitHub

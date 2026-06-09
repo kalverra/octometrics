@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/rs/zerolog"
 )
 
@@ -72,12 +72,12 @@ func (g *ghaContext) pullRequestNumber() (int, bool) {
 	return num, true
 }
 
-func (g *ghaContext) newGitHubClient() *github.Client {
-	client := github.NewClient(nil)
-	if g.Token != "" {
-		client = client.WithAuthToken(g.Token)
+func (g *ghaContext) newGitHubClient() (*github.Client, error) {
+	client, err := github.NewClient(github.WithAuthToken(g.Token))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub client: %w", err)
 	}
-	return client
+	return client, nil
 }
 
 // fetchJobSteps retrieves step timing for the current job from the GitHub Actions API.
@@ -89,7 +89,10 @@ func fetchJobSteps(log zerolog.Logger, gha *ghaContext) ([]*github.TaskStep, err
 		return nil, fmt.Errorf("github_job_name not set, cannot match job")
 	}
 
-	client := gha.newGitHubClient()
+	client, err := gha.newGitHubClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub client: %w", err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

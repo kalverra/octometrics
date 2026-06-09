@@ -8,7 +8,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/go-github/v84/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/kalverra/octometrics/gather"
 	"github.com/kalverra/octometrics/observe"
 	"github.com/rs/zerolog"
