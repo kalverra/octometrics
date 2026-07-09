@@ -50,10 +50,15 @@ octometrics mcp
 
 ## Contributing
 
+I recommend using [mise](https://mise.jdx.dev/) for tool version control and as a makefile replacement. Use [lefthook](https://lefthook.dev/) for pre-commit and pre-push hooks. (Or just use plain go commands).
+
 ```sh
-just lint # Run linters
-just test # Run tests
+mise install      # Install tools
+mise run hooks    # Install lefthook git hooks
+mise run lint     # Run linters
+mise run test     # Run tests
 ```
+
 ---
 
 Highly inspired by the [workflow-telemetry-action](https://github.com/catchpoint/workflow-telemetry-action/tree/master).

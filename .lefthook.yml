@@ -1,0 +1,99 @@
+# Summary on success; command stdout/stderr only when a hook fails.
+# https://lefthook.dev/configuration/output
+output:
+  - summary
+  - success
+  - failure
+
+pre-commit:
+  parallel: true
+  commands:
+    trailing-whitespace:
+      tags: style
+      glob: "*"
+      run: |
+        for f in {staged_files}; do
+          [ -f "$f" ] || continue
+          if [ "$(uname -s)" = Darwin ]; then
+            sed -i '' -e 's/[[:blank:]]*$//' "$f"
+          else
+            sed -i -e 's/[[:blank:]]*$//' "$f"
+          fi
+        done
+      stage_fixed: true
+
+    end-of-file-fixer:
+      tags: style
+      glob: "*"
+      run: |
+        for f in {staged_files}; do
+          [ -f "$f" ] || continue
+          [ -s "$f" ] || continue
+          # $(tail -c1) drops a trailing newline in command substitution; compare the byte instead.
+          last=$(tail -c1 "$f" | od -An -tu1 | tr -d ' \n')
+          [ "$last" = "10" ] && continue
+          printf '\n' >> "$f"
+        done
+      stage_fixed: true
+
+    betterleaks:
+      tags: security
+      run: betterleaks git . --pre-commit --staged --redact -v
+
+    codespell:
+      tags: linter
+      glob: "*"
+      exclude:
+        - go.sum
+      run: codespell {staged_files}
+
+    actionlint:
+      tags: linter
+      glob: ".github/workflows/*.{yml,yaml}"
+      run: actionlint {staged_files}
+
+    golangci-lint:
+      tags: linter
+      glob:
+        - "*.go"
+        - "**/*.go"
+        - "go.mod"
+        - "go.sum"
+      run: golangci-lint run --fix --fast-only ./...
+      stage_fixed: true
+
+    go-generate:
+      tags: linter
+      glob:
+        - "*.go"
+        - "**/*.go"
+      run: go generate ./...
+      stage_fixed: true
+
+    go-mod-tidy:
+      tags: linter
+      glob:
+        - "go.mod"
+        - "go.sum"
+        - "*.go"
+        - "**/*.go"
+      run: |
+        while IFS= read -r mod; do
+          [ -n "$mod" ] || continue
+          (cd "$(dirname "$mod")" && go mod tidy)
+        done <<EOF
+        $(git ls-files 'go.mod' '**/go.mod')
+        EOF
+      stage_fixed: true
+
+pre-push:
+  parallel: true
+  commands:
+    go-short-tests:
+      tags: test
+      glob:
+        - "*.go"
+        - "**/*.go"
+        - "go.mod"
+        - "go.sum"
+      run: go tool gotestsum -- -cover -short ./...

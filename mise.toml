@@ -1,0 +1,33 @@
+[tools]
+go = "1.26.5"
+golangci-lint = "2.12.2"
+goreleaser = "2.17.0"
+lefthook = "2.1.10"
+actionlint = "1.7.12"
+betterleaks = "1.6.1"
+"pipx:codespell" = "2.4.2"
+
+[tasks.goreleaser]
+run = "goreleaser release --clean --snapshot"
+
+[tasks.lint]
+run = "golangci-lint run ./... --fix"
+
+[tasks.test]
+run = "go tool gotestsum -- -cover ./..."
+
+[tasks.test-race]
+run = "go tool gotestsum -- -race ./..."
+
+[tasks.bench]
+run = "go test -bench=. -benchmem -run='^$' ./... -cpu=2,4,8"
+
+[tasks.mcp]
+run = "go run . mcp --github-token $GITHUB_TOKEN"
+
+[tasks.mocks]
+run = "go generate ./..."
+
+[tasks.hooks]
+description = "Install lefthook git hooks"
+run = "lefthook install"

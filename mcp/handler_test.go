@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v89/github"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"

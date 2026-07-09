@@ -41,5 +41,5 @@ Identify specific code blocks that could benefit from **scrupulous human review*
 - **Functional options pattern**: Commands and packages use `Option` funcs (e.g. `monitor.WithOutputFile()`, `gather.ForceUpdate()`). Follow this pattern when adding configurable behavior.
 - **Logging**: Use `zerolog`. Pass `zerolog.Logger` as the first parameter to package-level functions. Log API calls at Trace, operational events at Debug/Info, and problems at Warn/Error.
 - **Error handling**: Wrap errors with `fmt.Errorf("context: %w", err)`. Deferred `Close()` calls must check the error (see `errcheck` linter).
-- **GitHub API**: Use `github.com/google/go-github/v88`. Rate limiting is handled by `go-github-ratelimit`. See `gather/gather.go` for the client setup pattern.
+- **GitHub API**: Use `github.com/google/go-github/v89`. Rate limiting is handled by `go-github-ratelimit`. See `gather/gather.go` for the client setup pattern.
 - **No unnecessary comments**: Do not add comments that merely narrate what the code does. Comments should explain non-obvious intent or constraints.

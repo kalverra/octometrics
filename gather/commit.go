@@ -9,11 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v89/github"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -210,10 +211,43 @@ func Commit(
 	}
 
 	commitData.RepositoryCommit = commit
-	commitData.CheckRuns, err = checkRunsForCommit(client, owner, repo, sha)
+	checkRuns, err := checkRunsForCommit(client, owner, repo, sha)
 	if err != nil {
 		return nil, err
 	}
+
+	if len(checkRuns) == 0 && len(commit.Parents) > 1 {
+		log.Info().
+			Str("commit_sha", sha).
+			Msg("No check runs found on merge commit. Checking parents.")
+		// Check the second parent first (typical for PR/merge group merge commits)
+		for _, v := range slices.Backward(commit.Parents) {
+			parentSHA := v.GetSHA()
+			if parentSHA == "" {
+				continue
+			}
+			log.Info().
+				Str("parent_sha", parentSHA).
+				Msg("Checking parent commit for check runs")
+			parentCheckRuns, err := checkRunsForCommit(client, owner, repo, parentSHA)
+			if err != nil {
+				log.Warn().
+					Str("parent_sha", parentSHA).
+					Err(err).
+					Msg("Failed to check runs for parent commit")
+				continue
+			}
+			if len(parentCheckRuns) > 0 {
+				log.Info().
+					Str("parent_sha", parentSHA).
+					Int("count", len(parentCheckRuns)).
+					Msg("Found check runs on parent commit")
+				checkRuns = parentCheckRuns
+				break
+			}
+		}
+	}
+	commitData.CheckRuns = checkRuns
 	err = setWorkflowRunsForCommit(log, client, owner, repo, commitData.CheckRuns, commitData, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather workflow runs for commit '%s': %w", sha, err)
