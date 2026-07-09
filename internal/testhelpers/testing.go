@@ -29,7 +29,7 @@ type options struct {
 // This option takes precedence over the -silence-test-logs flag.
 func Silent() Option {
 	return func(o *options) {
-		o.logLevel = "disabled"
+		o.logLevel = "silent"
 	}
 }
 

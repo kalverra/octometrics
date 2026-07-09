@@ -51,6 +51,57 @@ func TestLoad_Flags(t *testing.T) {
 	assert.Equal(t, 7, cfg.To.Day())
 }
 
+func TestValidateGather_PartialDateRange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		cfg     Config
+		wantErr string
+	}{
+		{
+			name: "from only",
+			cfg: Config{
+				Owner: "o",
+				Repo:  "r",
+				From:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantErr: "both --from and --to must be provided",
+		},
+		{
+			name: "to only",
+			cfg: Config{
+				Owner: "o",
+				Repo:  "r",
+				To:    time.Date(2025, 1, 7, 0, 0, 0, 0, time.UTC),
+			},
+			wantErr: "both --from and --to must be provided",
+		},
+		{
+			name: "both dates",
+			cfg: Config{
+				Owner: "o",
+				Repo:  "r",
+				From:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				To:    time.Date(2025, 1, 7, 0, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := tt.cfg.ValidateGather()
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestLoad_FlagsOverrideEnv(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "test-token")
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)

@@ -1,19 +1,14 @@
 package gather
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sort"
 	"time"
 
 	"github.com/google/go-github/v89/github"
 	"github.com/rs/zerolog"
-	"github.com/shurcooL/githubv4"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -50,33 +45,27 @@ func PullRequest(
 		pullRequestData = &PullRequestData{}
 		targetDir       = filepath.Join(options.DataDir, owner, repo, PullRequestsDataDir)
 		targetFile      = filepath.Join(targetDir, fmt.Sprintf("%d.json", pullRequestNumber))
-		fileExists      = false
 	)
-
-	err := os.MkdirAll(targetDir, 0700)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
-	}
-
-	if _, err := os.Stat(targetFile); err == nil {
-		fileExists = true
-	}
 
 	log = log.With().
 		Int("pull_request_number", pullRequestNumber).
 		Logger()
 
+	err := ensureDataDir(targetDir, PullRequestsDataDir)
+	if err != nil {
+		return nil, err
+	}
+
 	startTime := time.Now()
 
-	if !forceUpdate && fileExists {
+	if !forceUpdate && cacheFileExists(targetFile) {
 		log = log.With().
 			Str("source", "local file").
 			Logger()
-		prFileBytes, err := os.ReadFile(filepath.Clean(targetFile))
+		pullRequestData, err := readJSONFile[*PullRequestData](targetFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open workflow run file: %w", err)
+			return nil, fmt.Errorf("failed to open pull request file: %w", err)
 		}
-		err = json.Unmarshal(prFileBytes, &pullRequestData)
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).
 			Msg("Gathered pull request data")
@@ -130,16 +119,7 @@ func PullRequest(
 		return nil, fmt.Errorf("failed to gather commit data for pull request %d: %w", pullRequestNumber, err)
 	}
 
-	data, err := json.Marshal(pullRequestData)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to marshal pull request data to json for pull request %d: %w",
-			pullRequestNumber,
-			err,
-		)
-	}
-	err = os.WriteFile(targetFile, data, 0600)
-	if err != nil {
+	if err := writeJSONFile(targetFile, pullRequestData); err != nil {
 		return nil, fmt.Errorf(
 			"failed to write pull request data to file for pull request %d: %w",
 			pullRequestNumber,
@@ -231,6 +211,7 @@ func prCommitData(
 		eg             errgroup.Group
 	)
 
+	eg.SetLimit(defaultGatherConcurrency)
 	for _, commit := range prCommits {
 		eg.Go(func() error {
 			data, err := Commit(log, client, owner, repo, commit.GetSHA(), opts...)
@@ -263,158 +244,4 @@ func prCommitData(
 	})
 
 	return commitData, nil
-}
-
-// prMergeQueueEvents queries the GitHub GraphQL API for merge queue events for a given pull request.
-func prMergeQueueEvents(
-	client *GitHubClient,
-	owner, repo string,
-	pullRequestNumber int,
-) ([]*MergeQueueEvent, error) {
-	// https://docs.github.com/en/graphql/reference/objects#addedtomergequeueevent
-	var addedQuery struct {
-		Repository struct {
-			PullRequest struct {
-				TimelineItems struct {
-					Nodes []struct {
-						AddedToMergeQueueEvent struct {
-							Actor struct {
-								Login githubv4.String
-							}
-							CreatedAt githubv4.DateTime
-							Enqueuer  struct {
-								Login githubv4.String
-							}
-							ID githubv4.String
-						} `graphql:"... on AddedToMergeQueueEvent"`
-					}
-				} `graphql:"timelineItems(itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT], first: 100)"`
-			} `graphql:"pullRequest(number: $prNumber)"`
-		} `graphql:"repository(owner: $owner, name: $repo)"`
-	}
-
-	// check for pr number overflow
-	if pullRequestNumber > math.MaxInt32 {
-		return nil, fmt.Errorf(
-			"pull request number %d is too large for GitHub GraphQL API, will cause overflow",
-			pullRequestNumber,
-		)
-	}
-
-	//nolint:gosec // explicitly checking MaxInt32 bound before
-	variables := map[string]any{
-		"owner":    githubv4.String(owner),
-		"repo":     githubv4.String(repo),
-		"prNumber": githubv4.Int(pullRequestNumber),
-	}
-
-	err := client.GraphQL.Query(context.Background(), &addedQuery, variables)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query for added to merge queue events: %w", err)
-	}
-
-	// https://docs.github.com/en/graphql/reference/objects#removedfrommergequeueevent
-	var removedQuery struct {
-		Repository struct {
-			PullRequest struct {
-				TimelineItems struct {
-					Nodes []struct {
-						RemovedFromMergeQueueEvent struct {
-							Actor struct {
-								Login githubv4.String
-							}
-							BeforeCommit struct {
-								CommitURL githubv4.String
-								OID       githubv4.String
-							}
-							CreatedAt githubv4.DateTime
-							Reason    githubv4.String
-							ID        githubv4.String
-						} `graphql:"... on RemovedFromMergeQueueEvent"`
-					}
-				} `graphql:"timelineItems(itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT], first: 100)"`
-			} `graphql:"pullRequest(number: $prNumber)"`
-		} `graphql:"repository(owner: $owner, name: $repo)"`
-	}
-
-	err = client.GraphQL.Query(context.Background(), &removedQuery, variables)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query for removed from merge queue events: %w", err)
-	}
-
-	// Sort the added and removed events by timestamp to ensure we can match them correctly
-	sort.Slice(addedQuery.Repository.PullRequest.TimelineItems.Nodes, func(i, j int) bool {
-		return addedQuery.Repository.PullRequest.TimelineItems.Nodes[i].AddedToMergeQueueEvent.CreatedAt.Before(
-			addedQuery.Repository.PullRequest.TimelineItems.Nodes[j].AddedToMergeQueueEvent.CreatedAt.Time,
-		)
-	})
-
-	sort.Slice(removedQuery.Repository.PullRequest.TimelineItems.Nodes, func(i, j int) bool {
-		return removedQuery.Repository.PullRequest.TimelineItems.Nodes[i].RemovedFromMergeQueueEvent.CreatedAt.Before(
-			removedQuery.Repository.PullRequest.TimelineItems.Nodes[j].RemovedFromMergeQueueEvent.CreatedAt.Time,
-		)
-	})
-
-	// Merge corresponding added and removed events into a single event based on timestamps (added events don't have an associated commit)
-	mergeEvents := make([]*MergeQueueEvent, 0, len(addedQuery.Repository.PullRequest.TimelineItems.Nodes))
-	for index := range addedQuery.Repository.PullRequest.TimelineItems.Nodes {
-		mergeEvent := &MergeQueueEvent{
-			AddedTime: addedQuery.Repository.PullRequest.TimelineItems.Nodes[index].AddedToMergeQueueEvent.CreatedAt.Time,
-			AddedActor: string(
-				addedQuery.Repository.PullRequest.TimelineItems.Nodes[index].AddedToMergeQueueEvent.Actor.Login,
-			),
-			AddedEnqueuer: string(
-				addedQuery.Repository.PullRequest.TimelineItems.Nodes[index].AddedToMergeQueueEvent.Enqueuer.Login,
-			),
-			AddedID: string(
-				addedQuery.Repository.PullRequest.TimelineItems.Nodes[index].AddedToMergeQueueEvent.ID,
-			),
-		}
-
-		if index >= len(removedQuery.Repository.PullRequest.TimelineItems.Nodes) {
-			mergeEvents = append(mergeEvents, mergeEvent)
-			break // No corresponding removed event
-		}
-		if addedQuery.Repository.PullRequest.TimelineItems.Nodes[index].AddedToMergeQueueEvent.CreatedAt.After(
-			removedQuery.Repository.PullRequest.TimelineItems.Nodes[index].RemovedFromMergeQueueEvent.CreatedAt.Time,
-		) {
-			return nil, fmt.Errorf(
-				"'added' merge queue event %s at %s is after the corresponding 'removed' merge queue event %s at %s for pull request %d",
-				addedQuery.Repository.PullRequest.TimelineItems.Nodes[index].AddedToMergeQueueEvent.ID,
-				addedQuery.Repository.PullRequest.TimelineItems.Nodes[index].AddedToMergeQueueEvent.CreatedAt.Time,
-				removedQuery.Repository.PullRequest.TimelineItems.Nodes[index].RemovedFromMergeQueueEvent.ID,
-				removedQuery.Repository.PullRequest.TimelineItems.Nodes[index].RemovedFromMergeQueueEvent.CreatedAt.Time,
-				pullRequestNumber,
-			)
-		}
-
-		mergeEvent.RemovedTime = removedQuery.Repository.PullRequest.TimelineItems.Nodes[index].RemovedFromMergeQueueEvent.CreatedAt.Time
-		mergeEvent.RemovedActor = string(
-			removedQuery.Repository.PullRequest.TimelineItems.Nodes[index].RemovedFromMergeQueueEvent.Actor.Login,
-		)
-		mergeEvent.RemovedID = string(
-			removedQuery.Repository.PullRequest.TimelineItems.Nodes[index].RemovedFromMergeQueueEvent.ID,
-		)
-		mergeEvent.RemovedReason = string(
-			removedQuery.Repository.PullRequest.TimelineItems.Nodes[index].RemovedFromMergeQueueEvent.Reason,
-		)
-		mergeEvent.Commit = string(
-			removedQuery.Repository.PullRequest.TimelineItems.Nodes[index].RemovedFromMergeQueueEvent.BeforeCommit.OID,
-		)
-
-		mergeEvents = append(mergeEvents, mergeEvent)
-	}
-
-	return mergeEvents, nil
-}
-
-// establishPRChecksStatus determines the status of the pull request checks
-// based on the status of the individual workflow run conclusions.
-// https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-repository
-func establishPRChecksConclusion(_, newStatus string) string {
-	switch newStatus {
-	case "failure", "in_progress", "timed_out":
-		return newStatus
-	}
-	return newStatus
 }

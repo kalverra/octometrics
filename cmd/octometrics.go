@@ -44,6 +44,16 @@ func versionInfo() string {
 	)
 }
 
+func commandNeedsGitHubToken(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "monitor", "report", "help", "completion":
+			return false
+		}
+	}
+	return true
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "octometrics",
 	Short: "See metrics and profiling of your GitHub Actions",
@@ -63,7 +73,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
 
-		if cfg.GitHubToken == "" {
+		if cfg.GitHubToken == "" && commandNeedsGitHubToken(cmd) {
 			logger.Warn().Msg("GitHub token not provided, will likely hit rate limits quickly")
 			fmt.Fprintln(os.Stderr, "WARNING: GitHub token not provided, will likely hit rate limits quickly")
 		}

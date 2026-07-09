@@ -12,7 +12,7 @@ import (
 )
 
 // buildReport assembles the full markdown report from analysis data and optional job steps.
-func buildReport(analysis *monitor.Analysis, steps []*github.TaskStep, _ *ghaContext) string {
+func buildReport(analysis *monitor.Analysis, steps []*github.TaskStep) string {
 	var b strings.Builder
 
 	title := "Octometrics Report"
@@ -68,6 +68,11 @@ func buildReport(analysis *monitor.Analysis, steps []*github.TaskStep, _ *ghaCon
 	}
 
 	return b.String()
+}
+
+// MetricSummary returns a markdown table of peak and average monitoring metrics.
+func MetricSummary(analysis *monitor.Analysis) string {
+	return metricSummaryTable(analysis)
 }
 
 // metricSummaryTable produces a markdown table with peak and average values.
@@ -190,18 +195,23 @@ func ioSummaryRows(analysis *monitor.Analysis) (sentRow, recvRow string) {
 		return "", ""
 	}
 
-	var maxSent, maxRecv uint64
+	var (
+		totalSent, totalRecv uint64
+		peakSent, peakRecv   uint64
+	)
 	for _, m := range analysis.IOMeasurements {
-		if m.BytesSent > maxSent {
-			maxSent = m.BytesSent
+		totalSent += m.BytesSent
+		totalRecv += m.BytesRecv
+		if m.BytesSent > peakSent {
+			peakSent = m.BytesSent
 		}
-		if m.BytesRecv > maxRecv {
-			maxRecv = m.BytesRecv
+		if m.BytesRecv > peakRecv {
+			peakRecv = m.BytesRecv
 		}
 	}
 
-	sentRow = fmt.Sprintf("| Net Sent | %s total | — |", formatBytes(maxSent))
-	recvRow = fmt.Sprintf("| Net Recv | %s total | — |", formatBytes(maxRecv))
+	sentRow = fmt.Sprintf("| Net Sent | %s peak / %s total | — |", formatBytes(peakSent), formatBytes(totalSent))
+	recvRow = fmt.Sprintf("| Net Recv | %s peak / %s total | — |", formatBytes(peakRecv), formatBytes(totalRecv))
 	return sentRow, recvRow
 }
 

@@ -212,7 +212,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 					expectedRunner = runner
 					runnerCost, ok := rateByRunner[runner]
 					require.True(t, ok, "runner '%s' not found in rateByRunner", runner)
-					expectedCost = jobRun.GetDurationMS() / 1000 / 60 * runnerCost
+					expectedCost = billableMinutes(jobRun.GetDurationMS()) * runnerCost
 					break
 				}
 			}

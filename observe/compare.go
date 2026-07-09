@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -44,17 +45,16 @@ type MonitoringPair struct {
 // EventPair groups the left and right Timeline for the same triggering event.
 // Either side may be nil when the event only appears in one observation.
 type EventPair struct {
-	Event                string
-	Left                 *Timeline
-	Right                *Timeline
-	IsTypical            bool // true for common events (pull_request, push, merge_group)
-	LeftDuration         time.Duration
-	RightDuration        time.Duration
-	DurationDelta        time.Duration
-	DurationDeltaPercent float64
-	Items                []ComparisonItem
-	OnlyLeft             []ComparisonOnlyItem
-	OnlyRight            []ComparisonOnlyItem
+	Event         string
+	Left          *Timeline
+	Right         *Timeline
+	IsTypical     bool // true for common events (pull_request, push, merge_group)
+	LeftDuration  time.Duration
+	RightDuration time.Duration
+	DurationDelta time.Duration
+	Items         []ComparisonItem
+	OnlyLeft      []ComparisonOnlyItem
+	OnlyRight     []ComparisonOnlyItem
 
 	// CombinedGantt is a single Mermaid Gantt with Left/Right sections, aligned to the same start time.
 	CombinedGantt *CompareGanttData
@@ -93,19 +93,18 @@ var typicalEvents = map[string]bool{
 
 // ComparisonItem represents a matched item present in both observations.
 type ComparisonItem struct {
-	Name                 string
-	LeftID               string
-	RightID              string
-	LeftDuration         time.Duration
-	RightDuration        time.Duration
-	DurationDelta        time.Duration // Right - Left; positive means right is slower
-	DurationDeltaPercent float64
-	LeftConclusion       string // Gantt status: "", "crit", "done", "active"
-	RightConclusion      string
-	StatusChanged        bool
-	LeftRunner           string
-	RightRunner          string
-	RunnerChanged        bool
+	Name            string
+	LeftID          string
+	RightID         string
+	LeftDuration    time.Duration
+	RightDuration   time.Duration
+	DurationDelta   time.Duration // Right - Left; positive means right is slower
+	LeftConclusion  string        // Gantt status: "", "crit", "done", "active"
+	RightConclusion string
+	StatusChanged   bool
+	LeftRunner      string
+	RightRunner     string
+	RunnerChanged   bool
 }
 
 // ComparisonOnlyItem represents an item present in only one observation.
@@ -273,22 +272,22 @@ func buildComparison(left, right *Observation, owner, repo, compareType string) 
 
 // matchItems computes matched, only-left, and only-right items for two sets of timeline items.
 func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []ComparisonOnlyItem, []ComparisonOnlyItem) {
-	leftByName := make(map[string]TimelineItem, len(leftItems))
+	leftByKey := make(map[itemMatchKey]TimelineItem, len(leftItems))
 	for _, item := range leftItems {
-		leftByName[item.Name] = item
+		leftByKey[compareMatchKey(item)] = item
 	}
-	rightByName := make(map[string]TimelineItem, len(rightItems))
+	rightByKey := make(map[itemMatchKey]TimelineItem, len(rightItems))
 	for _, item := range rightItems {
-		rightByName[item.Name] = item
+		rightByKey[compareMatchKey(item)] = item
 	}
 
 	var matched []ComparisonItem
-	seen := make(map[string]bool)
-	for name, li := range leftByName {
-		if ri, ok := rightByName[name]; ok {
+	seen := make(map[itemMatchKey]bool)
+	for key, li := range leftByKey {
+		if ri, ok := rightByKey[key]; ok {
 			delta := ri.Duration - li.Duration
 			matched = append(matched, ComparisonItem{
-				Name:            name,
+				Name:            li.Name,
 				LeftID:          li.ID,
 				RightID:         ri.ID,
 				LeftDuration:    li.Duration,
@@ -301,7 +300,7 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 				RightRunner:     ri.Runner,
 				RunnerChanged:   li.Runner != ri.Runner,
 			})
-			seen[name] = true
+			seen[key] = true
 		}
 	}
 	sort.Slice(matched, func(i, j int) bool {
@@ -309,10 +308,10 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 	})
 
 	var onlyLeft []ComparisonOnlyItem
-	for name, item := range leftByName {
-		if !seen[name] {
+	for key, item := range leftByKey {
+		if !seen[key] {
 			onlyLeft = append(onlyLeft, ComparisonOnlyItem{
-				Name:       name,
+				Name:       item.Name,
 				Duration:   item.Duration,
 				Conclusion: item.Conclusion,
 				Runner:     item.Runner,
@@ -322,10 +321,10 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 	sort.Slice(onlyLeft, func(i, j int) bool { return onlyLeft[i].Name < onlyLeft[j].Name })
 
 	var onlyRight []ComparisonOnlyItem
-	for name, item := range rightByName {
-		if _, inLeft := leftByName[name]; !inLeft {
+	for key, item := range rightByKey {
+		if _, inLeft := leftByKey[key]; !inLeft {
 			onlyRight = append(onlyRight, ComparisonOnlyItem{
-				Name:       name,
+				Name:       item.Name,
 				Duration:   item.Duration,
 				Conclusion: item.Conclusion,
 				Runner:     item.Runner,
@@ -335,6 +334,28 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 	sort.Slice(onlyRight, func(i, j int) bool { return onlyRight[i].Name < onlyRight[j].Name })
 
 	return matched, onlyLeft, onlyRight
+}
+
+type itemMatchKey struct {
+	id   string
+	name string
+}
+
+func compareMatchKey(item TimelineItem) itemMatchKey {
+	if item.ID != "" {
+		return itemMatchKey{id: item.ID}
+	}
+	return itemMatchKey{name: normalizeCompareName(item.Name)}
+}
+
+func normalizeCompareName(name string) string {
+	for _, suffix := range []string{" (in progress)", " (cancelled)"} {
+		name = strings.TrimSuffix(name, suffix)
+	}
+	if idx := strings.LastIndex(name, " (attempt "); idx != -1 && strings.HasSuffix(name, ")") {
+		name = name[:idx]
+	}
+	return name
 }
 
 // wallClockDuration computes the wall-clock span across all Timeline items

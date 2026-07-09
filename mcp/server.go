@@ -14,6 +14,7 @@ import (
 
 	"github.com/kalverra/octometrics/gather"
 	"github.com/kalverra/octometrics/observe"
+	"github.com/kalverra/octometrics/report"
 )
 
 // Observer defines the interface for building observations and comparisons.
@@ -50,6 +51,14 @@ type Observer interface {
 		since, until time.Time,
 		event string,
 	) ([]*github.WorkflowRun, error)
+	GatherWorkflowRun(
+		ctx context.Context,
+		log zerolog.Logger,
+		client *gather.GitHubClient,
+		owner, repo string,
+		runID int64,
+		opts ...gather.Option,
+	) (*gather.WorkflowRunData, error)
 }
 
 // DefaultObserver is the default implementation that calls the observe package.
@@ -77,6 +86,19 @@ func (d *DefaultObserver) JobRuns(
 	opts ...observe.Option,
 ) ([]*observe.Observation, error) {
 	return observe.JobRuns(log, client, owner, repo, runID, opts...)
+}
+
+// GatherWorkflowRun loads gathered workflow run data for MCP tools that need raw analysis.
+func (d *DefaultObserver) GatherWorkflowRun(
+	_ context.Context,
+	log zerolog.Logger,
+	client *gather.GitHubClient,
+	owner, repo string,
+	runID int64,
+	opts ...gather.Option,
+) (*gather.WorkflowRunData, error) {
+	data, _, err := gather.WorkflowRun(log, client, owner, repo, runID, opts...)
+	return data, err
 }
 
 // CompareWorkflowRuns builds a comparison between two workflow runs.
@@ -137,10 +159,13 @@ type serverHandler struct {
 }
 
 // Server starts the MCP server over stdio.
-func Server(log zerolog.Logger, client *gather.GitHubClient, obs Observer) error {
+func Server(log zerolog.Logger, client *gather.GitHubClient, obs Observer, serverVersion string) error {
+	if serverVersion == "" {
+		serverVersion = "dev"
+	}
 	s := server.NewMCPServer(
 		"octometrics",
-		"1.0.0",
+		serverVersion,
 		server.WithToolCapabilities(true),
 	)
 
@@ -334,43 +359,26 @@ func (h *serverHandler) handleGetPerformanceMetrics(
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to get job ID: %v", err)), nil
 	}
 
-	jobs, err := h.observer.JobRuns(ctx, h.log, h.client, owner, repo, int64(runID))
+	workflowRun, err := h.observer.GatherWorkflowRun(ctx, h.log, h.client, owner, repo, int64(runID))
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to get jobs: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get workflow run: %v", err)), nil
 	}
 
-	var targetJob *observe.Observation
-	for _, j := range jobs {
-		if j.ID == fmt.Sprintf("%d", jobID) {
-			targetJob = j
-			break
+	for _, job := range workflowRun.Jobs {
+		if job.GetID() != int64(jobID) {
+			continue
 		}
+		if job.Analysis == nil {
+			return mcp.NewToolResultText("No performance monitoring data available for this job."), nil
+		}
+		summary := report.MetricSummary(job.Analysis)
+		if summary == "" {
+			return mcp.NewToolResultText("No performance monitoring data available for this job."), nil
+		}
+		return mcp.NewToolResultText(fmt.Sprintf("Performance metrics for job %s:\n\n%s", job.GetName(), summary)), nil
 	}
 
-	if targetJob == nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Job ID %d not found in workflow run %d", jobID, runID)), nil
-	}
-
-	if targetJob.MonitoringData == nil || len(targetJob.MonitoringData.Charts) == 0 {
-		return mcp.NewToolResultText("No performance monitoring data available for this job."), nil
-	}
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "Performance Metrics for Job %s:\n\n", targetJob.Name)
-
-	// The charts contain the mermaid diagram strings, which include peak/avg data in the titles/legends
-	// We'll extract the title and attempt to summarize.
-	for _, chart := range targetJob.MonitoringData.Charts {
-		// Title usually looks like "CPU Usage %"
-		// But wait, the title is just a string, and the actual peak data is embedded in the diagram string or we can extract it.
-		// Let's just output the titles and maybe peak info if we can parse it, or we can just return the raw xychart string
-		// since it is token-efficient compared to raw json.
-		fmt.Fprintf(&b, "--- %s ---\n", chart.Title)
-		// Let's just include the mermaid chart since xychart is relatively token-compact (downsampled to 40 points)
-		fmt.Fprintf(&b, "%s\n\n", chart.Diagram)
-	}
-
-	return mcp.NewToolResultText(b.String()), nil
+	return mcp.NewToolResultError(fmt.Sprintf("Job ID %d not found in workflow run %d", jobID, runID)), nil
 }
 
 func (h *serverHandler) handleCompareRuns(

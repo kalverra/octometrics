@@ -230,7 +230,7 @@ func cpuChartDiagram(analysis *monitor.Analysis) string {
 	}
 
 	downsampled := downsample(points, defaultTargetPoints, maxAggregator)
-	return buildXYChartDiagram("CPU Usage (%)", "Usage %", 0, 100, downsampled)
+	return buildXYChartDiagram("CPU Usage (%)", "Usage %", 0, 100, downsampled, time.Time{}, time.Time{}, false)
 }
 
 func cpuChartDiagramWindowed(analysis *monitor.Analysis, windowStart, axisEnd time.Time) string {
@@ -437,7 +437,16 @@ func memoryChartDiagram(analysis *monitor.Analysis) string {
 	}
 
 	downsampled := downsample(points, defaultTargetPoints, lastAggregator)
-	return buildXYChartDiagram(fmt.Sprintf("Memory Usage (%s)", unit), unit, 0, maxY, downsampled)
+	return buildXYChartDiagram(
+		fmt.Sprintf("Memory Usage (%s)", unit),
+		unit,
+		0,
+		maxY,
+		downsampled,
+		time.Time{},
+		time.Time{},
+		false,
+	)
 }
 
 func memoryChartDiagramWindowed(analysis *monitor.Analysis, windowStart, axisEnd time.Time) string {
@@ -512,7 +521,16 @@ func diskChartDiagram(analysis *monitor.Analysis) string {
 	}
 
 	downsampled := downsample(points, defaultTargetPoints, lastAggregator)
-	return buildXYChartDiagram(fmt.Sprintf("Disk Usage (%s)", unit), unit, 0, maxY, downsampled)
+	return buildXYChartDiagram(
+		fmt.Sprintf("Disk Usage (%s)", unit),
+		unit,
+		0,
+		maxY,
+		downsampled,
+		time.Time{},
+		time.Time{},
+		false,
+	)
 }
 
 func diskChartDiagramWindowed(analysis *monitor.Analysis, windowStart, axisEnd time.Time) string {
@@ -586,7 +604,16 @@ func ioChartDiagrams(analysis *monitor.Analysis) []MonitoringChart {
 		}
 		dsSent := downsample(sent, defaultTargetPoints, lastAggregator)
 		maxSent := float64(maxRawSent) / sentDiv
-		d := buildXYChartDiagram(fmt.Sprintf("Network Sent (%s)", sentUnit), sentUnit, 0, maxSent*1.1, dsSent)
+		d := buildXYChartDiagram(
+			fmt.Sprintf("Network Sent (%s)", sentUnit),
+			sentUnit,
+			0,
+			maxSent*1.1,
+			dsSent,
+			time.Time{},
+			time.Time{},
+			false,
+		)
 		if d != "" {
 			charts = append(charts, MonitoringChart{Title: "Network Sent", Diagram: d})
 		}
@@ -600,7 +627,16 @@ func ioChartDiagrams(analysis *monitor.Analysis) []MonitoringChart {
 		}
 		dsRecv := downsample(recv, defaultTargetPoints, lastAggregator)
 		maxRecv := float64(maxRawRecv) / recvDiv
-		d := buildXYChartDiagram(fmt.Sprintf("Network Received (%s)", recvUnit), recvUnit, 0, maxRecv*1.1, dsRecv)
+		d := buildXYChartDiagram(
+			fmt.Sprintf("Network Received (%s)", recvUnit),
+			recvUnit,
+			0,
+			maxRecv*1.1,
+			dsRecv,
+			time.Time{},
+			time.Time{},
+			false,
+		)
 		if d != "" {
 			charts = append(charts, MonitoringChart{Title: "Network Received", Diagram: d})
 		}
@@ -668,32 +704,41 @@ func ioChartDiagramsWindowed(analysis *monitor.Analysis, windowStart, axisEnd ti
 	return charts
 }
 
-// cpuAverageOverTime computes the average CPU usage across all cores at each time point.
+// cpuAverageOverTime computes the average CPU usage across all cores at each timestamp.
 func cpuAverageOverTime(cpuMeasurements map[int][]*monitor.CPUMeasurement) []timeValue {
-	// Find the CPU with the most measurements as the reference timeline.
-	var refCPU int
-	var maxLen int
-	for cpuNum, measurements := range cpuMeasurements {
-		if len(measurements) > maxLen {
-			maxLen = len(measurements)
-			refCPU = cpuNum
+	type cpuReading struct {
+		usedPercent float64
+	}
+
+	byTime := make(map[time.Time][]cpuReading)
+	for _, measurements := range cpuMeasurements {
+		for _, m := range measurements {
+			byTime[m.Time] = append(byTime[m.Time], cpuReading{usedPercent: m.UsedPercent})
 		}
 	}
-	if maxLen == 0 {
+	if len(byTime) == 0 {
 		return nil
 	}
 
-	numCPUs := float64(len(cpuMeasurements))
-	result := make([]timeValue, maxLen)
-	for i := 0; i < maxLen; i++ {
-		result[i].Time = cpuMeasurements[refCPU][i].Time
+	times := make([]time.Time, 0, len(byTime))
+	for t := range byTime {
+		times = append(times, t)
+	}
+	sort.Slice(times, func(i, j int) bool {
+		return times[i].Before(times[j])
+	})
+
+	result := make([]timeValue, 0, len(times))
+	for _, t := range times {
+		readings := byTime[t]
 		var sum float64
-		for _, measurements := range cpuMeasurements {
-			if i < len(measurements) {
-				sum += measurements[i].UsedPercent
-			}
+		for _, reading := range readings {
+			sum += reading.usedPercent
 		}
-		result[i].Value = sum / numCPUs
+		result = append(result, timeValue{
+			Time:  t,
+			Value: sum / float64(len(readings)),
+		})
 	}
 	return result
 }
@@ -745,30 +790,73 @@ func markdownMermaidBlock(diagram string) string {
 }
 
 // buildXYChartDiagram returns Mermaid xychart-beta source without markdown fences.
-func buildXYChartDiagram(title, yLabel string, yMin, yMax float64, points []timeValue) string {
+// When window is non-nil and valid, points are resampled across the window axis.
+func buildXYChartDiagram(
+	title, yLabel string,
+	yMin, yMax float64,
+	points []timeValue,
+	windowStart, windowEnd time.Time,
+	windowed bool,
+) string {
 	if len(points) == 0 {
 		return ""
+	}
+
+	var (
+		duration time.Duration
+		xMax     float64
+		values   []string
+	)
+
+	if windowed {
+		if !windowEnd.After(windowStart) {
+			return ""
+		}
+		duration = windowEnd.Sub(windowStart)
+		if duration >= 2*time.Minute {
+			xMax = math.Ceil(duration.Minutes())
+		} else {
+			xMax = math.Ceil(duration.Seconds())
+		}
+		if xMax < 1 {
+			xMax = 1
+		}
+		n := max(len(points), 2)
+		values = resampleLineValues(points, windowStart, windowEnd, n)
+	} else {
+		duration = points[len(points)-1].Time.Sub(points[0].Time)
+		if duration >= 2*time.Minute {
+			xMax = math.Ceil(duration.Minutes())
+		} else {
+			xMax = math.Ceil(duration.Seconds())
+		}
+		values = make([]string, len(points))
+		for i, p := range points {
+			values[i] = fmt.Sprintf("%.1f", p.Value)
+		}
 	}
 
 	var b strings.Builder
 	b.WriteString("xychart-beta\n")
 	fmt.Fprintf(&b, "    title %q\n", title)
-
-	elapsed := points[len(points)-1].Time.Sub(points[0].Time)
-	if elapsed >= 2*time.Minute {
-		fmt.Fprintf(&b, "    x-axis \"Minutes\" 0 --> %.0f\n", math.Ceil(elapsed.Minutes()))
+	if duration >= 2*time.Minute {
+		fmt.Fprintf(&b, "    x-axis \"Minutes\" 0 --> %.0f\n", xMax)
 	} else {
-		fmt.Fprintf(&b, "    x-axis \"Seconds\" 0 --> %.0f\n", math.Ceil(elapsed.Seconds()))
+		fmt.Fprintf(&b, "    x-axis \"Seconds\" 0 --> %.0f\n", xMax)
 	}
 	fmt.Fprintf(&b, "    y-axis %q %.0f --> %.0f\n", yLabel, yMin, math.Ceil(yMax))
-
-	values := make([]string, len(points))
-	for i, p := range points {
-		values[i] = fmt.Sprintf("%.1f", p.Value)
-	}
 	fmt.Fprintf(&b, "    line [%s]\n", strings.Join(values, ", "))
 
 	return b.String()
+}
+
+func buildXYChartDiagramWindowed(
+	title, yLabel string,
+	yMin, yMax float64,
+	points []timeValue,
+	windowStart, axisEnd time.Time,
+) string {
+	return buildXYChartDiagram(title, yLabel, yMin, yMax, points, windowStart, axisEnd, true)
 }
 
 func interpolateAt(points []timeValue, t time.Time) float64 {
@@ -808,46 +896,6 @@ func resampleLineValues(points []timeValue, t0, t1 time.Time, n int) []string {
 		values[i] = fmt.Sprintf("%.1f", v)
 	}
 	return values
-}
-
-// buildXYChartDiagramWindowed maps evenly spaced xychart line points to elapsed time in [windowStart, axisEnd].
-func buildXYChartDiagramWindowed(
-	title, yLabel string,
-	yMin, yMax float64,
-	points []timeValue,
-	windowStart, axisEnd time.Time,
-) string {
-	if len(points) == 0 || !axisEnd.After(windowStart) {
-		return ""
-	}
-	duration := axisEnd.Sub(windowStart)
-	var xMax float64
-	if duration >= 2*time.Minute {
-		xMax = math.Ceil(duration.Minutes())
-		if xMax < 1 {
-			xMax = 1
-		}
-	} else {
-		xMax = math.Ceil(duration.Seconds())
-		if xMax < 1 {
-			xMax = 1
-		}
-	}
-	n := max(len(points), 2)
-	valueStrs := resampleLineValues(points, windowStart, axisEnd, n)
-
-	var b strings.Builder
-	b.WriteString("xychart-beta\n")
-	fmt.Fprintf(&b, "    title %q\n", title)
-	if duration >= 2*time.Minute {
-		fmt.Fprintf(&b, "    x-axis \"Minutes\" 0 --> %.0f\n", xMax)
-	} else {
-		fmt.Fprintf(&b, "    x-axis \"Seconds\" 0 --> %.0f\n", xMax)
-	}
-	fmt.Fprintf(&b, "    y-axis %q %.0f --> %.0f\n", yLabel, yMin, math.Ceil(yMax))
-	fmt.Fprintf(&b, "    line [%s]\n", strings.Join(valueStrs, ", "))
-
-	return b.String()
 }
 
 // buildXYChartDiagramMultiLine emits one xychart-beta with multiple line series (same x grid, equal-length value slices).
@@ -937,7 +985,7 @@ func buildXYChartDiagramMultiLineWindowed(
 
 // buildXYChart produces a Mermaid xychart-beta code block for Markdown.
 func buildXYChart(title, yLabel string, yMin, yMax float64, points []timeValue) string {
-	d := buildXYChartDiagram(title, yLabel, yMin, yMax, points)
+	d := buildXYChartDiagram(title, yLabel, yMin, yMax, points, time.Time{}, time.Time{}, false)
 	if d == "" {
 		return ""
 	}
@@ -947,10 +995,12 @@ func buildXYChart(title, yLabel string, yMin, yMax float64, points []timeValue) 
 // conclusionToGanttStatus maps a GitHub conclusion to a Mermaid Gantt status keyword.
 func conclusionToGanttStatus(conclusion string) string {
 	switch conclusion {
-	case "failure":
+	case "failure", "timed_out":
 		return "crit"
-	case "cancelled":
+	case "cancelled", "skipped":
 		return "done"
+	case "action_required":
+		return "active"
 	default:
 		return ""
 	}

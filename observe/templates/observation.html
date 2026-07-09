@@ -61,8 +61,15 @@
             </summary>
             <div class="section-body">
                 {{ template "timeline_html" . }}
-                {{ if $.MonitoringData }}
-                {{ range $.MonitoringData.Charts }}
+            </div>
+        </details>
+        {{ end }}
+
+        {{ if .MonitoringData }}
+        <details class="section" open>
+            <summary>Performance monitoring</summary>
+            <div class="section-body">
+                {{ range .MonitoringData.Charts }}
                 <details class="monitoring-category">
                     <summary>{{ .Title }}</summary>
                     <div class="monitoring-body">
@@ -71,7 +78,6 @@
                         </div>
                     </div>
                 </details>
-                {{ end }}
                 {{ end }}
             </div>
         </details>

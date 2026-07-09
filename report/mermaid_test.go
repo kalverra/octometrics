@@ -459,6 +459,26 @@ func TestCPUAverageOverTime(t *testing.T) {
 	assert.InDelta(t, 40.0, result[1].Value, 0.01)
 }
 
+func TestCPUAverageOverTime_raggedTimestamps(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+	cpuMeasurements := map[int][]*monitor.CPUMeasurement{
+		0: {
+			{Time: base, UsedPercent: 80},
+			{Time: base.Add(time.Second), UsedPercent: 60},
+		},
+		1: {
+			{Time: base, UsedPercent: 40},
+		},
+	}
+
+	result := cpuAverageOverTime(cpuMeasurements)
+	require.Len(t, result, 2)
+	assert.InDelta(t, 60.0, result[0].Value, 0.01)
+	assert.InDelta(t, 60.0, result[1].Value, 0.01)
+}
+
 func TestSanitizeMermaidName(t *testing.T) {
 	t.Parallel()
 
@@ -472,7 +492,10 @@ func TestConclusionToGanttStatus(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t, "crit", conclusionToGanttStatus("failure"))
+	assert.Equal(t, "crit", conclusionToGanttStatus("timed_out"))
 	assert.Equal(t, "done", conclusionToGanttStatus("cancelled"))
+	assert.Equal(t, "done", conclusionToGanttStatus("skipped"))
+	assert.Equal(t, "active", conclusionToGanttStatus("action_required"))
 	assert.Empty(t, conclusionToGanttStatus("success"))
 	assert.Empty(t, conclusionToGanttStatus(""))
 }

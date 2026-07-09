@@ -166,6 +166,9 @@ func processEntry(analysis *Analysis, entry *monitorEntry) error {
 			Total: entry.GetTotal(),
 		}
 	case GitHubActionsEnvVarsMsg:
+		if entry.GitHubActionsEnvVars == nil {
+			return nil
+		}
 		analysis.SystemInfo.GitHubActionsEnvVars = entry.GitHubActionsEnvVars
 		analysis.JobName = analysis.SystemInfo.GitHubActionsEnvVars.JobName
 	case ObservedCPUMsg:

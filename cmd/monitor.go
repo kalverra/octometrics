@@ -46,10 +46,24 @@ octometrics monitor --interval=5s # Monitor system resources every 5 seconds
 			ctx = context.Background()
 		}
 
-		err := monitor.Start(ctx,
+		monitorOpts := []monitor.Option{
 			monitor.WithObserveInterval(interval),
 			monitor.WithOutputFile(outputFile),
-		)
+		}
+		if skipCPU {
+			monitorOpts = append(monitorOpts, monitor.DisableCPU())
+		}
+		if skipMemory {
+			monitorOpts = append(monitorOpts, monitor.DisableMemory())
+		}
+		if skipDisk {
+			monitorOpts = append(monitorOpts, monitor.DisableDisk())
+		}
+		if skipIO {
+			monitorOpts = append(monitorOpts, monitor.DisableIO())
+		}
+
+		err := monitor.Start(ctx, monitorOpts...)
 		if err != nil {
 			return fmt.Errorf("error monitoring system resources, stopping monitoring: %w", err)
 		}

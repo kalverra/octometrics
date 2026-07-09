@@ -12,6 +12,12 @@ import (
 var mcpCmd = &cobra.Command{
 	Use:   "mcp",
 	Short: "Start the Octometrics MCP server (Model Context Protocol) via stdio",
+	Long: `Start the Octometrics MCP server over stdio.
+
+Exposes tools for workflow summaries, job timelines, performance metrics, run comparison, and workflow listing.`,
+	Example: `
+octometrics mcp -t $GITHUB_TOKEN
+`,
 	PreRunE: func(_ *cobra.Command, _ []string) error {
 		if cfg.GitHubToken == "" {
 			return fmt.Errorf("github-token is required for the MCP server")
@@ -24,7 +30,7 @@ var mcpCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(_ *cobra.Command, _ []string) error {
-		return mcp.Server(logger, githubClient, &mcp.DefaultObserver{})
+		return mcp.Server(logger, githubClient, &mcp.DefaultObserver{}, version)
 	},
 }
 

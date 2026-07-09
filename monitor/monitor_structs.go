@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/net"
 
 	"github.com/kalverra/octometrics/internal/logging"
 )
@@ -55,34 +57,34 @@ func DisableIO() Option {
 	}
 }
 
-// DisableProcesses disables process monitoring
-func DisableProcesses() Option {
+// WithDiskPath sets the filesystem path monitored for disk usage.
+func WithDiskPath(path string) Option {
 	return func(opts *options) {
-		opts.MonitorProcesses = false
+		opts.DiskPath = path
 	}
 }
 
 type options struct {
-	OutputFile                  string
-	ObserveInterval             time.Duration
-	MonitorCPU                  bool
-	MonitorMemory               bool
-	MonitorDisk                 bool
-	MonitorIO                   bool
-	MonitorProcesses            bool
-	MonitorGitHubActionsEnvVars bool
+	OutputFile      string
+	ObserveInterval time.Duration
+	MonitorCPU      bool
+	MonitorMemory   bool
+	MonitorDisk     bool
+	MonitorIO       bool
+	DiskPath        string
+	prevCPUTimes    []cpu.TimesStat
+	prevIOStats     []net.IOCountersStat
 }
 
 func defaultOptions() *options {
 	return &options{
-		OutputFile:                  DataFile,
-		ObserveInterval:             time.Second,
-		MonitorCPU:                  true,
-		MonitorMemory:               true,
-		MonitorDisk:                 true,
-		MonitorIO:                   true,
-		MonitorProcesses:            false,
-		MonitorGitHubActionsEnvVars: true,
+		OutputFile:      DataFile,
+		ObserveInterval: time.Second,
+		MonitorCPU:      true,
+		MonitorMemory:   true,
+		MonitorDisk:     true,
+		MonitorIO:       true,
+		DiskPath:        defaultDiskPath(),
 	}
 }
 

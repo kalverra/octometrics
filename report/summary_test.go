@@ -52,7 +52,7 @@ func TestBuildReport(t *testing.T) {
 		},
 	}
 
-	result := buildReport(analysis, steps, nil)
+	result := buildReport(analysis, steps)
 
 	assert.Contains(t, result, "## Octometrics — Build and Test")
 	assert.Contains(t, result, "### Step Timeline")
@@ -83,7 +83,7 @@ func TestBuildReportCPUPerCore(t *testing.T) {
 			},
 		},
 	}
-	result := buildReport(analysis, nil, nil)
+	result := buildReport(analysis, nil)
 	assert.Contains(t, result, "### CPU Usage")
 	assert.Contains(t, result, "#### CPU per core (2 cores)")
 	assert.Equal(t, 2, strings.Count(result, "```mermaid"), "aggregate CPU plus one multi-line per-core block")
@@ -97,7 +97,7 @@ func TestBuildReportEmptyAnalysis(t *testing.T) {
 		CPUMeasurements: map[int][]*monitor.CPUMeasurement{},
 	}
 
-	result := buildReport(analysis, nil, nil)
+	result := buildReport(analysis, nil)
 	assert.Contains(t, result, "## Octometrics Report")
 	assert.NotContains(t, result, "### Step Timeline")
 	assert.NotContains(t, result, "### CPU Usage")

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gofri/go-github-ratelimit/v2/github_ratelimit"
@@ -31,6 +32,8 @@ const (
 
 var (
 	errGitHubTimeout = errors.New("github API timeout")
+	// defaultGatherConcurrency limits parallel GitHub gather operations per commit/PR/range batch.
+	defaultGatherConcurrency = 10
 )
 
 // ghCtx returns a standard context to use for GitHub API calls.
@@ -166,6 +169,7 @@ func NewGitHubClient(
 }
 
 // Range gathers all workflow runs for a repository within a given time range.
+// The returned int is the number of workflow runs that failed to gather.
 func Range(
 	log zerolog.Logger,
 	client *GitHubClient,
@@ -173,9 +177,9 @@ func Range(
 	since, until time.Time,
 	event string,
 	opts ...Option,
-) error {
+) (int, error) {
 	if client == nil {
-		return fmt.Errorf("github client is nil")
+		return 0, fmt.Errorf("github client is nil")
 	}
 
 	log.Info().
@@ -192,7 +196,6 @@ func Range(
 	}
 
 	var (
-		allRuns  []*github.WorkflowRun
 		listOpts = &github.ListWorkflowRunsOptions{
 			Created: createdFilter,
 			Event:   event,
@@ -205,33 +208,42 @@ func Range(
 	ctx, cancel := ghCtx()
 	defer cancel()
 
-	for run, err := range client.Rest.Actions.ListRepositoryWorkflowRunsIter(ctx, owner, repo, listOpts) {
-		if err != nil {
-			return fmt.Errorf("failed to list workflow runs: %w", err)
-		}
-		allRuns = append(allRuns, run)
-	}
-
-	log.Info().Int("count", len(allRuns)).Msg("Found workflow runs to gather")
-
+	runCh := make(chan int64, defaultGatherConcurrency)
+	var failures atomic.Int32
 	var eg errgroup.Group
-	// Limit concurrency to avoid hitting rate limits too fast even with the rate limiter
-	eg.SetLimit(10)
+	eg.SetLimit(defaultGatherConcurrency + 1)
 
-	for _, run := range allRuns {
-		runID := run.GetID()
-		eg.Go(func() error {
-			_, _, err := WorkflowRun(log, client, owner, repo, runID, opts...)
+	eg.Go(func() error {
+		defer close(runCh)
+		count := 0
+		for run, err := range client.Rest.Actions.ListRepositoryWorkflowRunsIter(ctx, owner, repo, listOpts) {
 			if err != nil {
-				log.Error().Err(err).Int64("workflow_run_id", runID).Msg("Failed to gather workflow run")
-				// We don't return error here to allow other runs to be gathered
-				return nil
+				return fmt.Errorf("failed to list workflow runs: %w", err)
+			}
+			count++
+			runCh <- run.GetID()
+		}
+		log.Info().Int("count", count).Msg("Found workflow runs to gather")
+		return nil
+	})
+
+	for range defaultGatherConcurrency {
+		eg.Go(func() error {
+			for runID := range runCh {
+				_, _, err := WorkflowRun(log, client, owner, repo, runID, opts...)
+				if err != nil {
+					failures.Add(1)
+					log.Error().Err(err).Int64("workflow_run_id", runID).Msg("Failed to gather workflow run")
+				}
 			}
 			return nil
 		})
 	}
 
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return int(failures.Load()), err
+	}
+	return int(failures.Load()), nil
 }
 
 // gitHubClientRoundTripper returns a RoundTripper that logs requests and responses to the GitHub API.

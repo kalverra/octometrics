@@ -86,7 +86,10 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			opts = append(opts, gather.WithCost())
 		}
 
-		var err error
+		var (
+			err           error
+			rangeFailures int
+		)
 		action := func() {
 			if cfg.WorkflowRunID != 0 {
 				_, _, err = gather.WorkflowRun(logger, githubClient, cfg.Owner, cfg.Repo, cfg.WorkflowRunID, opts...)
@@ -95,7 +98,15 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			} else if cfg.CommitSHA != "" {
 				_, err = gather.Commit(logger, githubClient, cfg.Owner, cfg.Repo, cfg.CommitSHA, opts...)
 			} else if !cfg.From.IsZero() && !cfg.To.IsZero() {
-				err = gather.Range(logger, githubClient, cfg.Owner, cfg.Repo, cfg.From, cfg.To, cfg.Event, opts...)
+				rangeFailures, err = gather.Range(
+					logger,
+					githubClient,
+					cfg.Owner,
+					cfg.Repo,
+					cfg.From,
+					cfg.To,
+					cfg.Event,
+					opts...)
 			}
 		}
 
@@ -106,6 +117,10 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 
 		if err != nil {
 			return err
+		}
+		if rangeFailures > 0 {
+			fmt.Fprintf(os.Stderr, "Warning: %d workflow run(s) failed to gather\n", rangeFailures)
+			return fmt.Errorf("%d workflow run(s) failed to gather", rangeFailures)
 		}
 		if spinnerErr != nil {
 			return spinnerErr

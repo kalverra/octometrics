@@ -56,8 +56,6 @@ var (
 	ErrMonitorDisk = errors.New("error monitoring Disk")
 	// ErrMonitorIO indicates an IO monitoring failure.
 	ErrMonitorIO = errors.New("error monitoring IO")
-	// ErrMonitorProcesses indicates a process monitoring failure.
-	ErrMonitorProcesses = errors.New("error monitoring Processes")
 )
 
 // Start begins monitoring system resources and writes the data to a file.
@@ -79,6 +77,7 @@ func Start(ctx context.Context, options ...Option) error {
 
 	interruptChan := make(chan os.Signal, 1)
 	signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(interruptChan)
 
 	log.Info().
 		Str("output_file", opts.OutputFile).
@@ -86,10 +85,9 @@ func Start(ctx context.Context, options ...Option) error {
 		Bool("monitor_cpu", opts.MonitorCPU).
 		Bool("monitor_memory", opts.MonitorMemory).
 		Bool("monitor_disk", opts.MonitorDisk).
-		Bool("monitor_processes", opts.MonitorProcesses).
 		Msg("Starting Monitoring")
 
-	if err := systemInfo(log); err != nil {
+	if err := systemInfo(log, opts); err != nil {
 		return fmt.Errorf("error gathering system info: %w", err)
 	}
 
@@ -124,7 +122,7 @@ func Start(ctx context.Context, options ...Option) error {
 	}
 }
 
-func systemInfo(log zerolog.Logger) error {
+func systemInfo(log zerolog.Logger, opts *options) error {
 	cpus, err := cpu.Info()
 	if err != nil {
 		return err
@@ -149,7 +147,7 @@ func systemInfo(log zerolog.Logger) error {
 		Uint64("total", memStat.Total).
 		Msg(MemSystemInfoMsg)
 
-	diskStat, err := disk.Usage("/")
+	diskStat, err := disk.Usage(opts.DiskPath)
 	if err != nil {
 		return err
 	}
@@ -185,7 +183,7 @@ func spot(log zerolog.Logger, opts *options) error {
 
 	if opts.MonitorCPU {
 		eg.Go(func() error {
-			return spotCPU(log)
+			return spotCPU(log, opts)
 		})
 	}
 
@@ -197,18 +195,14 @@ func spot(log zerolog.Logger, opts *options) error {
 
 	if opts.MonitorDisk {
 		eg.Go(func() error {
-			return spotDisk(log)
+			return spotDisk(log, opts)
 		})
 	}
 
 	if opts.MonitorIO {
 		eg.Go(func() error {
-			return spotIO(log)
+			return spotIO(log, opts)
 		})
-	}
-
-	if opts.MonitorProcesses {
-		log.Warn().Msg("Process monitoring not implemented yet")
 	}
 
 	if err := eg.Wait(); err != nil {
@@ -221,17 +215,27 @@ func spot(log zerolog.Logger, opts *options) error {
 	return nil
 }
 
-func spotCPU(log zerolog.Logger) error {
-	cpuPercents, err := cpu.Percent(0, true)
+func spotCPU(log zerolog.Logger, opts *options) error {
+	cpuTimes, err := cpu.Times(true)
 	if err != nil {
 		return fmt.Errorf("error monitoring CPU: %w", err)
 	}
 
-	if len(cpuPercents) == 0 {
+	if len(cpuTimes) == 0 {
 		return ErrMonitorCPU
 	}
 
-	for i, percent := range cpuPercents {
+	percents, err := cpuPercentsFromDelta(opts.prevCPUTimes, cpuTimes)
+	if err != nil {
+		return fmt.Errorf("error monitoring CPU: %w", err)
+	}
+	opts.prevCPUTimes = cpuTimes
+
+	if percents == nil {
+		return nil
+	}
+
+	for i, percent := range percents {
 		log.Debug().
 			Int("num", i).
 			Float64("used_percent", percent).
@@ -252,8 +256,8 @@ func spotMemory(log zerolog.Logger) error {
 	return nil
 }
 
-func spotDisk(log zerolog.Logger) error {
-	usageStat, err := disk.Usage("/")
+func spotDisk(log zerolog.Logger, opts *options) error {
+	usageStat, err := disk.Usage(opts.DiskPath)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrMonitorDisk, err)
 	}
@@ -265,12 +269,23 @@ func spotDisk(log zerolog.Logger) error {
 	return nil
 }
 
-func spotIO(log zerolog.Logger) error {
+func spotIO(log zerolog.Logger, opts *options) error {
 	ioStats, err := net.IOCounters(false)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrMonitorIO, err)
 	}
-	for _, stat := range ioStats {
+
+	deltas, err := ioDeltasFromCounters(opts.prevIOStats, ioStats)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrMonitorIO, err)
+	}
+	opts.prevIOStats = ioStats
+
+	if deltas == nil {
+		return nil
+	}
+
+	for _, stat := range deltas {
 		log.Debug().
 			Uint64("bytes_sent", stat.BytesSent).
 			Uint64("bytes_recv", stat.BytesRecv).

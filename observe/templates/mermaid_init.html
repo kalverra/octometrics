@@ -2,76 +2,105 @@
 
 {{ define "mermaid_init_html" }}
 <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const chartWidth = 1100;
-    const chartHeight = 420;
-    const base = {
-        startOnLoad: true,
-        theme: 'base',
-        useMaxWidth: true,
-        xyChart: {
-            width: chartWidth,
-            height: chartHeight,
-            plotReservedSpacePercent: 42,
-        },
+    const showMermaidFallback = () => {
+        document.querySelectorAll('pre.mermaid').forEach((node) => {
+            if (node.dataset.mermaidFallback) {
+                return;
+            }
+            node.dataset.mermaidFallback = 'true';
+            const msg = document.createElement('p');
+            msg.className = 'empty-state';
+            msg.textContent = 'Charts unavailable (Mermaid CDN failed to load). Check network or try again later.';
+            node.replaceWith(msg);
+        });
     };
-    if (prefersDark) {
-        mermaid.initialize({
-            ...base,
-            themeVariables: {
-                darkMode: true,
-                background: '#161b22',
-                primaryColor: '#238636',
-                primaryTextColor: '#ffffff',
-                primaryBorderColor: '#2ea043',
-                secondaryColor: '#238636',
-                secondaryTextColor: '#ffffff',
-                secondaryBorderColor: '#2ea043',
-                tertiaryColor: '#21262d',
-                tertiaryTextColor: '#e6edf3',
-                tertiaryBorderColor: '#30363d',
-                lineColor: '#484f58',
-                textColor: '#e6edf3',
-                mainBkg: '#161b22',
-                nodeBorder: '#2ea043',
-                critBkgColor: '#da3633',
-                critBorderColor: '#f85149',
-                activeTaskBkgColor: '#d29922',
-                activeTaskBorderColor: '#e3b341',
-                doneTaskBkgColor: '#30363d',
-                doneTaskBorderColor: '#484f58',
-                taskTextColor: '#ffffff',
-                taskTextDarkColor: '#ffffff',
-                taskTextClickableColor: '#ffffff',
+
+    let mermaid;
+    try {
+        mermaid = (await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')).default;
+    } catch (error) {
+        console.error('Failed to load Mermaid', error);
+        showMermaidFallback();
+    }
+
+    if (mermaid) {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const chartWidth = 1100;
+        const chartHeight = 420;
+        const base = {
+            startOnLoad: false,
+            theme: 'base',
+            useMaxWidth: true,
+            xyChart: {
+                width: chartWidth,
+                height: chartHeight,
+                plotReservedSpacePercent: 42,
             },
-        });
-    } else {
-        mermaid.initialize({
-            ...base,
-            themeVariables: {
-                primaryColor: '#2da44e',
-                primaryTextColor: '#ffffff',
-                primaryBorderColor: '#1a7f37',
-                secondaryColor: '#2da44e',
-                secondaryTextColor: '#ffffff',
-                secondaryBorderColor: '#1a7f37',
-                tertiaryColor: '#f6f8fa',
-                tertiaryTextColor: '#1f2328',
-                tertiaryBorderColor: '#d1d9e0',
-                lineColor: '#d1d9e0',
-                textColor: '#1f2328',
-                critBkgColor: '#cf222e',
-                critBorderColor: '#a40e26',
-                activeTaskBkgColor: '#bf8700',
-                activeTaskBorderColor: '#9a6700',
-                doneTaskBkgColor: '#eaeef2',
-                doneTaskBorderColor: '#d1d9e0',
-                taskTextColor: '#ffffff',
-                taskTextDarkColor: '#1f2328',
-                taskTextClickableColor: '#ffffff',
-            },
-        });
+        };
+        if (prefersDark) {
+            mermaid.initialize({
+                ...base,
+                themeVariables: {
+                    darkMode: true,
+                    background: '#161b22',
+                    primaryColor: '#238636',
+                    primaryTextColor: '#ffffff',
+                    primaryBorderColor: '#2ea043',
+                    secondaryColor: '#238636',
+                    secondaryTextColor: '#ffffff',
+                    secondaryBorderColor: '#2ea043',
+                    tertiaryColor: '#21262d',
+                    tertiaryTextColor: '#e6edf3',
+                    tertiaryBorderColor: '#30363d',
+                    lineColor: '#484f58',
+                    textColor: '#e6edf3',
+                    mainBkg: '#161b22',
+                    nodeBorder: '#2ea043',
+                    critBkgColor: '#da3633',
+                    critBorderColor: '#f85149',
+                    activeTaskBkgColor: '#d29922',
+                    activeTaskBorderColor: '#e3b341',
+                    doneTaskBkgColor: '#30363d',
+                    doneTaskBorderColor: '#484f58',
+                    taskTextColor: '#ffffff',
+                    taskTextDarkColor: '#ffffff',
+                    taskTextClickableColor: '#ffffff',
+                },
+            });
+        } else {
+            mermaid.initialize({
+                ...base,
+                themeVariables: {
+                    primaryColor: '#2da44e',
+                    primaryTextColor: '#ffffff',
+                    primaryBorderColor: '#1a7f37',
+                    secondaryColor: '#2da44e',
+                    secondaryTextColor: '#ffffff',
+                    secondaryBorderColor: '#1a7f37',
+                    tertiaryColor: '#f6f8fa',
+                    tertiaryTextColor: '#1f2328',
+                    tertiaryBorderColor: '#d1d9e0',
+                    lineColor: '#d1d9e0',
+                    textColor: '#1f2328',
+                    critBkgColor: '#cf222e',
+                    critBorderColor: '#a40e26',
+                    activeTaskBkgColor: '#bf8700',
+                    activeTaskBorderColor: '#9a6700',
+                    doneTaskBkgColor: '#eaeef2',
+                    doneTaskBorderColor: '#d1d9e0',
+                    taskTextColor: '#ffffff',
+                    taskTextDarkColor: '#1f2328',
+                    taskTextClickableColor: '#ffffff',
+                },
+            });
+        }
+        // Dynamic import resolves after DOMContentLoaded, so startOnLoad would miss the event.
+        // Render explicitly instead.
+        try {
+            await mermaid.run();
+        } catch (error) {
+            console.error('Failed to render Mermaid diagrams', error);
+        }
     }
 </script>
 {{ end }}

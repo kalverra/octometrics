@@ -29,27 +29,29 @@ func Commit(
 		return nil, err
 	}
 
-	var (
+	var workflowRuns []*gather.WorkflowRunData
+	if len(commit.WorkflowRuns) > 0 {
+		workflowRuns = commit.WorkflowRuns
+	} else {
 		workflowRuns = make([]*gather.WorkflowRunData, 0, len(commit.WorkflowRunIDs))
-		observation  = &Observation{
-			ID:         commitSHA,
-			Name:       "Commit " + commitSHA,
-			Owner:      owner,
-			Repo:       repo,
-			GitHubLink: commit.GetHTMLURL(),
-			DataType:   "commit",
-			State:      commit.GetConclusion(),
-			Actor:      commit.GetAuthor().GetLogin(),
-			Cost:       commit.GetCost(),
+		for _, workflowRunID := range commit.WorkflowRunIDs {
+			workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
+			if err != nil {
+				return nil, err
+			}
+			workflowRuns = append(workflowRuns, workflowRun)
 		}
-	)
-
-	for _, workflowRunID := range commit.WorkflowRunIDs {
-		workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
-		if err != nil {
-			return nil, err
-		}
-		workflowRuns = append(workflowRuns, workflowRun)
+	}
+	observation := &Observation{
+		ID:         commitSHA,
+		Name:       "Commit " + commitSHA,
+		Owner:      owner,
+		Repo:       repo,
+		GitHubLink: commit.GetHTMLURL(),
+		DataType:   "commit",
+		State:      commit.GetConclusion(),
+		Actor:      commit.GetAuthor().GetLogin(),
+		Cost:       commit.GetCost(),
 	}
 
 	filtered := make([]*gather.WorkflowRunData, 0, len(workflowRuns))

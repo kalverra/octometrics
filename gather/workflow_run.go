@@ -3,16 +3,17 @@ package gather
 import (
 	"archive/zip"
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/go-github/v89/github"
@@ -156,7 +157,7 @@ func WorkflowRun(
 	targetDir := filepath.Join(opts.DataDir, owner, repo, WorkflowRunsDataDir)
 	targetFile := filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
 
-	if err := os.MkdirAll(targetDir, 0700); err != nil {
+	if err := ensureDataDir(targetDir, WorkflowRunsDataDir); err != nil {
 		return nil, "", fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
 	}
 
@@ -198,35 +199,15 @@ func WorkflowRun(
 
 // loadWorkflowRunFromDisk loads a workflow run from local disk.
 func loadWorkflowRunFromDisk(targetFile string) (*WorkflowRunData, error) {
-	if _, err := os.Stat(targetFile); err != nil {
-		return nil, err
+	if !cacheFileExists(targetFile) {
+		return nil, os.ErrNotExist
 	}
-
-	workflowFileBytes, err := os.ReadFile(filepath.Clean(targetFile))
-	if err != nil {
-		return nil, fmt.Errorf("failed to open workflow run file: %w", err)
-	}
-
-	var data WorkflowRunData
-	if err := json.Unmarshal(workflowFileBytes, &data); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal workflow run data: %w", err)
-	}
-
-	return &data, nil
+	return readJSONFile[*WorkflowRunData](targetFile)
 }
 
 // saveWorkflowRunToDisk saves a workflow run to local disk.
 func saveWorkflowRunToDisk(data *WorkflowRunData, targetFile string) error {
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal workflow run data to json: %w", err)
-	}
-
-	if err := os.WriteFile(targetFile, jsonData, 0600); err != nil {
-		return fmt.Errorf("failed to write workflow run data to file: %w", err)
-	}
-
-	return nil
+	return writeJSONFile(targetFile, data)
 }
 
 // fetchWorkflowRunFromGitHub fetches a workflow run from GitHub.
@@ -319,6 +300,7 @@ func processJobs(
 	gatherCost bool,
 ) {
 	completed := data.GetStatus() == "completed"
+	billingIndex := buildJobBillingIndex(billingData)
 
 	for _, job := range jobs {
 		completedAt := job.GetCompletedAt().Time
@@ -335,7 +317,7 @@ func processJobs(
 
 		if completed && gatherCost {
 			var billingErr error
-			runner, cost, billingErr = calculateJobRunBilling(job.GetID(), billingData)
+			runner, cost, billingErr = calculateJobRunBilling(job.GetID(), billingIndex)
 			if billingErr != nil {
 				log.Warn().Err(billingErr).Int64("job_id", job.GetID()).Msg("failed to calculate cost for job")
 			}
@@ -473,28 +455,49 @@ func billingData(
 	return usage, err
 }
 
-// calculateJobRunBilling calculates the cost of a job run based on the billing data
-func calculateJobRunBilling(
-	jobID int64,
-	billingData *github.WorkflowRunUsage,
-) (runner string, costInTenthsOfCents int64, err error) {
+// jobBillingEntry holds per-job billing computed once from workflow usage data.
+type jobBillingEntry struct {
+	runner string
+	cost   int64
+}
+
+func buildJobBillingIndex(billingData *github.WorkflowRunUsage) map[int64]jobBillingEntry {
+	index := make(map[int64]jobBillingEntry)
 	if billingData == nil || billingData.GetBillable() == nil {
-		return "", 0, fmt.Errorf("no billing data available")
+		return index
 	}
-	for runner, billData := range *billingData.GetBillable() {
-		if _, ok := rateByRunner[runner]; !ok {
-			return "", 0, fmt.Errorf("no rate available for runner %s", runner)
+	for runnerName, billData := range *billingData.GetBillable() {
+		rate, ok := rateByRunner[runnerName]
+		if !ok {
+			continue
 		}
 		for _, job := range billData.JobRuns {
-			if int64(job.GetJobID()) == jobID {
-				billableMinutes := job.GetDurationMS() / 1000 / 60
-				costInTenthsOfCents = billableMinutes * rateByRunner[runner]
-				return runner, costInTenthsOfCents, nil
+			index[int64(job.GetJobID())] = jobBillingEntry{
+				runner: runnerName,
+				cost:   billableMinutes(job.GetDurationMS()) * rate,
 			}
 		}
 	}
+	return index
+}
+
+// calculateJobRunBilling calculates the cost of a job run based on the billing data
+func calculateJobRunBilling(
+	jobID int64,
+	billingIndex map[int64]jobBillingEntry,
+) (runner string, costInTenthsOfCents int64, err error) {
+	if entry, ok := billingIndex[jobID]; ok {
+		return entry.runner, entry.cost, nil
+	}
 	// if we didn't find the job ID in billing data, it was free
 	return "Free", 0, nil
+}
+
+func billableMinutes(durationMS int64) int64 {
+	if durationMS <= 0 {
+		return 0
+	}
+	return int64(math.Ceil(float64(durationMS) / 60000.0))
 }
 
 func monitoringData(
@@ -510,6 +513,8 @@ func monitoringData(
 		}
 		artifactsToDownload []*github.Artifact
 		analyses            []*monitor.Analysis
+		analysesMu          sync.Mutex
+		eg                  errgroup.Group
 
 		ctx, cancel   = ghCtx()
 		artifactsIter = client.Rest.Actions.ListWorkflowRunArtifactsIter(ctx, owner, repo, workflowRunID, listOpts)
@@ -525,12 +530,24 @@ func monitoringData(
 		}
 	}
 
+	eg.SetLimit(defaultGatherConcurrency)
 	for _, artifact := range artifactsToDownload {
-		analysis, err := downloadAndAnalyzeArtifact(log, client, owner, repo, artifact, targetDir)
-		if err != nil {
-			return nil, err
-		}
-		analyses = append(analyses, analysis)
+		eg.Go(func(artifact *github.Artifact) func() error {
+			return func() error {
+				analysis, err := downloadAndAnalyzeArtifact(log, client, owner, repo, artifact, targetDir)
+				if err != nil {
+					return err
+				}
+				analysesMu.Lock()
+				analyses = append(analyses, analysis)
+				analysesMu.Unlock()
+				return nil
+			}
+		}(artifact))
+	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
 
 	return analyses, nil
@@ -593,7 +610,7 @@ func downloadAndAnalyzeArtifact(
 		Str("url", artifactURL.String()).
 		Msg("Downloading octometrics monitoring data")
 
-	downloadResp, err := http.Get(artifactURL.String())
+	downloadResp, err := client.Rest.Client().Get(artifactURL.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to download monitor data artifact: %w", err)
 	}

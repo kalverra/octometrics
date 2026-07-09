@@ -18,9 +18,10 @@ func BenchmarkObserveAll(b *testing.B) {
 
 func BenchmarkObserveCPU(b *testing.B) {
 	log, _ := testhelpers.Setup(b, testhelpers.Silent())
+	opts := defaultOptions()
 
 	for b.Loop() {
-		if err := spotCPU(log); err != nil {
+		if err := spotCPU(log, opts); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -38,9 +39,10 @@ func BenchmarkObserveMemory(b *testing.B) {
 
 func BenchmarkObserveDisk(b *testing.B) {
 	log, _ := testhelpers.Setup(b, testhelpers.Silent())
+	opts := defaultOptions()
 
 	for b.Loop() {
-		if err := spotDisk(log); err != nil {
+		if err := spotDisk(log, opts); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -48,9 +50,10 @@ func BenchmarkObserveDisk(b *testing.B) {
 
 func BenchmarkObserveIO(b *testing.B) {
 	log, _ := testhelpers.Setup(b, testhelpers.Silent())
+	opts := defaultOptions()
 
 	for b.Loop() {
-		if err := spotIO(log); err != nil {
+		if err := spotIO(log, opts); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -58,9 +61,10 @@ func BenchmarkObserveIO(b *testing.B) {
 
 func BenchmarkSystemInfo(b *testing.B) {
 	log, _ := testhelpers.Setup(b, testhelpers.Silent())
+	opts := defaultOptions()
 
 	for b.Loop() {
-		if err := systemInfo(log); err != nil {
+		if err := systemInfo(log, opts); err != nil {
 			b.Fatal(err)
 		}
 	}

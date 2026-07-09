@@ -12,8 +12,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kalverra/octometrics/gather"
+	"github.com/kalverra/octometrics/monitor"
 	"github.com/kalverra/octometrics/observe"
-	"github.com/kalverra/octometrics/report"
 )
 
 func TestHandleGetWorkflowSummary(t *testing.T) {
@@ -208,23 +209,24 @@ func TestHandleGetPerformanceMetrics(t *testing.T) {
 		observer: obsMock,
 	}
 
-	sampleJobs := []*observe.Observation{
-		{
-			ID:   "456",
-			Name: "build",
-			MonitoringData: &observe.Monitoring{
-				Charts: []report.MonitoringChart{
-					{
-						Title:   "CPU Usage %",
-						Diagram: "xychart-beta ...",
+	workflowData := &gather.WorkflowRunData{
+		Jobs: []*gather.JobData{
+			{
+				WorkflowJob: &github.WorkflowJob{
+					ID:   new(int64(456)),
+					Name: new("build"),
+				},
+				Analysis: &monitor.Analysis{
+					CPUMeasurements: map[int][]*monitor.CPUMeasurement{
+						0: {{Time: time.Now(), UsedPercent: 42}},
 					},
 				},
 			},
 		},
 	}
 
-	obsMock.On("JobRuns", mock.Anything, mock.Anything, mock.Anything, "owner", "repo", int64(123)).
-		Return(sampleJobs, nil)
+	obsMock.On("GatherWorkflowRun", mock.Anything, mock.Anything, mock.Anything, "owner", "repo", int64(123)).
+		Return(workflowData, nil)
 
 	req := mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
@@ -243,9 +245,8 @@ func TestHandleGetPerformanceMetrics(t *testing.T) {
 	require.False(t, res.IsError)
 
 	text := res.Content[0].(mcp.TextContent).Text
-	assert.Contains(t, text, "Performance Metrics for Job build:")
-	assert.Contains(t, text, "--- CPU Usage % ---")
-	assert.Contains(t, text, "xychart-beta ...")
+	assert.Contains(t, text, "Performance metrics for job build:")
+	assert.Contains(t, text, "CPU")
 }
 
 func TestHandlers_ObserverErrors(t *testing.T) {

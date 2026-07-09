@@ -165,8 +165,15 @@
                 </details>
                 {{ end }}
 
-                {{ if $.MonitoringPairs }}
-                {{ range $.MonitoringPairs }}
+            </div>
+        </details>
+        {{ end }}
+
+        {{ if .MonitoringPairs }}
+        <details class="section" open>
+            <summary>Performance monitoring</summary>
+            <div class="section-body">
+                {{ range .MonitoringPairs }}
                 <details class="monitoring-category">
                     <summary>{{ .Title }}</summary>
                     <div class="monitoring-body">
@@ -188,7 +195,6 @@
                         </div>
                     </div>
                 </details>
-                {{ end }}
                 {{ end }}
             </div>
         </details>

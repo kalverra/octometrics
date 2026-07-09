@@ -3,15 +3,12 @@
 package gather
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/google/go-github/v89/github"
@@ -22,6 +19,8 @@ import (
 // CommitsDataDir is the directory name for storing commit data files.
 const CommitsDataDir = "commits"
 
+var workflowRunIDRe = regexp.MustCompile(`\/actions\/runs\/(\d+)`)
+
 // CommitData contains the commit data for a given commit SHA.
 // It also includes some additional info that makes it easier to map to its associated workflows.
 type CommitData struct {
@@ -31,13 +30,12 @@ type CommitData struct {
 	CheckRuns          []*github.CheckRun `json:"check_runs"`
 	MergeQueueEvents   []*MergeQueueEvent `json:"merge_queue_events"`
 	WorkflowRunIDs     []int64            `json:"workflow_run_ids"`
+	WorkflowRuns       []*WorkflowRunData `json:"workflow_runs,omitempty"`
 	StartActionsTime   time.Time          `json:"start_actions_time"`
 	EndActionsTime     time.Time          `json:"end_actions_time"`
 	Conclusion         string             `json:"conclusion"`
 	Cost               int64              `json:"cost"`
 	CorrespondingPRNum int                `json:"corresponding_pr_number,omitempty"`
-
-	comparisonMutex sync.Mutex `json:"-"`
 }
 
 // GetOwner returns the owner of the repository for the commit.
@@ -151,7 +149,6 @@ func Commit(
 		}
 		targetDir  = filepath.Join(options.DataDir, owner, repo, CommitsDataDir)
 		targetFile = filepath.Join(targetDir, fmt.Sprintf("%s.json", sha))
-		fileExists = false
 	)
 
 	if options.pullRequestData != nil {
@@ -163,14 +160,12 @@ func Commit(
 		Str("commit_sha", sha).
 		Logger()
 
-	err := os.MkdirAll(targetDir, 0700)
+	err := ensureDataDir(targetDir, CommitsDataDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make data dir '%s': %w", WorkflowRunsDataDir, err)
+		return nil, err
 	}
 
-	if _, err := os.Stat(targetFile); err == nil {
-		fileExists = true
-	}
+	fileExists := cacheFileExists(targetFile)
 
 	startTime := time.Now()
 
@@ -178,13 +173,9 @@ func Commit(
 		log = log.With().
 			Str("source", "local file").
 			Logger()
-		commitFileBytes, err := os.ReadFile(filepath.Clean(targetFile))
+		commitData, err := readJSONFile[*CommitData](targetFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open commit file: %w", err)
-		}
-		err = json.Unmarshal(commitFileBytes, &commitData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal commit data: %w", err)
 		}
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).
@@ -253,12 +244,7 @@ func Commit(
 		return nil, fmt.Errorf("failed to gather workflow runs for commit '%s': %w", sha, err)
 	}
 
-	data, err := json.Marshal(commitData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal commit data to json '%s': %w", sha, err)
-	}
-	err = os.WriteFile(targetFile, data, 0600)
-	if err != nil {
+	if err := writeJSONFile(targetFile, commitData); err != nil {
 		return nil, fmt.Errorf("failed to write commit data to file '%s': %w", sha, err)
 	}
 
@@ -308,7 +294,6 @@ func setWorkflowRunsForCommit(
 ) error {
 	var (
 		workflowRunIDsSet = map[int64]struct{}{}
-		workflowRunIDRe   = regexp.MustCompile(`\/actions\/runs\/(\d+)`)
 		eg                errgroup.Group
 	)
 
@@ -334,39 +319,64 @@ func setWorkflowRunsForCommit(
 		workflowRunIDsSet[workflowRunID] = struct{}{}
 	}
 
-	// Pass commit data down to the workflow run
-	opts = append(opts, withCommitData(commitData))
+	type workflowRunSummary struct {
+		id         int64
+		conclusion string
+		cost       int64
+		start      time.Time
+		end        time.Time
+	}
+
+	workflowRunIDs := make([]int64, 0, len(workflowRunIDsSet))
 	for workflowRunID := range workflowRunIDsSet {
-		eg.Go(func(workflowRunID int64) func() error {
+		workflowRunIDs = append(workflowRunIDs, workflowRunID)
+	}
+	slices.Sort(workflowRunIDs)
+
+	summaries := make([]workflowRunSummary, len(workflowRunIDs))
+	workflowRuns := make([]*WorkflowRunData, len(workflowRunIDs))
+	commitOpts := append(slices.Clone(opts), withCommitData(commitData))
+	eg.SetLimit(defaultGatherConcurrency)
+	for index, workflowRunID := range workflowRunIDs {
+		eg.Go(func(index int, workflowRunID int64) func() error {
 			return func() error {
-				workflowRun, _, err := WorkflowRun(log, client, owner, repo, workflowRunID, opts...)
+				workflowRun, _, err := WorkflowRun(log, client, owner, repo, workflowRunID, commitOpts...)
 				if err != nil {
 					return fmt.Errorf("failed to gather workflow run data for commit %s: %w", commitData.GetSHA(), err)
 				}
-				commitData.comparisonMutex.Lock()
-				defer commitData.comparisonMutex.Unlock()
 				conclusion := workflowRun.GetConclusion()
 				if conclusion == "" {
 					conclusion = workflowRun.GetStatus()
 				}
-				commitData.Conclusion = establishPRChecksConclusion(commitData.Conclusion, conclusion)
-				commitData.Cost += workflowRun.GetCost()
-				if workflowRun.GetRunStartedAt().Before(commitData.StartActionsTime) ||
-					commitData.StartActionsTime.IsZero() {
-					commitData.StartActionsTime = workflowRun.GetRunStartedAt().Time
+				summaries[index] = workflowRunSummary{
+					id:         workflowRunID,
+					conclusion: conclusion,
+					cost:       workflowRun.GetCost(),
+					start:      workflowRun.GetRunStartedAt().Time,
+					end:        workflowRun.GetRunCompletedAt(),
 				}
-				if workflowRun.GetRunCompletedAt().After(commitData.EndActionsTime) {
-					commitData.EndActionsTime = workflowRun.GetRunCompletedAt()
-				}
-				commitData.WorkflowRunIDs = append(commitData.WorkflowRunIDs, workflowRunID)
+				workflowRuns[index] = workflowRun
 				return nil
 			}
-		}(workflowRunID))
+		}(index, workflowRunID))
 	}
 
 	if err := eg.Wait(); err != nil {
 		return fmt.Errorf("failed to gather workflow runs for commit %s: %w", commitData.GetSHA(), err)
 	}
+
+	for _, summary := range summaries {
+		commitData.Conclusion = establishPRChecksConclusion(commitData.Conclusion, summary.conclusion)
+		commitData.Cost += summary.cost
+		if summary.start.Before(commitData.StartActionsTime) || commitData.StartActionsTime.IsZero() {
+			commitData.StartActionsTime = summary.start
+		}
+		if summary.end.After(commitData.EndActionsTime) {
+			commitData.EndActionsTime = summary.end
+		}
+	}
+	commitData.WorkflowRunIDs = workflowRunIDs
+	commitData.WorkflowRuns = workflowRuns
 
 	return nil
 }

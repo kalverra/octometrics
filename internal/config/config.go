@@ -139,7 +139,12 @@ func (c *Config) ValidateGather() error {
 	if c.PullRequestNumber != 0 {
 		setCount++
 	}
-	if !c.From.IsZero() || !c.To.IsZero() {
+	hasFrom := !c.From.IsZero()
+	hasTo := !c.To.IsZero()
+	if hasFrom || hasTo {
+		if hasFrom != hasTo {
+			return errors.New("both --from and --to must be provided for a time range")
+		}
 		setCount++
 	}
 

@@ -31,9 +31,22 @@ var templateFS embed.FS
 const (
 	// OutputDir is the base directory for all observation output.
 	OutputDir         = "observe_output"
-	htmlOutputDir     = "observe_output/html"
+	defaultHTMLOutput = "observe_output/html"
 	markdownOutputDir = "observe_output/md"
 )
+
+var activeHTMLOutputDir = defaultHTMLOutput
+
+func effectiveHTMLOutputDir(custom string) string {
+	if custom != "" {
+		return custom
+	}
+	return defaultHTMLOutput
+}
+
+func setActiveHTMLOutputDir(custom string) {
+	activeHTMLOutputDir = effectiveHTMLOutputDir(custom)
+}
 
 var (
 	// htmlTemplate is the cached template for HTML rendering
@@ -87,7 +100,7 @@ func outputDirForFormat(outputType string) string {
 	if outputType == "md" {
 		return markdownOutputDir
 	}
-	return htmlOutputDir
+	return activeHTMLOutputDir
 }
 
 func init() {
@@ -310,7 +323,7 @@ func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath, d
 	log.Info().
 		Str("url", "http://localhost:8080"+initialPath).
 		Str("built_observations_dur", time.Since(startTime).String()).
-		Str("html_dir", htmlOutputDir).
+		Str("html_dir", activeHTMLOutputDir).
 		Str("md_dir", markdownOutputDir).
 		Msg("Observing data...")
 	fmt.Println("Observe data at http://localhost:8080")
@@ -325,7 +338,7 @@ func ServeHTML(log zerolog.Logger, initialPath string) error {
 	var (
 		baseURL    = "http://localhost:8080"
 		browserURL = baseURL + initialPath
-		dir        = http.Dir(htmlOutputDir)
+		dir        = http.Dir(activeHTMLOutputDir)
 		fs         = http.FileServer(dir)
 	)
 	http.Handle("/", fs)
@@ -333,6 +346,7 @@ func ServeHTML(log zerolog.Logger, initialPath string) error {
 	go func() {
 		interruptChan := make(chan os.Signal, 1)
 		signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(interruptChan)
 
 		err := openBrowser(browserURL)
 		if err != nil {
@@ -408,6 +422,7 @@ func generateAllObserveData(
 	for _, opt := range opts {
 		opt(observeOpts)
 	}
+	setActiveHTMLOutputDir(observeOpts.outputDir)
 
 	collected := make(map[categoryKey][]IndexItem)
 	bpCache := make(map[string]*gather.BranchProtectionResult)
@@ -564,7 +579,7 @@ func generateIndexPages(collected map[categoryKey][]IndexItem) error {
 		})
 	}
 	sort.Slice(rootDirs, func(i, j int) bool { return rootDirs[i].Name < rootDirs[j].Name })
-	err := renderIndex(filepath.Join(htmlOutputDir, "index.html"), IndexPage{
+	err := renderIndex(filepath.Join(activeHTMLOutputDir, "index.html"), IndexPage{
 		Title:       "Octometrics",
 		Breadcrumbs: []Breadcrumb{homeBreadcrumb},
 		Dirs:        rootDirs,
@@ -575,7 +590,10 @@ func generateIndexPages(collected map[categoryKey][]IndexItem) error {
 
 	repoCategoryDisplay := map[string]string{
 		"workflow_runs": "Workflow Runs",
+		"job_runs":      "Job Runs",
+		"commits":       "Commits",
 		"pull_requests": "Pull Requests",
+		"comparisons":   "Comparisons",
 		"surveys":       "Surveys",
 	}
 
@@ -598,7 +616,7 @@ func generateIndexPages(collected map[categoryKey][]IndexItem) error {
 		}
 		sort.Slice(catDirs, func(i, j int) bool { return catDirs[i].Name < catDirs[j].Name })
 
-		err := renderIndex(filepath.Join(htmlOutputDir, owner, repo, "index.html"), IndexPage{
+		err := renderIndex(filepath.Join(activeHTMLOutputDir, owner, repo, "index.html"), IndexPage{
 			Title: repoPath,
 			Breadcrumbs: []Breadcrumb{
 				homeBreadcrumb,
@@ -618,15 +636,18 @@ func generateIndexPages(collected map[categoryKey][]IndexItem) error {
 
 		sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
 
-		err := renderIndex(filepath.Join(htmlOutputDir, key.owner, key.repo, key.category, "index.html"), IndexPage{
-			Title: key.category,
-			Breadcrumbs: []Breadcrumb{
-				homeBreadcrumb,
-				{Name: repoPath, Path: "/" + repoPath + "/"},
-				{Name: key.category, Path: "/" + catPath + "/"},
+		err := renderIndex(
+			filepath.Join(activeHTMLOutputDir, key.owner, key.repo, key.category, "index.html"),
+			IndexPage{
+				Title: key.category,
+				Breadcrumbs: []Breadcrumb{
+					homeBreadcrumb,
+					{Name: repoPath, Path: "/" + repoPath + "/"},
+					{Name: key.category, Path: "/" + catPath + "/"},
+				},
+				Items: items,
 			},
-			Items: items,
-		})
+		)
 		if err != nil {
 			return fmt.Errorf("failed to render category index for %s: %w", catPath, err)
 		}

@@ -26,7 +26,7 @@ func Run(log zerolog.Logger, opts Options) error {
 	gha, err := detectGitHubActions()
 	if err != nil {
 		log.Warn().Err(err).Msg("GitHub Actions not detected, printing report to stdout only")
-		fmt.Println(buildReport(analysis, nil, nil))
+		fmt.Println(buildReport(analysis, nil))
 		return nil
 	}
 
@@ -41,20 +41,19 @@ func Run(log zerolog.Logger, opts Options) error {
 		log.Warn().Err(err).Msg("Failed to fetch job steps, continuing without step timeline")
 	}
 
-	markdown := buildReport(analysis, steps, gha)
+	markdown := buildReport(analysis, steps)
 	fmt.Print(markdown)
 
 	if !opts.SkipSummary {
 		if err := writeSummary(gha.StepSummary, markdown); err != nil {
-			log.Error().Err(err).Msg("Failed to write step summary")
-		} else {
-			log.Info().Msg("Wrote step summary")
+			return fmt.Errorf("failed to write step summary: %w", err)
 		}
+		log.Info().Msg("Wrote step summary")
 	}
 
 	if !opts.SkipComment {
 		if err := postComment(log, gha, markdown); err != nil {
-			log.Error().Err(err).Msg("Failed to post comment")
+			return fmt.Errorf("failed to post comment: %w", err)
 		}
 	}
 
