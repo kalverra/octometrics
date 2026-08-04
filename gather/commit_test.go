@@ -1,6 +1,7 @@
 package gather
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/go-github/v89/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kalverra/octometrics/internal/testhelpers"
@@ -208,6 +210,50 @@ func TestCommit_FallbackToParentForMergeCommit(t *testing.T) {
 	require.Equal(t, "merge-sha", commit.GetSHA())
 	require.Len(t, commit.WorkflowRunIDs, 1)
 	require.Equal(t, int64(123), commit.WorkflowRunIDs[0])
+}
+
+func TestCommit_WithRepositoryCommit(t *testing.T) {
+	t.Parallel()
+
+	log, tempDir := testhelpers.Setup(t)
+	// client is nil to prove GitHub API is NOT called
+	repoCommit := &github.RepositoryCommit{
+		SHA: new("1234567890abcdef1234567890abcdef12345678"),
+		Commit: &github.Commit{
+			Message: new("test commit"),
+		},
+	}
+
+	commitData, err := Commit(
+		log,
+		nil,
+		"owner",
+		"repo",
+		repoCommit.GetSHA(),
+		CustomDataFolder(tempDir),
+		withRepositoryCommit(repoCommit),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, commitData)
+	assert.Equal(t, repoCommit.GetSHA(), commitData.GetSHA())
+}
+
+func TestCommit_CheckRunsNotPersisted(t *testing.T) {
+	t.Parallel()
+
+	cd := &CommitData{
+		Owner:          "owner",
+		Repo:           "repo",
+		CheckRuns:      []*github.CheckRun{{ID: new(int64(123))}},
+		WorkflowRunIDs: []int64{999},
+	}
+
+	data, err := json.Marshal(cd)
+	require.NoError(t, err)
+
+	jsonStr := string(data)
+	assert.NotContains(t, jsonStr, "check_runs")
+	assert.Contains(t, jsonStr, "workflow_run_ids")
 }
 
 var (

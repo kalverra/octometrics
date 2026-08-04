@@ -19,6 +19,7 @@ import (
 	"github.com/google/go-github/v89/github"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/kalverra/octometrics/monitor"
 )
@@ -132,6 +133,22 @@ type WorkflowRunData struct {
 	CorrespondingCommitSHA   string                   `json:"corresponding_commit_sha,omitempty"`
 }
 
+// GetOwner returns the owner of the repository for the workflow run.
+func (w *WorkflowRunData) GetOwner() string {
+	if w == nil || w.WorkflowRun == nil || w.GetRepository() == nil {
+		return ""
+	}
+	return w.WorkflowRun.GetRepository().GetOwner().GetLogin()
+}
+
+// GetRepo returns the repository name for the workflow run.
+func (w *WorkflowRunData) GetRepo() string {
+	if w == nil || w.WorkflowRun == nil || w.GetRepository() == nil {
+		return ""
+	}
+	return w.WorkflowRun.GetRepository().GetName()
+}
+
 // GetJobs returns the list of jobs for the workflow run
 func (w *WorkflowRunData) GetJobs() []*JobData {
 	if w == nil || w.WorkflowRun == nil {
@@ -188,6 +205,11 @@ func (w *WorkflowRunData) GetWorkflowDef() *WorkflowDef {
 	return w.WorkflowDef
 }
 
+var (
+	workflowRunCache sync.Map
+	workflowRunGroup singleflight.Group
+)
+
 // WorkflowRun gathers and processes a workflow run from GitHub or local disk.
 func WorkflowRun(
 	log zerolog.Logger,
@@ -211,37 +233,66 @@ func WorkflowRun(
 	log = log.With().Str("target_file", targetFile).Int64("workflow_run_id", workflowRunID).Logger()
 	startTime := time.Now()
 
-	// 1. Try loading from disk first
+	cacheKey := targetFile
+
 	if !opts.ForceUpdate {
-		if data, err := loadWorkflowRunFromDisk(targetFile); err == nil {
+		if cached, ok := workflowRunCache.Load(cacheKey); ok {
 			log.Debug().
 				Str("duration", time.Since(startTime).String()).
-				Str("source", "local file").
+				Str("source", "memory cache").
 				Msg("Gathered workflow run data")
-			return data, targetFile, nil
+			return cached.(*WorkflowRunData), targetFile, nil
 		}
 	}
 
-	// 2. Fetch from GitHub
-	if client == nil {
-		return nil, "", fmt.Errorf("github client is nil")
-	}
+	val, err, _ := workflowRunGroup.Do(cacheKey, func() (any, error) {
+		if !opts.ForceUpdate {
+			if cached, ok := workflowRunCache.Load(cacheKey); ok {
+				return cached.(*WorkflowRunData), nil
+			}
+			if data, loadErr := loadWorkflowRunFromDisk(targetFile); loadErr == nil {
+				workflowRunCache.Store(cacheKey, data)
+				log.Debug().
+					Str("duration", time.Since(startTime).String()).
+					Str("source", "local file").
+					Msg("Gathered workflow run data")
+				return data, nil
+			}
+		}
 
-	workflowRunData, err := fetchWorkflowRunFromGitHub(log, client, owner, repo, workflowRunID, opts, targetDir)
+		if client == nil {
+			return nil, fmt.Errorf("github client is nil")
+		}
+
+		workflowRunData, fetchErr := fetchWorkflowRunFromGitHub(
+			log,
+			client,
+			owner,
+			repo,
+			workflowRunID,
+			opts,
+			targetDir,
+		)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+
+		if saveErr := saveWorkflowRunToDisk(workflowRunData, owner, repo, opts.DataDir, targetFile); saveErr != nil {
+			return nil, fmt.Errorf("failed to save workflow run data for '%d': %w", workflowRunID, saveErr)
+		}
+
+		workflowRunCache.Store(cacheKey, workflowRunData)
+		log.Debug().
+			Str("duration", time.Since(startTime).String()).
+			Str("source", "GitHub API").
+			Msg("Gathered workflow run data")
+		return workflowRunData, nil
+	})
 	if err != nil {
 		return nil, "", err
 	}
 
-	// 3. Save to disk
-	if err := saveWorkflowRunToDisk(workflowRunData, targetFile); err != nil {
-		return nil, "", fmt.Errorf("failed to save workflow run data for '%d': %w", workflowRunID, err)
-	}
-
-	log.Debug().
-		Str("duration", time.Since(startTime).String()).
-		Str("source", "GitHub API").
-		Msg("Gathered workflow run data")
-	return workflowRunData, targetFile, nil
+	return val.(*WorkflowRunData), targetFile, nil
 }
 
 // loadWorkflowRunFromDisk loads a workflow run from local disk.
@@ -253,8 +304,37 @@ func loadWorkflowRunFromDisk(targetFile string) (*WorkflowRunData, error) {
 }
 
 // saveWorkflowRunToDisk saves a workflow run to local disk.
-func saveWorkflowRunToDisk(data *WorkflowRunData, targetFile string) error {
-	return writeJSONFile(targetFile, data)
+func saveWorkflowRunToDisk(data *WorkflowRunData, owner, repo, dataDir, targetFile string) error {
+	if err := writeJSONFile(targetFile, data); err != nil {
+		return err
+	}
+	state := data.GetConclusion()
+	if state == "" {
+		state = data.GetStatus()
+	}
+	_ = AppendManifestRecord(dataDir, owner, repo, ManifestRecord{
+		Type:      "workflow_run",
+		ID:        fmt.Sprint(data.GetID()),
+		Name:      data.GetName(),
+		State:     state,
+		Actor:     data.GetActor().GetLogin(),
+		CreatedAt: data.GetCreatedAt().Time,
+	})
+	for _, job := range data.Jobs {
+		jState := job.GetConclusion()
+		if jState == "" {
+			jState = job.GetStatus()
+		}
+		_ = AppendManifestRecord(dataDir, owner, repo, ManifestRecord{
+			Type:      "job_run",
+			ID:        fmt.Sprint(job.GetID()),
+			Name:      job.GetName(),
+			State:     jState,
+			Actor:     data.GetActor().GetLogin(),
+			CreatedAt: job.GetStartedAt().Time,
+		})
+	}
+	return nil
 }
 
 // fetchWorkflowRunFromGitHub fetches a workflow run from GitHub.
@@ -340,10 +420,15 @@ func fetchWorkflowRunFromGitHub(
 
 	data.Usage = workflowBillingData
 	data.WorkflowDef = workflowDef
-	processJobs(log, client, owner, repo, data, workflowRunJobs, workflowBillingData, opts.gatherCost)
+	processJobs(log, client, owner, repo, data, workflowRunJobs, workflowBillingData, opts.gatherCost, opts.DataDir)
 	processAnalyses(log, data, analyses)
 
 	return data, nil
+}
+
+type runsOnLogResult struct {
+	cost    int64
+	summary *RunsOnCostSummary
 }
 
 // processJobs processes the jobs for a workflow run.
@@ -355,10 +440,16 @@ func processJobs(
 	jobs []*github.WorkflowJob,
 	billingData *github.WorkflowRunUsage,
 	gatherCost bool,
+	dataDir string,
 ) {
 	completed := data.GetStatus() == "completed"
 	billingIndex := buildJobBillingIndex(billingData)
 
+	logResults := sync.Map{}
+	var logFetchGroup errgroup.Group
+	logFetchGroup.SetLimit(defaultGatherConcurrency)
+
+	// Pass 1: find RunCompletedAt and fetch logs in parallel for unpriced runs-on jobs
 	for _, job := range jobs {
 		completedAt := job.GetCompletedAt().Time
 		if !completedAt.IsZero() {
@@ -367,61 +458,45 @@ func processJobs(
 			}
 		}
 
-		var (
-			runner       string
-			cost         int64
-			costEstimate bool
-		)
-
 		if completed && gatherCost {
-			var billingErr error
-			runner, cost, billingErr = calculateJobRunBilling(job.GetID(), billingIndex)
-			if billingErr != nil {
-				log.Warn().Err(billingErr).Int64("job_id", job.GetID()).Msg("failed to calculate cost for job")
-			}
-		}
-
-		if runner == "" {
-			runner = job.GetRunnerName()
-		}
-		if runner == "" {
-			runner = getRunnerFromLabels(job.Labels)
-		}
-
-		// If no billing data and job uses runs-on, try exact cost from logs, then fall back to label estimate
-		if cost == 0 && gatherCost && completed {
 			startedAt := job.GetStartedAt().Time
 			duration := completedAt.Sub(startedAt)
+			conclusion := job.GetConclusion()
 
-			// Only fetch logs for runs-on jobs (expensive API call)
-			if _, isRunsOn := parseRunsOnLabel(job.Labels); isRunsOn {
-				if logCost, logSummary, logErr := fetchRunsOnCostFromLogs(
-					log,
-					client,
-					owner,
-					repo,
-					job.GetID(),
-				); logErr == nil &&
-					logCost > 0 {
-					cost = logCost
-					costEstimate = false
-					if logSummary != nil && logSummary.InstanceType != "" {
-						runner = "runs-on:" + logSummary.InstanceType
-					} else if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
-						runner = runsOnName
-					}
-				} else {
-					// Fall back to label-based estimate
-					if runsOnCost, isEstimate := calculateRunsOnCost(job.Labels, duration); runsOnCost > 0 {
-						cost = runsOnCost
-						costEstimate = isEstimate
-						if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
-							runner = runsOnName
-						}
+			if conclusion != "skipped" && duration > 0 {
+				if _, isRunsOn := parseRunsOnLabel(job.Labels); isRunsOn {
+					if runsOnCost, _ := calculateRunsOnCost(job.Labels, duration); runsOnCost == 0 {
+						jobID := job.GetID()
+						logFetchGroup.Go(func() error {
+							if logCost, logSummary, logErr := fetchRunsOnCostFromLogs(
+								log,
+								client,
+								owner,
+								repo,
+								jobID,
+								dataDir,
+							); logErr == nil && logCost > 0 {
+								logResults.Store(jobID, runsOnLogResult{cost: logCost, summary: logSummary})
+							}
+							return nil
+						})
 					}
 				}
 			}
 		}
+	}
+	_ = logFetchGroup.Wait()
+
+	// Pass 2: calculate billing/estimates and assemble jobs
+	for _, job := range jobs {
+		runner, cost, costEstimate := calculateJobCostAndRunner(
+			log,
+			job,
+			completed,
+			gatherCost,
+			billingIndex,
+			&logResults,
+		)
 
 		data.Cost += cost
 		if costEstimate {
@@ -438,6 +513,59 @@ func processJobs(
 			CostGathered: gatherCost && completed,
 		})
 	}
+}
+
+func calculateJobCostAndRunner(
+	log zerolog.Logger,
+	job *github.WorkflowJob,
+	completed, gatherCost bool,
+	billingIndex map[int64]jobBillingEntry,
+	logResults *sync.Map,
+) (runner string, cost int64, costEstimate bool) {
+	if completed && gatherCost {
+		var billingErr error
+		runner, cost, billingErr = calculateJobRunBilling(job.GetID(), billingIndex)
+		if billingErr != nil {
+			log.Warn().Err(billingErr).Int64("job_id", job.GetID()).Msg("failed to calculate cost for job")
+		}
+	}
+
+	if runner == "" {
+		runner = job.GetRunnerName()
+	}
+	if runner == "" {
+		runner = getRunnerFromLabels(job.Labels)
+	}
+
+	if cost == 0 && gatherCost && completed {
+		conclusion := job.GetConclusion()
+		startedAt := job.GetStartedAt().Time
+		completedAt := job.GetCompletedAt().Time
+		duration := completedAt.Sub(startedAt)
+
+		if conclusion != "skipped" && duration > 0 {
+			if _, isRunsOn := parseRunsOnLabel(job.Labels); isRunsOn {
+				if runsOnCost, isEstimate := calculateRunsOnCost(job.Labels, duration); runsOnCost > 0 {
+					cost = runsOnCost
+					costEstimate = isEstimate
+					if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
+						runner = runsOnName
+					}
+				} else if val, ok := logResults.Load(job.GetID()); ok {
+					res := val.(runsOnLogResult)
+					cost = res.cost
+					costEstimate = false
+					if res.summary != nil && res.summary.InstanceType != "" {
+						runner = "runs-on:" + res.summary.InstanceType
+					} else if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
+						runner = runsOnName
+					}
+				}
+			}
+		}
+	}
+
+	return runner, cost, costEstimate
 }
 
 // processAnalyses processes the analyses for a workflow run.

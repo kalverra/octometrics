@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"runtime/pprof"
 	"time"
 
 	"github.com/charmbracelet/fang"
@@ -20,8 +21,9 @@ const (
 )
 
 var (
-	cfg    *config.Config
-	logger zerolog.Logger
+	cfg     *config.Config
+	logger  zerolog.Logger
+	cpuFile *os.File
 )
 
 // These variables are set at build time and describe the version and build of the application
@@ -73,11 +75,32 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			return fmt.Errorf("failed to setup logging: %w", err)
 		}
 
+		if cfg.CPUProfile != "" {
+			f, err := os.Create(cfg.CPUProfile)
+			if err != nil {
+				return fmt.Errorf("could not create CPU profile: %w", err)
+			}
+			cpuFile = f
+			if err := pprof.StartCPUProfile(f); err != nil {
+				_ = f.Close()
+				return fmt.Errorf("could not start CPU profile: %w", err)
+			}
+		}
+
 		if cfg.GitHubToken == "" && commandNeedsGitHubToken(cmd) {
 			logger.Warn().Msg("GitHub token not provided, will likely hit rate limits quickly")
 			fmt.Fprintln(os.Stderr, "WARNING: GitHub token not provided, will likely hit rate limits quickly")
 		}
 
+		return nil
+	},
+	PersistentPostRunE: func(_ *cobra.Command, _ []string) error {
+		if cpuFile != nil {
+			pprof.StopCPUProfile()
+			if err := cpuFile.Close(); err != nil {
+				return fmt.Errorf("failed to close CPU profile file: %w", err)
+			}
+		}
 		return nil
 	},
 }
@@ -86,6 +109,7 @@ func init() {
 	rootCmd.PersistentFlags().String("log-level", config.DefaultLogLevel, "Level for detailed logging")
 	rootCmd.PersistentFlags().
 		String("data-dir", config.DefaultDataDir(), "Directory for cached GitHub data (env: DATA_DIR)")
+	rootCmd.PersistentFlags().String("cpu-profile", "", "Write CPU profile to file")
 }
 
 // Execute runs the root command for octometrics.

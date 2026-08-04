@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"sort"
 	"time"
 
@@ -126,6 +127,15 @@ func PullRequest(
 			err,
 		)
 	}
+
+	_ = AppendManifestRecord(options.DataDir, owner, repo, ManifestRecord{
+		Type:      "pull_request",
+		ID:        fmt.Sprint(pullRequestNumber),
+		Name:      pullRequestData.GetTitle(),
+		State:     pullRequestData.GetState(),
+		Actor:     pullRequestData.GetUser().GetLogin(),
+		CreatedAt: pullRequestData.GetCreatedAt().Time,
+	})
 	log.Debug().
 		Str("duration", time.Since(startTime).String()).
 		Msg("Gathered pull request data")
@@ -214,7 +224,8 @@ func prCommitData(
 	eg.SetLimit(defaultGatherConcurrency)
 	for _, commit := range prCommits {
 		eg.Go(func() error {
-			data, err := Commit(log, client, owner, repo, commit.GetSHA(), opts...)
+			commitOpts := append(slices.Clone(opts), withRepositoryCommit(commit))
+			data, err := Commit(log, client, owner, repo, commit.GetSHA(), commitOpts...)
 			if err != nil {
 				return fmt.Errorf("failed to gather data for commit '%s': %w", commit.GetSHA(), err)
 			}

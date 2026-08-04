@@ -1,10 +1,15 @@
 package gather
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kalverra/octometrics/internal/testhelpers"
 )
 
 func TestParseRunsOnCostSummary(t *testing.T) {
@@ -170,4 +175,26 @@ func TestRunsOnCostSummaryToTenthsOfCent(t *testing.T) {
 			assert.Equal(t, tt.want, s.CostInTenthsOfCent())
 		})
 	}
+}
+
+func TestFetchRunsOnCostFromLogs_DiskCache(t *testing.T) {
+	t.Parallel()
+
+	log, tempDir := testhelpers.Setup(t)
+
+	// Pre-create disk cache for job 999
+	cacheDir := filepath.Join(tempDir, "owner", "repo", "runs_on_costs")
+	require.NoError(t, os.MkdirAll(cacheDir, 0750))
+	cacheFile := filepath.Join(cacheDir, "999.json")
+	summary := &RunsOnCostSummary{InstanceType: "c7i.2xlarge", CostUSD: 0.05}
+	data, err := json.Marshal(summary)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(cacheFile, data, 0600))
+
+	// client is nil to prove no HTTP network calls are made
+	cost, loadedSummary, err := fetchRunsOnCostFromLogs(log, nil, "owner", "repo", 999, tempDir)
+	require.NoError(t, err)
+	require.NotNil(t, loadedSummary)
+	assert.Equal(t, int64(50), cost)
+	assert.Equal(t, "c7i.2xlarge", loadedSummary.InstanceType)
 }

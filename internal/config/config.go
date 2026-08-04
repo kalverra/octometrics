@@ -32,6 +32,7 @@ type Config struct {
 	ExcludeCosts      bool      `mapstructure:"exclude_costs"`
 	DataDir           string    `mapstructure:"data_dir"`
 	ExcludeWorkflows  []string  `mapstructure:"exclude_workflows"`
+	CPUProfile        string    `mapstructure:"cpu_profile"`
 }
 
 // DefaultLogLevel is the default log level.

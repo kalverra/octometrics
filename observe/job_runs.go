@@ -30,6 +30,17 @@ func JobRuns(
 		return nil, err
 	}
 
+	return jobRunObservations(workflowRun)
+}
+
+func jobRunObservations(workflowRun *gather.WorkflowRunData) ([]*Observation, error) {
+	if workflowRun == nil {
+		return nil, fmt.Errorf("workflow run data is nil")
+	}
+
+	owner := workflowRun.GetRepository().GetOwner().GetLogin()
+	repo := workflowRun.GetRepository().GetName()
+
 	var (
 		eg               errgroup.Group
 		observations     = make([]*Observation, 0, len(workflowRun.Jobs))

@@ -15,6 +15,7 @@ import (
 	"github.com/migueleliasweb/go-github-mock/src/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/kalverra/octometrics/internal/testhelpers"
 	"github.com/kalverra/octometrics/monitor"
@@ -582,4 +583,114 @@ func TestSafeMonitorJSONLZipEntry(t *testing.T) {
 		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: `win\octometrics.monitor.log.jsonl`}}),
 	)
 	require.False(t, safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "wrong.log.jsonl"}}))
+}
+
+func TestProcessJobs_RunsOnSkipLogFetch(t *testing.T) {
+	t.Parallel()
+
+	logCalled := false
+	mockedHTTPClient := mock.NewMockedHTTPClient(
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsJobsLogsByOwnerByRepoByJobId,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				logCalled = true
+				w.WriteHeader(http.StatusOK)
+			}),
+		),
+	)
+
+	log, _ := testhelpers.Setup(t)
+	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
+	require.NoError(t, err)
+
+	now := time.Now()
+	// Skipped job with runs-on label
+	skippedJob := &github.WorkflowJob{
+		ID:          new(int64(101)),
+		Name:        new("skipped-job"),
+		Status:      new("completed"),
+		Conclusion:  new("skipped"),
+		StartedAt:   &github.Timestamp{Time: now},
+		CompletedAt: &github.Timestamp{Time: now},
+		Labels:      []string{"runs-on=123/cpu=4/ram=16/family=c7i/spot=true"},
+	}
+
+	// Nonzero duration runs-on job that can be priced by label estimator
+	pricedJob := &github.WorkflowJob{
+		ID:          new(int64(102)),
+		Name:        new("priced-job"),
+		Status:      new("completed"),
+		Conclusion:  new("success"),
+		StartedAt:   &github.Timestamp{Time: now},
+		CompletedAt: &github.Timestamp{Time: now.Add(2 * time.Minute)},
+		Labels:      []string{"2cpu-linux-x64"},
+	}
+
+	data := &WorkflowRunData{
+		WorkflowRun: &github.WorkflowRun{
+			Status: new("completed"),
+		},
+	}
+
+	log, tempDir := testhelpers.Setup(t)
+	processJobs(log, client, "owner", "repo", data, []*github.WorkflowJob{skippedJob, pricedJob}, nil, true, tempDir)
+
+	assert.False(t, logCalled, "fetchRunsOnCostFromLogs should not be called for skipped job or priced job")
+	assert.Len(t, data.Jobs, 2)
+	assert.Equal(t, int64(0), data.Jobs[0].Cost)
+	assert.Positive(t, data.Jobs[1].Cost)
+}
+
+func TestWorkflowRun_ReadCacheAndSingleflight(t *testing.T) {
+	t.Parallel()
+
+	var fetchCount atomic.Int32
+	mockedHTTPClient := mock.NewMockedHTTPClient(
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsRunsByOwnerByRepoByRunId,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fetchCount.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id": 99999, "status": "completed", "conclusion": "success"}`))
+			}),
+		),
+		mock.WithRequestMatchPages(
+			mock.GetReposActionsRunsJobsByOwnerByRepoByRunId,
+			&github.Jobs{TotalCount: new(0), Jobs: []*github.WorkflowJob{}},
+		),
+		mock.WithRequestMatch(
+			mock.GetReposActionsRunsTimingByOwnerByRepoByRunId,
+			&github.WorkflowRunUsage{},
+		),
+		mock.WithRequestMatchPages(
+			mock.GetReposActionsRunsArtifactsByOwnerByRepoByRunId,
+			&github.ArtifactList{TotalCount: new(int64(0)), Artifacts: []*github.Artifact{}},
+		),
+	)
+
+	log, tempDir := testhelpers.Setup(t)
+	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
+	require.NoError(t, err)
+
+	const n = 10
+	var eg errgroup.Group
+	for range n {
+		eg.Go(func() error {
+			_, _, err := WorkflowRun(log, client, "owner", "repo", 99999, CustomDataFolder(tempDir))
+			return err
+		})
+	}
+	require.NoError(t, eg.Wait())
+
+	assert.Equal(
+		t,
+		int32(1),
+		fetchCount.Load(),
+		"GitHub API should only be called once due to singleflight and read cache",
+	)
+
+	// Call again, should hit read cache directly
+	_, _, err = WorkflowRun(log, client, "owner", "repo", 99999, CustomDataFolder(tempDir))
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), fetchCount.Load(), "Cache hit should not trigger additional GitHub API call")
 }

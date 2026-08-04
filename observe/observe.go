@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -22,9 +23,10 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/gather"
+	"github.com/kalverra/octometrics/internal/config"
 )
 
-//go:embed templates/*.html templates/*.md templates/*.css
+//go:embed templates/*.html templates/*.md templates/*.css templates/*.js
 var templateFS embed.FS
 
 // Output directory constants for rendered observations.
@@ -103,6 +105,31 @@ func outputDirForFormat(outputType string) string {
 	return activeHTMLOutputDir
 }
 
+// WriteStaticAssets writes static CSS and JS files to the given output directory.
+func WriteStaticAssets(outputDir string) error {
+	if err := os.MkdirAll(outputDir, 0750); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	styles, err := templateFS.ReadFile("templates/styles.css")
+	if err != nil {
+		return fmt.Errorf("failed to read styles.css: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "styles.css"), styles, 0600); err != nil {
+		return fmt.Errorf("failed to write styles.css: %w", err)
+	}
+
+	mermaidJS, err := templateFS.ReadFile("templates/mermaid-init.js")
+	if err != nil {
+		return fmt.Errorf("failed to read mermaid-init.js: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "mermaid-init.js"), mermaidJS, 0600); err != nil {
+		return fmt.Errorf("failed to write mermaid-init.js: %w", err)
+	}
+
+	return nil
+}
+
 func init() {
 	var err error
 
@@ -124,7 +151,7 @@ func init() {
 	}
 
 	htmlTemplate, err = template.New("observation_html").Funcs(htmlFuncs).
-		ParseFS(templateFS, "templates/*.html", "templates/*.css")
+		ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
 	}
@@ -249,8 +276,19 @@ type Observation struct {
 }
 
 // Render writes the observation to a file in the specified output format (html or md).
-func (o *Observation) Render(log zerolog.Logger, outputType string) (observationFile string, err error) {
-	baseDir := outputDirForFormat(outputType)
+func (o *Observation) Render(
+	log zerolog.Logger,
+	outputType string,
+	opts ...Option,
+) (observationFile string, err error) {
+	observeOpts := defaultOptions()
+	for _, opt := range opts {
+		opt(observeOpts)
+	}
+	baseDir := observeOpts.outputDir
+	if outputType == "md" {
+		baseDir = markdownOutputDir
+	}
 	if o.ID == "" {
 		log.Warn().Msg("Observation ID is empty, skipping rendering")
 		return "", nil
@@ -317,13 +355,26 @@ func (o *Observation) renderToFormat(outputType string) (bytes.Buffer, error) {
 	return buf, nil
 }
 
-// Interactive generates all downloaded data in HTML and serves it on a local server.
-// If initialPath is non-empty, the browser opens directly to that path (e.g. "/owner/repo/workflow_runs/123.html").
+// Interactive generates downloaded data in HTML lazily on demand and serves it on a local server.
+// If initialPath is non-empty, the target entity is rendered before the browser opens.
 func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath, dataDir string, opts ...Option) error {
 	startTime := time.Now()
-	err := All(log, client, []string{"html", "md"}, dataDir, opts...)
-	if err != nil {
-		return fmt.Errorf("failed to generate observe data: %w", err)
+	observeOpts := defaultOptions()
+	for _, opt := range opts {
+		opt(observeOpts)
+	}
+	setActiveHTMLOutputDir(observeOpts.outputDir)
+
+	if err := WriteStaticAssets(activeHTMLOutputDir); err != nil {
+		return fmt.Errorf("failed to write static assets: %w", err)
+	}
+
+	handler := NewOnDemandHandler(log, client, dataDir, activeHTMLOutputDir, opts...)
+
+	if initialPath != "" {
+		req := httptest.NewRequest("GET", initialPath, nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
 	}
 
 	log.Info().
@@ -335,19 +386,23 @@ func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath, d
 	fmt.Println("Observe data at http://localhost:8080")
 	fmt.Printf("Markdown files written to %s/\n", markdownOutputDir)
 
-	return ServeHTML(log, initialPath)
+	return ServeHTMLWithHandler(log, initialPath, handler)
 }
 
-// ServeHTML starts a local HTTP file server for the HTML output directory
+// ServeHTML starts a local HTTP server for the HTML output directory using OnDemandHandler
 // and opens the browser to the specified initial path.
 func ServeHTML(log zerolog.Logger, initialPath string) error {
+	handler := NewOnDemandHandler(log, nil, config.DefaultDataDir(), activeHTMLOutputDir)
+	return ServeHTMLWithHandler(log, initialPath, handler)
+}
+
+// ServeHTMLWithHandler starts a local HTTP server with the given handler.
+func ServeHTMLWithHandler(log zerolog.Logger, initialPath string, handler http.Handler) error {
 	var (
 		baseURL    = "http://localhost:8080"
 		browserURL = baseURL + initialPath
-		dir        = http.Dir(activeHTMLOutputDir)
-		fs         = http.FileServer(dir)
 	)
-	http.Handle("/", fs)
+	http.Handle("/", handler)
 
 	go func() {
 		interruptChan := make(chan os.Signal, 1)
@@ -409,7 +464,7 @@ func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string, 
 		return spinnerErr
 	}
 
-	fmt.Printf("Observations built (%s) ✅\n", time.Since(startTime).String())
+	fmt.Printf("Observations built (%s) ✅\n", time.Since(startTime).Round(10*time.Millisecond).String())
 	return nil
 }
 
@@ -429,9 +484,19 @@ func generateAllObserveData(
 		opt(observeOpts)
 	}
 	setActiveHTMLOutputDir(observeOpts.outputDir)
+	if err := WriteStaticAssets(activeHTMLOutputDir); err != nil {
+		return fmt.Errorf("failed to write static assets: %w", err)
+	}
 
 	collected := make(map[categoryKey][]IndexItem)
 	bpCache := make(map[string]*gather.BranchProtectionResult)
+
+	var (
+		jsonLoadDur  time.Duration
+		renderDur    time.Duration
+		filesWritten int
+		filesSkipped int
+	)
 
 	err := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -469,6 +534,7 @@ func generateAllObserveData(
 			observations []*Observation
 		)
 
+		loadStart := time.Now()
 		switch dataCat {
 		case gather.WorkflowRunsDataDir:
 			var workflowRunID int64
@@ -476,7 +542,12 @@ func generateAllObserveData(
 			if err != nil {
 				return fmt.Errorf("failed to parse workflow run ID: %w", err)
 			}
-			observation, err = WorkflowRun(log, client, owner, repo, workflowRunID, opts...)
+			var wfData *gather.WorkflowRunData
+			wfData, _, err = gather.WorkflowRun(log, client, owner, repo, workflowRunID, observeOpts.gatherOptions...)
+			if err != nil {
+				return fmt.Errorf("failed to load workflow run data: %w", err)
+			}
+			observation, err = workflowRunObservation(wfData)
 			if err != nil {
 				return fmt.Errorf("failed to generate workflow run observation: %w", err)
 			}
@@ -488,7 +559,7 @@ func generateAllObserveData(
 				return nil
 			}
 			observations = append(observations, observation)
-			jobRuns, jobErr := JobRuns(log, client, owner, repo, workflowRunID, opts...)
+			jobRuns, jobErr := jobRunObservations(wfData)
 			if jobErr != nil {
 				return fmt.Errorf("failed to generate job runs: %w", jobErr)
 			}
@@ -507,6 +578,7 @@ func generateAllObserveData(
 			observation, err = Commit(log, client, owner, repo, commitSHA, opts...)
 			observations = append(observations, observation)
 		}
+		jsonLoadDur += time.Since(loadStart)
 
 		if err != nil {
 			return fmt.Errorf("failed to generate observe data: %w", err)
@@ -530,7 +602,21 @@ func generateAllObserveData(
 				if obs == nil {
 					return fmt.Errorf("found a nil observation, this should never happen")
 				}
-				_, err = obs.Render(log, outputType)
+				targetPath := filepath.Join(
+					outputDirForFormat(outputType),
+					obs.Owner,
+					obs.Repo,
+					obs.DataType+"s",
+					fmt.Sprintf("%s.%s", obs.ID, outputType),
+				)
+				if _, statErr := os.Stat(targetPath); statErr == nil {
+					filesSkipped++
+				} else {
+					filesWritten++
+				}
+				renderStart := time.Now()
+				_, err = obs.Render(log, outputType, opts...)
+				renderDur += time.Since(renderStart)
 				if err != nil {
 					return err
 				}
@@ -556,7 +642,19 @@ func generateAllObserveData(
 		return err
 	}
 
-	return generateIndexPages(collected)
+	indexStart := time.Now()
+	err = generateIndexPages(collected)
+	indexDur := time.Since(indexStart)
+
+	log.Debug().
+		Str("json_load_dur", jsonLoadDur.String()).
+		Str("render_dur", renderDur.String()).
+		Str("index_dur", indexDur.String()).
+		Int("files_written", filesWritten).
+		Int("files_skipped", filesSkipped).
+		Msg("Observe phase timings")
+
+	return err
 }
 
 func generateIndexPages(collected map[categoryKey][]IndexItem) error {

@@ -28,6 +28,18 @@ func WorkflowRun(
 		return nil, err
 	}
 
+	return workflowRunObservation(workflowRun)
+}
+
+func workflowRunObservation(workflowRun *gather.WorkflowRunData) (*Observation, error) {
+	if workflowRun == nil {
+		return nil, fmt.Errorf("workflow run data is nil")
+	}
+
+	owner := workflowRun.GetRepository().GetOwner().GetLogin()
+	repo := workflowRun.GetRepository().GetName()
+	workflowRunID := workflowRun.GetID()
+
 	state := workflowRun.GetConclusion()
 	if state == "" {
 		state = workflowRun.GetStatus()

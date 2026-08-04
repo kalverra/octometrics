@@ -27,7 +27,7 @@ type CommitData struct {
 	*github.RepositoryCommit
 	Owner              string             `json:"owner"`
 	Repo               string             `json:"repo"`
-	CheckRuns          []*github.CheckRun `json:"check_runs"`
+	CheckRuns          []*github.CheckRun `json:"-"`
 	MergeQueueEvents   []*MergeQueueEvent `json:"merge_queue_events"`
 	WorkflowRunIDs     []int64            `json:"workflow_run_ids"`
 	WorkflowRuns       []*WorkflowRunData `json:"workflow_runs,omitempty"`
@@ -205,18 +205,23 @@ func Commit(
 		Str("source", "GitHub API").
 		Logger()
 
-	if client == nil {
-		return nil, fmt.Errorf("github client is nil")
-	}
-
-	ctx, cancel := ghCtx()
-	commit, resp, err := client.Rest.Repositories.GetCommit(ctx, owner, repo, sha, nil)
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	var commit *github.RepositoryCommit
+	if options.repositoryCommit != nil {
+		commit = options.repositoryCommit
+	} else {
+		if client == nil {
+			return nil, fmt.Errorf("github client is nil")
+		}
+		ctx, cancel := ghCtx()
+		var resp *github.Response
+		commit, resp, err = client.Rest.Repositories.GetCommit(ctx, owner, repo, sha, nil)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		}
 	}
 
 	commitData.RepositoryCommit = commit
@@ -266,6 +271,15 @@ func Commit(
 		return nil, fmt.Errorf("failed to write commit data to file '%s': %w", sha, err)
 	}
 
+	_ = AppendManifestRecord(options.DataDir, owner, repo, ManifestRecord{
+		Type:      "commit",
+		ID:        sha,
+		Name:      "Commit " + sha,
+		State:     commitData.Conclusion,
+		Actor:     commitData.GetCommit().GetAuthor().GetName(),
+		CreatedAt: commitData.GetCommit().GetAuthor().GetDate().Time,
+	})
+
 	log.Debug().
 		Str("duration", time.Since(startTime).String()).
 		Msg("Gathered commit data")
@@ -277,6 +291,9 @@ func checkRunsForCommit(
 	owner, repo string,
 	sha string,
 ) ([]*github.CheckRun, error) {
+	if client == nil {
+		return nil, nil
+	}
 	var (
 		allCheckRuns []*github.CheckRun
 		listOpts     = &github.ListCheckRunsOptions{

@@ -51,6 +51,20 @@ func TestLoad_Flags(t *testing.T) {
 	assert.Equal(t, 7, cfg.To.Day())
 }
 
+func TestLoad_Flags_CPUProfile(t *testing.T) {
+	t.Parallel()
+
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.String("cpu-profile", "cpu.pprof", "cpu profile path")
+
+	err := flags.Set("cpu-profile", "cpu.pprof")
+	require.NoError(t, err)
+
+	cfg, err := Load(WithFlags(flags))
+	require.NoError(t, err, "failed to load config")
+	assert.Equal(t, "cpu.pprof", cfg.CPUProfile)
+}
+
 func TestValidateGather_PartialDateRange(t *testing.T) {
 	t.Parallel()
 

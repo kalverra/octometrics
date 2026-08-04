@@ -8,10 +8,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Compare: {{ .Left.Name }} vs {{ .Right.Name }} | Octometrics</title>
-    <style>
-        {{ template "styles_css" }}
-    </style>
-    {{ template "mermaid_init_html" }}
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/mermaid-init.js"></script>
 </head>
 
 <body>

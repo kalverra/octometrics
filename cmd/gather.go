@@ -112,10 +112,27 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			}
 		}
 
-		spinnerErr := spinner.New().
-			Title("Gathering data").
-			Action(action).
-			Run()
+		s := spinner.New().Title(formatGatherTitle(0))
+		actionWithCounter := func() {
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+			stopChan := make(chan struct{})
+			go func() {
+				for {
+					select {
+					case <-ticker.C:
+						s.Title(formatGatherTitle(time.Since(startTime)))
+					case <-stopChan:
+						return
+					}
+				}
+			}()
+			defer close(stopChan)
+
+			action()
+		}
+
+		spinnerErr := s.Action(actionWithCounter).Run()
 
 		if err != nil {
 			return err
@@ -128,8 +145,9 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			return spinnerErr
 		}
 
-		logger.Info().Str("duration", time.Since(startTime).String()).Msg("Gathered data")
-		fmt.Printf("Gathered data (%s) ✅\n", time.Since(startTime).String())
+		dur := time.Since(startTime)
+		logger.Info().Str("duration", dur.String()).Msg("Gathered data")
+		fmt.Printf("Gathered data (%s) ✅\n", formatDuration(dur))
 
 		if cfg.NoObserve {
 			return nil
@@ -146,13 +164,7 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			pagePath = fmt.Sprintf("/%s/%s/", cfg.Owner, cfg.Repo)
 		}
 
-		if err := os.RemoveAll(observe.OutputDir); err != nil {
-			return fmt.Errorf("failed to clean observe output: %w", err)
-		}
-		observeOpts := []observe.Option{
-			observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
-		}
-		return observe.Interactive(logger, githubClient, pagePath, cfg.DataDir, observeOpts...)
+		return observe.Interactive(logger, githubClient, pagePath, cfg.DataDir, buildObserveOptions(cfg)...)
 	},
 }
 
@@ -178,4 +190,12 @@ func init() {
 		"Omit workflow display names from observations after gather (comma-separated or repeat flag)")
 
 	rootCmd.AddCommand(gatherCmd)
+}
+
+func formatGatherTitle(d time.Duration) string {
+	return fmt.Sprintf("Gathering data (%s)", d.Truncate(time.Second))
+}
+
+func formatDuration(d time.Duration) string {
+	return d.Round(10 * time.Millisecond).String()
 }

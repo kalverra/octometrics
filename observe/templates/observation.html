@@ -8,11 +8,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ .Name }} | Octometrics</title>
-    <style>
-        {{ template "styles_css" }}
-    </style>
+    <link rel="stylesheet" href="/styles.css">
     {{ if or .TimelineData .MonitoringData .FlowChart }}
-    {{ template "mermaid_init_html" }}
+    <script type="module" src="/mermaid-init.js"></script>
     {{ end }}
 </head>
 

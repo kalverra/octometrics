@@ -58,9 +58,10 @@ type options struct {
 	DataDir     string
 
 	// Optional data params to pass things down the stack so that e.g. a workflow can easily know what PR it belongs to
-	pullRequestData *PullRequestData
-	commitData      *CommitData
-	gatherCost      bool
+	pullRequestData  *PullRequestData
+	commitData       *CommitData
+	repositoryCommit *github.RepositoryCommit
+	gatherCost       bool
 }
 
 func defaultDataDir() string {
@@ -107,6 +108,13 @@ func withPullRequestData(prData *PullRequestData) Option {
 func withCommitData(commitData *CommitData) Option {
 	return func(o *options) {
 		o.commitData = commitData
+	}
+}
+
+// withRepositoryCommit passes optional github.RepositoryCommit down the stack to avoid re-fetching
+func withRepositoryCommit(repoCommit *github.RepositoryCommit) Option {
+	return func(o *options) {
+		o.repositoryCommit = repoCommit
 	}
 }
 

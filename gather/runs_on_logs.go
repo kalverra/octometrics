@@ -2,15 +2,20 @@ package gather
 
 import (
 	"fmt"
-	"io"
 	"math"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 )
+
+var unauthenticatedHTTPClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
 
 // RunsOnCostSummary holds parsed cost data from runs-on's "Execution Cost Summary" step.
 type RunsOnCostSummary struct {
@@ -138,8 +143,7 @@ func parseUSDValue(s string) float64 {
 }
 
 // fetchJobLogs downloads the logs for a single workflow job.
-// Returns the raw log content as a string.
-// The GitHub API returns a 302 redirect to a download URL.
+// Uses a tail-Range request (256 KiB) first, falling back to full download if needed.
 func fetchJobLogs(client *GitHubClient, owner, repo string, jobID int64) (string, error) {
 	ctx, cancel := ghCtx()
 	defer cancel()
@@ -156,44 +160,66 @@ func fetchJobLogs(client *GitHubClient, owner, repo string, jobID int64) (string
 		)
 	}
 
-	// Use a plain HTTP client for the blob download — the redirect URL is an Azure Blob Storage
-	// signed URL that rejects requests carrying GitHub OAuth Authorization headers.
-	downloadResp, err := http.Get(logURL.String())
+	// 1. Try a tail Range request first (256 KiB)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, logURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create log request for job %d: %w", jobID, err)
+	}
+	req.Header.Set("Range", "bytes=-262144")
+
+	downloadResp, err := unauthenticatedHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to download job logs for job %d: %w", jobID, err)
 	}
-	defer func() {
-		if err := downloadResp.Body.Close(); err != nil {
-			// Best effort close
-			_ = err
-		}
-	}()
-
-	if downloadResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(
-			"unexpected status code %d downloading job logs for job %d",
-			downloadResp.StatusCode,
-			jobID,
-		)
-	}
-
-	body, err := io.ReadAll(downloadResp.Body)
+	bodyBytes, err := readAllLimited(downloadResp.Body, maxMonitorJSONLSize)
+	_ = downloadResp.Body.Close()
 	if err != nil {
 		return "", fmt.Errorf("failed to read job logs body for job %d: %w", jobID, err)
 	}
 
-	return string(body), nil
+	logs := string(bodyBytes)
+	if downloadResp.StatusCode == http.StatusPartialContent || downloadResp.StatusCode == http.StatusOK {
+		if strings.Contains(logs, costSummaryMarker) {
+			return logs, nil
+		}
+	}
+
+	// 2. If range request was 206 and summary wasn't in tail, do a full GET request
+	if downloadResp.StatusCode == http.StatusPartialContent {
+		fullReq, fullErr := http.NewRequestWithContext(ctx, http.MethodGet, logURL.String(), nil)
+		if fullErr == nil {
+			fullResp, getErr := unauthenticatedHTTPClient.Do(fullReq)
+			if getErr == nil && fullResp.StatusCode == http.StatusOK {
+				fullBodyBytes, readErr := readAllLimited(fullResp.Body, maxMonitorJSONLSize)
+				_ = fullResp.Body.Close()
+				if readErr == nil {
+					return string(fullBodyBytes), nil
+				}
+			}
+		}
+	}
+
+	return logs, nil
 }
 
 // fetchRunsOnCostFromLogs fetches job logs and parses the runs-on cost summary.
-// Returns (cost in tenths-of-cent, parsed summary, error).
-// Returns (0, nil, nil) if logs are fetched but no cost summary is found.
+// Checks disk cache at data/<owner>/<repo>/runs_on_costs/<jobID>.json first.
 func fetchRunsOnCostFromLogs(
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
 	jobID int64,
+	dataDir string,
 ) (int64, *RunsOnCostSummary, error) {
+	cacheFile := filepath.Join(dataDir, owner, repo, "runs_on_costs", fmt.Sprintf("%d.json", jobID))
+
+	if cacheFileExists(cacheFile) {
+		if summary, err := readJSONFile[*RunsOnCostSummary](cacheFile); err == nil && summary != nil {
+			log.Trace().Int64("job_id", jobID).Msg("loaded runs-on cost summary from disk cache")
+			return summary.CostInTenthsOfCent(), summary, nil
+		}
+	}
+
 	logs, err := fetchJobLogs(client, owner, repo, jobID)
 	if err != nil {
 		log.Trace().Err(err).Int64("job_id", jobID).Msg("failed to fetch job logs for runs-on cost")
@@ -205,6 +231,9 @@ func fetchRunsOnCostFromLogs(
 		log.Trace().Int64("job_id", jobID).Int("log_size", len(logs)).Msg("no runs-on cost summary found in job logs")
 		return 0, nil, nil
 	}
+
+	_ = ensureDataDir(filepath.Dir(cacheFile), "runs_on_costs")
+	_ = writeJSONFile(cacheFile, summary)
 
 	return summary.CostInTenthsOfCent(), summary, nil
 }
