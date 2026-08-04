@@ -44,7 +44,7 @@ func NewOnDemandHandler(
 func (h *OnDemandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqPath := filepath.Clean(r.URL.Path)
 
-	if reqPath == "/styles.css" || reqPath == "/mermaid-init.js" {
+	if reqPath == "/styles.css" || reqPath == "/mermaid-init.js" || reqPath == "/export-png.js" {
 		filePath := filepath.Join(h.outputDir, reqPath)
 		if _, err := os.Stat(filePath); err != nil {
 			_ = WriteStaticAssets(h.outputDir)

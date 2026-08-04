@@ -18,7 +18,7 @@
 | Metric | Before | After | Delta | % Delta |
 |---|---|---|---|---|
 | Duration | {{ .LeftDuration }} | {{ .RightDuration }} | {{ formatDelta .DurationDelta }} | {{ .DurationDeltaPercent }} |
-{{ if or .LeftCost .RightCost }}| Cost | ${{ printf "%.2f" (divideBy1000 .LeftCost) }} | ${{ printf "%.2f" (divideBy1000 .RightCost) }} | ${{ printf "%.2f" (divideBy1000 .CostDelta) }} | {{ .CostDeltaPercent }} |
+{{ if or .LeftCost .RightCost }}| Cost | ${{ printf "%.2f" (divideBy1000 .LeftCost) }} | ${{ printf "%.2f" (divideBy1000 .RightCost) }} | {{ formatCostDelta .CostDelta }} | {{ .CostDeltaPercent }} |
 {{ end }}
 
 {{ if .CombinedGantt }}

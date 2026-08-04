@@ -58,3 +58,23 @@ func TestExternalStaticAssets(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(mermaidJsContent), `import('https://cdn.jsdelivr.net/npm/mermaid`)
 }
+
+func TestCopyableTableWrapperCentered(t *testing.T) {
+	t.Parallel()
+
+	_, tempDir := testhelpers.Setup(t)
+
+	err := WriteStaticAssets(tempDir)
+	require.NoError(t, err)
+
+	//nolint:gosec // test file read
+	stylesContent, err := os.ReadFile(filepath.Join(tempDir, "styles.css"))
+	require.NoError(t, err)
+	cssStr := string(stylesContent)
+
+	assert.Contains(
+		t,
+		cssStr,
+		".copyable-table-wrapper {\n    margin: 0 auto 1.25rem;\n    display: flex;\n    flex-direction: column;\n    align-items: center;",
+	)
+}

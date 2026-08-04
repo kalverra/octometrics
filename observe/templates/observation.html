@@ -12,6 +12,7 @@
     {{ if or .TimelineData .MonitoringData .FlowChart }}
     <script type="module" src="/mermaid-init.js"></script>
     {{ end }}
+    <script type="module" src="/export-png.js"></script>
 </head>
 
 <body>
@@ -57,7 +58,7 @@
         </header>
 
         {{ range .TimelineData }}
-        <details class="section" open>
+        <details class="section event-section" open>
             <summary>
                 {{ .Event }} &mdash; {{ .Duration }}, {{ if not $.CostGathered }}cost not gathered{{ else }}${{ printf "%.2f" (divideBy1000 $.Cost) }}{{ if $.CostEstimate }} (est.){{ end }}{{ end }} ({{ if not .RealStartTime.IsZero }}{{ .RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .RealEndTime.IsZero }}{{ .RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .EndTime.Format "2006-01-02T15:04:05" }}{{ end }})
             </summary>

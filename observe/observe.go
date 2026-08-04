@@ -64,9 +64,21 @@ func sharedFuncMap() template.FuncMap {
 		"divideBy1000":        func(v int64) float64 { return float64(v) / 1000.0 },
 		"joinStrings":         strings.Join,
 		"formatDelta":         formatDelta,
+		"formatCostDelta":     formatCostDelta,
 		"conclusionText":      conclusionText,
 		"shortSHA":            shortSHA,
 	}
+}
+
+func formatCostDelta(costDelta int64) string {
+	if costDelta == 0 {
+		return "$0.00"
+	}
+	val := float64(costDelta) / 1000.0
+	if val < 0 {
+		return fmt.Sprintf("-$%.2f", -val)
+	}
+	return fmt.Sprintf("+$%.2f", val)
 }
 
 func shortSHA(sha string) string {
@@ -127,6 +139,14 @@ func WriteStaticAssets(outputDir string) error {
 		return fmt.Errorf("failed to write mermaid-init.js: %w", err)
 	}
 
+	exportJS, err := templateFS.ReadFile("templates/export-png.js")
+	if err != nil {
+		return fmt.Errorf("failed to read export-png.js: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "export-png.js"), exportJS, 0600); err != nil {
+		return fmt.Errorf("failed to write export-png.js: %w", err)
+	}
+
 	return nil
 }
 
@@ -140,6 +160,15 @@ func init() {
 			return "delta-slower"
 		}
 		if d < 0 {
+			return "delta-faster"
+		}
+		return ""
+	}
+	htmlFuncs["deltaCostClass"] = func(costDelta int64) string {
+		if costDelta > 0 {
+			return "delta-slower"
+		}
+		if costDelta < 0 {
 			return "delta-faster"
 		}
 		return ""

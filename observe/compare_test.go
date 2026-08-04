@@ -1,11 +1,15 @@
 package observe
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kalverra/octometrics/internal/testhelpers"
 )
 
 func TestNormalizeCompareName(t *testing.T) {
@@ -145,4 +149,72 @@ func TestBuildEventPairs_metrics(t *testing.T) {
 	assert.Equal(t, int64(150), pair.RightCost)
 	assert.Equal(t, int64(50), pair.CostDelta)
 	assert.Equal(t, "+50.0%", pair.CostDeltaPercent)
+}
+
+func TestFormatCostDelta(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		costDelta int64
+		want      string
+	}{
+		{name: "zero", costDelta: 0, want: "$0.00"},
+		{name: "positive", costDelta: 500, want: "+$0.50"},
+		{name: "negative", costDelta: -3620, want: "-$3.62"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, formatCostDelta(tt.costDelta))
+		})
+	}
+}
+
+func TestCompareHTMLVisualFixes(t *testing.T) {
+	t.Parallel()
+
+	log, tempDir := testhelpers.Setup(t)
+
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	comp := &Comparison{
+		Owner: "owner",
+		Repo:  "repo",
+		Left:  &Observation{ID: "111", Name: "left"},
+		Right: &Observation{ID: "222", Name: "right"},
+		Summary: ComparisonSummary{
+			LeftStartedAt:  now,
+			RightStartedAt: now.Add(time.Hour),
+		},
+		EventPairs: []EventPair{
+			{
+				Event:         "push",
+				LeftDuration:  time.Minute,
+				RightDuration: 2 * time.Minute,
+				DurationDelta: time.Minute,
+				LeftCost:      4430,
+				RightCost:     800,
+				CostDelta:     -3630,
+			},
+		},
+	}
+
+	setActiveHTMLOutputDir(tempDir)
+	renderedRelPath, err := comp.Render(log, "html")
+	require.NoError(t, err)
+
+	outPath := filepath.Join(tempDir, renderedRelPath)
+	//nolint:gosec // test file read
+	content, err := os.ReadFile(outPath)
+	require.NoError(t, err)
+	htmlStr := string(content)
+
+	// Check header run-at chicklet badge
+	assert.Contains(t, htmlStr, `class="badge badge-run-at"`)
+	assert.Contains(t, htmlStr, `<span class="badge-label">Run at</span>`)
+
+	// Check delta classes and negative currency formatting -$3.63 (faster/cheaper = delta-faster)
+	assert.Contains(t, htmlStr, `class="delta-faster"`)
+	assert.Contains(t, htmlStr, `-$3.63`)
 }

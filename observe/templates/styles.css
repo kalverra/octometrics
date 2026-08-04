@@ -37,7 +37,7 @@
         --color-text-secondary: #8b949e;
         --color-link: #58a6ff;
         --color-link-hover: #79c0ff;
-        --color-accent-green: #3fb950;
+        --color-accent-green: #4ade80;
         --color-accent-green-bg: #0d2818;
         --color-accent-red: #f85149;
         --color-accent-red-bg: #2d1214;
@@ -83,6 +83,7 @@ a:hover {
 
 /* Header */
 .page-header {
+    position: relative;
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--color-surface-border);
@@ -715,22 +716,23 @@ h3 {
     color: var(--color-text-secondary);
 }
 
-.compare-run-at {
-    width: 100%;
-    text-align: right;
-    font-size: 0.75rem;
-    color: var(--color-text-secondary);
+.badge-run-at {
     font-family: var(--font-mono);
 }
 
 .copyable-table-wrapper {
-    margin: 0 0 1rem;
+    margin: 0 0 1.25rem;
+    display: inline-block;
+    max-width: 100%;
 }
 
 .metrics-table {
+    max-width: 580px;
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
     background: var(--color-surface);
     border: 1px solid var(--color-surface-border);
     border-radius: var(--radius);
@@ -743,13 +745,15 @@ h3 {
 
 .metrics-table th,
 .metrics-table td {
-    padding: 0.5rem 0.75rem;
-    text-align: left;
+    padding: 0.65rem 1rem;
     border-bottom: 1px solid var(--color-surface-border);
 }
 
-.metrics-table tbody tr:last-child td {
-    border-bottom: none;
+.metrics-table th:first-child,
+.metrics-table td:first-child {
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-text);
 }
 
 .metrics-table td:nth-child(n+2),
@@ -757,22 +761,37 @@ h3 {
     text-align: right;
     font-family: var(--font-mono);
     font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.metrics-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.metrics-table tbody tr:hover {
+    background: var(--color-badge-bg);
 }
 
 .copy-table-btn {
-    margin-top: 0.5rem;
+    margin-top: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     padding: 0.35rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 600;
+    font-family: var(--font-sans);
     color: var(--color-text-secondary);
-    background: var(--color-badge-bg);
+    background: var(--color-surface);
     border: 1px solid var(--color-surface-border);
     border-radius: var(--radius);
     cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 
 .copy-table-btn:hover {
-    background: var(--color-surface);
+    background: var(--color-badge-bg);
+    color: var(--color-text);
 }
 
 .compare-table {
@@ -873,3 +892,65 @@ h3 {
         grid-template-columns: 1fr;
     }
 }
+
+/* Export PNG */
+.export-container {
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+.export-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    background: var(--color-surface);
+    border: 1px solid var(--color-surface-border);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.export-btn:hover:not(:disabled) {
+    background: var(--color-badge-bg);
+}
+
+.export-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.export-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.35rem;
+    min-width: 180px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-surface-border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px var(--color-shadow);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.export-menu-item {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.85rem;
+    font-size: 0.8rem;
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+}
+
+.export-menu-item:hover {
+    background: var(--color-badge-bg);
+}
+

@@ -10,6 +10,7 @@
     <title>Compare: {{ .Left.Name }} vs {{ .Right.Name }} | Octometrics</title>
     <link rel="stylesheet" href="/styles.css">
     <script type="module" src="/mermaid-init.js"></script>
+    <script type="module" src="/export-png.js"></script>
 </head>
 
 <body>
@@ -27,7 +28,9 @@
                     <span class="badge badge-identifier" style="font-family: var(--font-mono); font-size: 0.8em; margin-left: 0.5rem; background: var(--color-surface); border: 1px solid var(--color-surface-border);">{{ if eq .Left.DataType "commit" }}{{ shortSHA .Left.ID }}{{ else }}#{{ .Left.ID }}{{ end }}</span>
                     <span class="badge badge-{{ .Left.State }}">{{ .Left.State }}</span>
                     {{ if not .Summary.LeftStartedAt.IsZero }}
-                    <span class="compare-run-at">{{ .Summary.LeftStartedAt.Format "Jan 2, 2006 15:04" }}</span>
+                    <span class="badge badge-run-at">
+                        <span class="badge-label">Run at</span> {{ .Summary.LeftStartedAt.Format "Jan 2, 2006 15:04" }}
+                    </span>
                     {{ end }}
                 </div>
                 <div class="compare-side">
@@ -36,7 +39,9 @@
                     <span class="badge badge-identifier" style="font-family: var(--font-mono); font-size: 0.8em; margin-left: 0.5rem; background: var(--color-surface); border: 1px solid var(--color-surface-border);">{{ if eq .Right.DataType "commit" }}{{ shortSHA .Right.ID }}{{ else }}#{{ .Right.ID }}{{ end }}</span>
                     <span class="badge badge-{{ .Right.State }}">{{ .Right.State }}</span>
                     {{ if not .Summary.RightStartedAt.IsZero }}
-                    <span class="compare-run-at">{{ .Summary.RightStartedAt.Format "Jan 2, 2006 15:04" }}</span>
+                    <span class="badge badge-run-at">
+                        <span class="badge-label">Run at</span> {{ .Summary.RightStartedAt.Format "Jan 2, 2006 15:04" }}
+                    </span>
                     {{ end }}
                 </div>
             </div>
@@ -51,7 +56,7 @@
         </header>
 
         {{ range .EventPairs }}
-        <details class="section"{{ if .IsTypical }} open{{ end }}>
+        <details class="section event-section"{{ if .IsTypical }} open{{ end }}>
             <summary>
                 {{ .Event }}
                 <span class="badge" style="margin-left: 1rem;">
@@ -77,16 +82,16 @@
                                 <td>Duration</td>
                                 <td>{{ .LeftDuration }}</td>
                                 <td>{{ .RightDuration }}</td>
-                                <td>{{ formatDelta .DurationDelta }}</td>
-                                <td>{{ .DurationDeltaPercent }}</td>
+                                <td class="{{ deltaClass .DurationDelta }}">{{ formatDelta .DurationDelta }}</td>
+                                <td class="{{ deltaClass .DurationDelta }}">{{ .DurationDeltaPercent }}</td>
                             </tr>
                             {{ if or .LeftCost .RightCost }}
                             <tr>
                                 <td>Cost</td>
                                 <td>${{ printf "%.2f" (divideBy1000 .LeftCost) }}</td>
                                 <td>${{ printf "%.2f" (divideBy1000 .RightCost) }}</td>
-                                <td>${{ printf "%.2f" (divideBy1000 .CostDelta) }}</td>
-                                <td>{{ .CostDeltaPercent }}</td>
+                                <td class="{{ deltaCostClass .CostDelta }}">{{ formatCostDelta .CostDelta }}</td>
+                                <td class="{{ deltaCostClass .CostDelta }}">{{ .CostDeltaPercent }}</td>
                             </tr>
                             {{ end }}
                         </tbody>
