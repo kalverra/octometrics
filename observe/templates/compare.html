@@ -22,16 +22,22 @@
             <h1>Comparison</h1>
             <div class="compare-header">
                 <div class="compare-side">
-                    <span class="compare-label">Left</span>
+                    <span class="compare-label">Before</span>
                     <a target="_blank" href="{{ .Left.GitHubLink }}">{{ .Left.Name }}</a>
                     <span class="badge badge-identifier" style="font-family: var(--font-mono); font-size: 0.8em; margin-left: 0.5rem; background: var(--color-surface); border: 1px solid var(--color-surface-border);">{{ if eq .Left.DataType "commit" }}{{ shortSHA .Left.ID }}{{ else }}#{{ .Left.ID }}{{ end }}</span>
                     <span class="badge badge-{{ .Left.State }}">{{ .Left.State }}</span>
+                    {{ if not .Summary.LeftStartedAt.IsZero }}
+                    <span class="compare-run-at">{{ .Summary.LeftStartedAt.Format "Jan 2, 2006 15:04" }}</span>
+                    {{ end }}
                 </div>
                 <div class="compare-side">
-                    <span class="compare-label">Right</span>
+                    <span class="compare-label">After</span>
                     <a target="_blank" href="{{ .Right.GitHubLink }}">{{ .Right.Name }}</a>
                     <span class="badge badge-identifier" style="font-family: var(--font-mono); font-size: 0.8em; margin-left: 0.5rem; background: var(--color-surface); border: 1px solid var(--color-surface-border);">{{ if eq .Right.DataType "commit" }}{{ shortSHA .Right.ID }}{{ else }}#{{ .Right.ID }}{{ end }}</span>
                     <span class="badge badge-{{ .Right.State }}">{{ .Right.State }}</span>
+                    {{ if not .Summary.RightStartedAt.IsZero }}
+                    <span class="compare-run-at">{{ .Summary.RightStartedAt.Format "Jan 2, 2006 15:04" }}</span>
+                    {{ end }}
                 </div>
             </div>
             <div class="metadata">
@@ -55,24 +61,56 @@
                 </span>
             </summary>
             <div class="section-body">
+                <div class="copyable-table-wrapper">
+                    <table class="metrics-table">
+                        <thead>
+                            <tr>
+                                <th>Metric</th>
+                                <th>Before</th>
+                                <th>After</th>
+                                <th>Delta</th>
+                                <th>% Delta</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Duration</td>
+                                <td>{{ .LeftDuration }}</td>
+                                <td>{{ .RightDuration }}</td>
+                                <td>{{ formatDelta .DurationDelta }}</td>
+                                <td>{{ .DurationDeltaPercent }}</td>
+                            </tr>
+                            {{ if or .LeftCost .RightCost }}
+                            <tr>
+                                <td>Cost</td>
+                                <td>${{ printf "%.2f" (divideBy1000 .LeftCost) }}</td>
+                                <td>${{ printf "%.2f" (divideBy1000 .RightCost) }}</td>
+                                <td>${{ printf "%.2f" (divideBy1000 .CostDelta) }}</td>
+                                <td>{{ .CostDeltaPercent }}</td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                    <button class="copy-table-btn" type="button">Copy Markdown</button>
+                </div>
                 {{ if .CombinedGantt }}
                 <h3>Combined timeline</h3>
-                <p class="compare-gantt-hint">Left and right runs share the same start time on this chart so you can compare structure and overlap directly.</p>
+                <p class="compare-gantt-hint">Before and After runs share the same start time on this chart so you can compare structure and overlap directly.</p>
                 {{ template "compare_gantt_html" .CombinedGantt }}
                 {{ else }}
                 {{ if .Left }}
-                <h3>Left &mdash; {{ if not .Left.RealStartTime.IsZero }}{{ .Left.RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Left.StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .Left.RealEndTime.IsZero }}{{ .Left.RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Left.EndTime.Format "2006-01-02T15:04:05" }}{{ end }} ({{ .Left.Duration }})</h3>
+                <h3>Before &mdash; {{ if not .Left.RealStartTime.IsZero }}{{ .Left.RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Left.StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .Left.RealEndTime.IsZero }}{{ .Left.RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Left.EndTime.Format "2006-01-02T15:04:05" }}{{ end }} ({{ .Left.Duration }})</h3>
                 {{ template "timeline_html" .Left }}
                 {{ else }}
-                <h3>Left</h3>
+                <h3>Before</h3>
                 <p class="empty-state">No runs for this event.</p>
                 {{ end }}
 
                 {{ if .Right }}
-                <h3>Right &mdash; {{ if not .Right.RealStartTime.IsZero }}{{ .Right.RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Right.StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .Right.RealEndTime.IsZero }}{{ .Right.RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Right.EndTime.Format "2006-01-02T15:04:05" }}{{ end }} ({{ .Right.Duration }})</h3>
+                <h3>After &mdash; {{ if not .Right.RealStartTime.IsZero }}{{ .Right.RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Right.StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .Right.RealEndTime.IsZero }}{{ .Right.RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .Right.EndTime.Format "2006-01-02T15:04:05" }}{{ end }} ({{ .Right.Duration }})</h3>
                 {{ template "timeline_html" .Right }}
                 {{ else }}
-                <h3>Right</h3>
+                <h3>After</h3>
                 <p class="empty-state">No runs for this event.</p>
                 {{ end }}
                 {{ end }}
@@ -84,13 +122,13 @@
                         <thead>
                             <tr>
                                 <th class="ct-name">Name</th>
-                                <th class="ct-runner">Left Runner</th>
-                                <th class="ct-runner">Right Runner</th>
-                                <th class="ct-duration">Left Duration</th>
-                                <th class="ct-duration">Right Duration</th>
+                                <th class="ct-runner">Before Runner</th>
+                                <th class="ct-runner">After Runner</th>
+                                <th class="ct-duration">Before Duration</th>
+                                <th class="ct-duration">After Duration</th>
                                 <th class="ct-duration">Delta</th>
-                                <th class="ct-status">Left Status</th>
-                                <th class="ct-status">Right Status</th>
+                                <th class="ct-status">Before Status</th>
+                                <th class="ct-status">After Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -113,7 +151,7 @@
 
                 {{ if .OnlyLeft }}
                 <details>
-                    <summary>Only in Left ({{ len .OnlyLeft }})</summary>
+                    <summary>Only in Before ({{ len .OnlyLeft }})</summary>
                     <table class="compare-table">
                         <thead>
                             <tr>
@@ -139,7 +177,7 @@
 
                 {{ if .OnlyRight }}
                 <details>
-                    <summary>Only in Right ({{ len .OnlyRight }})</summary>
+                    <summary>Only in After ({{ len .OnlyRight }})</summary>
                     <table class="compare-table">
                         <thead>
                             <tr>
@@ -176,7 +214,7 @@
                     <summary>{{ .Title }}</summary>
                     <div class="monitoring-body">
                         <div class="timeline-chart">
-                            <h4 style="margin-top: 0; margin-bottom: 0.5rem; color: var(--color-text-secondary);">Left</h4>
+                            <h4 style="margin-top: 0; margin-bottom: 0.5rem; color: var(--color-text-secondary);">Before</h4>
                             {{ if .LeftDiagram }}
                             <pre class="mermaid">{{ .LeftDiagram }}</pre>
                             {{ else }}
@@ -184,7 +222,7 @@
                             {{ end }}
                         </div>
                         <div class="timeline-chart" style="margin-top: 2rem;">
-                            <h4 style="margin-top: 0; margin-bottom: 0.5rem; color: var(--color-text-secondary);">Right</h4>
+                            <h4 style="margin-top: 0; margin-bottom: 0.5rem; color: var(--color-text-secondary);">After</h4>
                             {{ if .RightDiagram }}
                             <pre class="mermaid">{{ .RightDiagram }}</pre>
                             {{ else }}
@@ -202,6 +240,35 @@
         <p class="empty-state">No timeline items to compare.</p>
         {{ end }}
     </div>
+
+<script>
+    function tableToMarkdown(table) {
+        const rows = [];
+        for (const row of table.querySelectorAll('tr')) {
+            const cells = Array.from(row.querySelectorAll('th, td')).map(cell => cell.textContent.trim());
+            rows.push('| ' + cells.join(' | ') + ' |');
+        }
+        if (rows.length > 1) {
+            const headerCells = Array.from(table.querySelectorAll('thead th')).map(() => '---');
+            rows.splice(1, 0, '| ' + headerCells.join(' | ') + ' |');
+        }
+        return rows.join('\n');
+    }
+
+    document.querySelectorAll('.copy-table-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const table = btn.parentElement.querySelector('.metrics-table');
+            if (!table) {
+                return;
+            }
+            navigator.clipboard.writeText(tableToMarkdown(table)).then(() => {
+                const original = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = original, 2000);
+            });
+        });
+    });
+</script>
 </body>
 
 </html>

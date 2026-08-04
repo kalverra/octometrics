@@ -3,16 +3,23 @@
 {{ define "compare_md" }}
 # Comparison: {{ .Left.Name }} vs {{ .Right.Name }}
 
-| | Left | Right |
+| | Before | After |
 |---|---|---|
 | **Name** | [{{ .Left.Name }}]({{ .Left.GitHubLink }}) | [{{ .Right.Name }}]({{ .Right.GitHubLink }}) |
 | **ID** | {{ if eq .Left.DataType "commit" }}{{ shortSHA .Left.ID }}{{ else }}#{{ .Left.ID }}{{ end }} | {{ if eq .Right.DataType "commit" }}{{ shortSHA .Right.ID }}{{ else }}#{{ .Right.ID }}{{ end }} |
 | **State** | {{ .Left.State }} | {{ .Right.State }} |
+| **Run at** | {{ if not .Summary.LeftStartedAt.IsZero }}{{ .Summary.LeftStartedAt.Format "Jan 2, 2006 15:04" }}{{ else }}-{{ end }} | {{ if not .Summary.RightStartedAt.IsZero }}{{ .Summary.RightStartedAt.Format "Jan 2, 2006 15:04" }}{{ else }}-{{ end }} |
 {{ if or .Summary.LeftCost .Summary.RightCost }}| **Cost** | ${{ printf "%.2f" (divideBy1000 .Summary.LeftCost) }} | ${{ printf "%.2f" (divideBy1000 .Summary.RightCost) }} |
 {{ end }}
 {{ range .EventPairs }}
 <details open>
 <summary><strong>{{ .Event }}</strong> — {{ .LeftDuration }} → {{ .RightDuration }} ({{ formatDelta .DurationDelta }})</summary>
+
+| Metric | Before | After | Delta | % Delta |
+|---|---|---|---|---|
+| Duration | {{ .LeftDuration }} | {{ .RightDuration }} | {{ formatDelta .DurationDelta }} | {{ .DurationDeltaPercent }} |
+{{ if or .LeftCost .RightCost }}| Cost | ${{ printf "%.2f" (divideBy1000 .LeftCost) }} | ${{ printf "%.2f" (divideBy1000 .RightCost) }} | ${{ printf "%.2f" (divideBy1000 .CostDelta) }} | {{ .CostDeltaPercent }} |
+{{ end }}
 
 {{ if .CombinedGantt }}
 ### Combined Timeline
@@ -20,21 +27,21 @@
 {{ template "compare_gantt_md" .CombinedGantt }}
 {{ else }}
 {{ if .Left }}
-### Left — {{ .Left.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Left.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Left.Duration }})
+### Before — {{ .Left.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Left.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Left.Duration }})
 
 {{ template "timeline_md" .Left }}
 {{ else }}
-### Left
+### Before
 
 _No runs for this event._
 {{ end }}
 
 {{ if .Right }}
-### Right — {{ .Right.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Right.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Right.Duration }})
+### After — {{ .Right.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Right.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Right.Duration }})
 
 {{ template "timeline_md" .Right }}
 {{ else }}
-### Right
+### After
 
 _No runs for this event._
 {{ end }}
@@ -44,7 +51,7 @@ _No runs for this event._
 <details open>
 <summary>Comparison ({{ len .Items }} matched)</summary>
 
-| Name | Left Duration | Right Duration | Delta | Left Status | Right Status |
+| Name | Before Duration | After Duration | Delta | Before Status | After Status |
 |------|---------------|----------------|-------|-------------|--------------|
 {{ range .Items }}| {{ .Name }} | {{ .LeftDuration }} | {{ .RightDuration }} | {{ formatDelta .DurationDelta }} | {{ conclusionText .LeftConclusion }} | {{ conclusionText .RightConclusion }} |
 {{ end }}
@@ -54,7 +61,7 @@ _No runs for this event._
 
 {{ if .OnlyLeft }}
 <details>
-<summary>Only in Left ({{ len .OnlyLeft }})</summary>
+<summary>Only in Before ({{ len .OnlyLeft }})</summary>
 
 | Name | Duration | Status |
 |------|----------|--------|
@@ -66,7 +73,7 @@ _No runs for this event._
 
 {{ if .OnlyRight }}
 <details>
-<summary>Only in Right ({{ len .OnlyRight }})</summary>
+<summary>Only in After ({{ len .OnlyRight }})</summary>
 
 | Name | Duration | Status |
 |------|----------|--------|
@@ -81,23 +88,23 @@ _No runs for this event._
 <summary>{{ .Title }}</summary>
 
 {{ if .LeftDiagram }}
-**Left:**
+**Before:**
 
 ```mermaid
 {{ .LeftDiagram }}
 ```
 {{ else }}
-**Left:** _No data_
+**Before:** _No data_
 {{ end }}
 
 {{ if .RightDiagram }}
-**Right:**
+**After:**
 
 ```mermaid
 {{ .RightDiagram }}
 ```
 {{ else }}
-**Right:** _No data_
+**After:** _No data_
 {{ end }}
 
 </details>

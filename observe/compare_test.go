@@ -67,3 +67,82 @@ func TestMatchItems_nameFallback(t *testing.T) {
 	assert.Empty(t, onlyRight)
 	assert.Equal(t, time.Minute, matched[0].DurationDelta)
 }
+
+func TestFormatPercentDelta(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		delta int64
+		base  int64
+		want  string
+	}{
+		{name: "zero", delta: 0, base: 100, want: "0.0%"},
+		{name: "positive", delta: 50, base: 100, want: "+50.0%"},
+		{name: "negative", delta: -50, base: 100, want: "-50.0%"},
+		{name: "both zero", delta: 0, base: 0, want: "0.0%"},
+		{name: "base zero", delta: 50, base: 0, want: "N/A"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, formatPercentDelta(tt.delta, tt.base))
+		})
+	}
+}
+
+func TestSumItemCosts(t *testing.T) {
+	t.Parallel()
+
+	items := []TimelineItem{
+		{Cost: 100},
+		{Cost: 250},
+		{Cost: 0},
+	}
+	assert.Equal(t, int64(350), sumItemCosts(items))
+	assert.Equal(t, int64(0), sumItemCosts(nil))
+}
+
+func TestEarliestStartTime(t *testing.T) {
+	t.Parallel()
+
+	t1 := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+	t2 := time.Date(2025, 1, 1, 9, 0, 0, 0, time.UTC)
+	timelines := []*Timeline{
+		{Items: []TimelineItem{{StartTime: t1}}},
+		{Items: []TimelineItem{{StartTime: t2}}},
+	}
+	assert.Equal(t, t2, earliestStartTime(timelines))
+	assert.True(t, earliestStartTime(nil).IsZero())
+}
+
+func TestBuildEventPairs_metrics(t *testing.T) {
+	t.Parallel()
+
+	left := []*Timeline{{
+		Event: "push",
+		Items: []TimelineItem{
+			{Name: "build", ID: "1", StartTime: time.Now(), Duration: time.Minute, Cost: 100},
+		},
+	}}
+	right := []*Timeline{{
+		Event: "push",
+		Items: []TimelineItem{
+			{Name: "build", ID: "1", StartTime: time.Now(), Duration: 2 * time.Minute, Cost: 150},
+		},
+	}}
+
+	pairs := buildEventPairs(left, right, "owner", "repo", "workflow_run")
+	require.Len(t, pairs, 1)
+	pair := pairs[0]
+
+	assert.Equal(t, time.Minute, pair.LeftDuration)
+	assert.Equal(t, 2*time.Minute, pair.RightDuration)
+	assert.Equal(t, time.Minute, pair.DurationDelta)
+	assert.Equal(t, "+100.0%", pair.DurationDeltaPercent)
+	assert.Equal(t, int64(100), pair.LeftCost)
+	assert.Equal(t, int64(150), pair.RightCost)
+	assert.Equal(t, int64(50), pair.CostDelta)
+	assert.Equal(t, "+50.0%", pair.CostDeltaPercent)
+}

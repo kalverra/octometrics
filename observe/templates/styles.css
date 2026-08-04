@@ -685,6 +685,7 @@ h3 {
 
 .compare-side {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
@@ -712,6 +713,66 @@ h3 {
     flex-shrink: 0;
     background: var(--color-badge-bg);
     color: var(--color-text-secondary);
+}
+
+.compare-run-at {
+    width: 100%;
+    text-align: right;
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    font-family: var(--font-mono);
+}
+
+.copyable-table-wrapper {
+    margin: 0 0 1rem;
+}
+
+.metrics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-surface-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+.metrics-table thead {
+    background: var(--color-badge-bg);
+}
+
+.metrics-table th,
+.metrics-table td {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-surface-border);
+}
+
+.metrics-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.metrics-table td:nth-child(n+2),
+.metrics-table th:nth-child(n+2) {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+.copy-table-btn {
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: var(--color-badge-bg);
+    border: 1px solid var(--color-surface-border);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.copy-table-btn:hover {
+    background: var(--color-surface);
 }
 
 .compare-table {

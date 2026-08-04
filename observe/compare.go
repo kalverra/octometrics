@@ -45,18 +45,23 @@ type MonitoringPair struct {
 // EventPair groups the left and right Timeline for the same triggering event.
 // Either side may be nil when the event only appears in one observation.
 type EventPair struct {
-	Event         string
-	Left          *Timeline
-	Right         *Timeline
-	IsTypical     bool // true for common events (pull_request, push, merge_group)
-	LeftDuration  time.Duration
-	RightDuration time.Duration
-	DurationDelta time.Duration
-	Items         []ComparisonItem
-	OnlyLeft      []ComparisonOnlyItem
-	OnlyRight     []ComparisonOnlyItem
+	Event                string
+	Left                 *Timeline
+	Right                *Timeline
+	IsTypical            bool // true for common events (pull_request, push, merge_group)
+	LeftDuration         time.Duration
+	RightDuration        time.Duration
+	DurationDelta        time.Duration
+	DurationDeltaPercent string
+	LeftCost             int64
+	RightCost            int64
+	CostDelta            int64
+	CostDeltaPercent     string
+	Items                []ComparisonItem
+	OnlyLeft             []ComparisonOnlyItem
+	OnlyRight            []ComparisonOnlyItem
 
-	// CombinedGantt is a single Mermaid Gantt with Left/Right sections, aligned to the same start time.
+	// CombinedGantt is a single Mermaid Gantt with Before/After sections, aligned to the same start time.
 	CombinedGantt *CompareGanttData
 }
 
@@ -117,11 +122,13 @@ type ComparisonOnlyItem struct {
 
 // ComparisonSummary holds aggregate comparison metrics.
 type ComparisonSummary struct {
-	LeftDuration  time.Duration
-	RightDuration time.Duration
-	DurationDelta time.Duration
-	LeftCost      int64
-	RightCost     int64
+	LeftDuration   time.Duration
+	RightDuration  time.Duration
+	DurationDelta  time.Duration
+	LeftCost       int64
+	RightCost      int64
+	LeftStartedAt  time.Time
+	RightStartedAt time.Time
 }
 
 // CompareWorkflowRuns builds a comparison between two workflow runs.
@@ -218,11 +225,13 @@ func buildComparison(left, right *Observation, owner, repo, compareType string) 
 		Repo:        repo,
 		CompareType: compareType,
 		Summary: ComparisonSummary{
-			LeftDuration:  leftDur,
-			RightDuration: rightDur,
-			DurationDelta: rightDur - leftDur,
-			LeftCost:      left.Cost,
-			RightCost:     right.Cost,
+			LeftDuration:   leftDur,
+			RightDuration:  rightDur,
+			DurationDelta:  rightDur - leftDur,
+			LeftCost:       left.Cost,
+			RightCost:      right.Cost,
+			LeftStartedAt:  earliestStartTime(left.TimelineData),
+			RightStartedAt: earliestStartTime(right.TimelineData),
 		},
 	}
 
@@ -381,6 +390,38 @@ func wallClockDuration(timelines []*Timeline) time.Duration {
 	return latest.Sub(earliest)
 }
 
+// sumItemCosts returns the total cost in tenths of a cent for a set of items.
+func sumItemCosts(items []TimelineItem) int64 {
+	var total int64
+	for _, item := range items {
+		total += item.Cost
+	}
+	return total
+}
+
+// earliestStartTime returns the earliest real start time across all timelines,
+// falling back to item StartTime when RealStartTime is not set.
+func earliestStartTime(timelines []*Timeline) time.Time {
+	var earliest time.Time
+	first := true
+	for _, td := range timelines {
+		if !td.RealStartTime.IsZero() {
+			if first || td.RealStartTime.Before(earliest) {
+				earliest = td.RealStartTime
+			}
+			first = false
+			continue
+		}
+		for _, item := range td.Items {
+			if first || item.StartTime.Before(earliest) {
+				earliest = item.StartTime
+			}
+			first = false
+		}
+	}
+	return earliest
+}
+
 func absDur(d time.Duration) time.Duration {
 	if d < 0 {
 		return -d
@@ -424,8 +465,8 @@ func buildCompareGantt(left, right *Timeline) *CompareGanttData {
 		sections = append(sections, CompareGanttSection{Label: label, Tasks: tasks})
 	}
 
-	appendSide("Left", left, "cl-")
-	appendSide("Right", right, "cr-")
+	appendSide("Before", left, "cl-")
+	appendSide("After", right, "cr-")
 
 	if len(sections) == 0 {
 		return nil
@@ -480,6 +521,11 @@ func buildEventPairs(left, right []*Timeline, owner, repo, compareType string) [
 		pair.LeftDuration = leftDur
 		pair.RightDuration = rightDur
 		pair.DurationDelta = rightDur - leftDur
+		pair.DurationDeltaPercent = formatPercentDelta(int64(pair.DurationDelta), int64(pair.LeftDuration))
+		pair.LeftCost = sumItemCosts(pair.Left.Items)
+		pair.RightCost = sumItemCosts(pair.Right.Items)
+		pair.CostDelta = pair.RightCost - pair.LeftCost
+		pair.CostDeltaPercent = formatPercentDelta(pair.CostDelta, pair.LeftCost)
 
 		rewriteLinksForComparisonItems(&pair, owner, repo, compareType)
 		pair.CombinedGantt = buildCompareGantt(pair.Left, pair.Right)
@@ -501,6 +547,11 @@ func buildEventPairs(left, right []*Timeline, owner, repo, compareType string) [
 		rightDur := wallClockDuration([]*Timeline{pair.Right})
 		pair.RightDuration = rightDur
 		pair.DurationDelta = rightDur
+		pair.DurationDeltaPercent = formatPercentDelta(int64(pair.DurationDelta), int64(pair.LeftDuration))
+		pair.LeftCost = 0
+		pair.RightCost = sumItemCosts(pair.Right.Items)
+		pair.CostDelta = pair.RightCost
+		pair.CostDeltaPercent = formatPercentDelta(pair.CostDelta, pair.LeftCost)
 
 		rewriteLinksForComparisonItems(&pair, owner, repo, compareType)
 		pair.CombinedGantt = buildCompareGantt(pair.Left, pair.Right)
@@ -569,6 +620,22 @@ func formatDelta(d time.Duration) string {
 		return "+" + d.String()
 	}
 	return d.String()
+}
+
+// formatPercentDelta returns a signed percentage string for delta relative to base.
+// Returns "N/A" when base is zero and delta is non-zero.
+func formatPercentDelta(delta, base int64) string {
+	if base == 0 {
+		if delta == 0 {
+			return "0.0%"
+		}
+		return "N/A"
+	}
+	pct := float64(delta) / float64(base) * 100
+	if pct > 0 {
+		return fmt.Sprintf("+%.1f%%", pct)
+	}
+	return fmt.Sprintf("%.1f%%", pct)
 }
 
 // collectWorkflowRunIDsFromObservation returns unique workflow run IDs from timeline items
