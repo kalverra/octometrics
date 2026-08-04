@@ -54,8 +54,9 @@ type Option func(*options)
 // options contains options for gathering data,
 // manipulated by GatherOption functions.
 type options struct {
-	ForceUpdate bool
-	DataDir     string
+	ForceUpdate     bool
+	SkipMemoryCache bool
+	DataDir         string
 
 	// Optional data params to pass things down the stack so that e.g. a workflow can easily know what PR it belongs to
 	pullRequestData  *PullRequestData
@@ -85,6 +86,14 @@ func defaultOptions() *options {
 func ForceUpdate() Option {
 	return func(o *options) {
 		o.ForceUpdate = true
+	}
+}
+
+// SkipMemoryCache bypasses the in-memory cache, loading from disk instead.
+// Useful when the on-disk data has been updated and the memory cache is stale.
+func SkipMemoryCache() Option {
+	return func(o *options) {
+		o.SkipMemoryCache = true
 	}
 }
 

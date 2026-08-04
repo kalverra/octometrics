@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -235,7 +236,7 @@ func WorkflowRun(
 
 	cacheKey := targetFile
 
-	if !opts.ForceUpdate {
+	if !opts.ForceUpdate && !opts.SkipMemoryCache {
 		if cached, ok := workflowRunCache.Load(cacheKey); ok {
 			log.Debug().
 				Str("duration", time.Since(startTime).String()).
@@ -247,8 +248,10 @@ func WorkflowRun(
 
 	val, err, _ := workflowRunGroup.Do(cacheKey, func() (any, error) {
 		if !opts.ForceUpdate {
-			if cached, ok := workflowRunCache.Load(cacheKey); ok {
-				return cached.(*WorkflowRunData), nil
+			if !opts.SkipMemoryCache {
+				if cached, ok := workflowRunCache.Load(cacheKey); ok {
+					return cached.(*WorkflowRunData), nil
+				}
 			}
 			if data, loadErr := loadWorkflowRunFromDisk(targetFile); loadErr == nil {
 				workflowRunCache.Store(cacheKey, data)
@@ -301,6 +304,35 @@ func loadWorkflowRunFromDisk(targetFile string) (*WorkflowRunData, error) {
 		return nil, os.ErrNotExist
 	}
 	return readJSONFile[*WorkflowRunData](targetFile)
+}
+
+// FindWorkflowRunIDForJob scans the data directory for the workflow run that contains
+// the given job ID. Returns the workflow run ID and nil error if found.
+func FindWorkflowRunIDForJob(dataDir, owner, repo string, jobID int64) (int64, error) {
+	wfDir := filepath.Join(dataDir, owner, repo, WorkflowRunsDataDir)
+	entries, err := os.ReadDir(wfDir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read workflow runs directory: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		wfID, err := strconv.ParseInt(strings.TrimSuffix(entry.Name(), ".json"), 10, 64)
+		if err != nil {
+			continue
+		}
+		data, err := loadWorkflowRunFromDisk(filepath.Join(wfDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		for _, job := range data.Jobs {
+			if job.GetID() == jobID {
+				return wfID, nil
+			}
+		}
+	}
+	return 0, fmt.Errorf("no workflow run found containing job ID %d", jobID)
 }
 
 // saveWorkflowRunToDisk saves a workflow run to local disk.
@@ -465,22 +497,31 @@ func processJobs(
 
 			if conclusion != "skipped" && duration > 0 {
 				if _, isRunsOn := parseRunsOnLabel(job.Labels); isRunsOn {
-					if runsOnCost, _ := calculateRunsOnCost(job.Labels, duration); runsOnCost == 0 {
-						jobID := job.GetID()
-						logFetchGroup.Go(func() error {
-							if logCost, logSummary, logErr := fetchRunsOnCostFromLogs(
-								log,
-								client,
-								owner,
-								repo,
-								jobID,
-								dataDir,
-							); logErr == nil && logCost > 0 {
-								logResults.Store(jobID, runsOnLogResult{cost: logCost, summary: logSummary})
-							}
-							return nil
-						})
-					}
+					jobID := job.GetID()
+					logFetchGroup.Go(func() error {
+						logCost, logSummary, logErr := fetchRunsOnCostFromLogs(
+							log,
+							client,
+							owner,
+							repo,
+							jobID,
+							dataDir,
+						)
+						if logErr != nil {
+							log.Debug().
+								Err(logErr).
+								Int64("job_id", jobID).
+								Msg("runs-on log fetch failed, will use label estimate")
+						} else if logSummary == nil {
+							log.Debug().
+								Int64("job_id", jobID).
+								Msg("no runs-on cost summary in logs, will use label estimate")
+						}
+						if logErr == nil && logSummary != nil {
+							logResults.Store(jobID, runsOnLogResult{cost: logCost, summary: logSummary})
+						}
+						return nil
+					})
 				}
 			}
 		}
@@ -545,19 +586,19 @@ func calculateJobCostAndRunner(
 
 		if conclusion != "skipped" && duration > 0 {
 			if _, isRunsOn := parseRunsOnLabel(job.Labels); isRunsOn {
-				if runsOnCost, isEstimate := calculateRunsOnCost(job.Labels, duration); runsOnCost > 0 {
-					cost = runsOnCost
-					costEstimate = isEstimate
-					if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
-						runner = runsOnName
-					}
-				} else if val, ok := logResults.Load(job.GetID()); ok {
+				if val, ok := logResults.Load(job.GetID()); ok {
 					res := val.(runsOnLogResult)
 					cost = res.cost
 					costEstimate = false
 					if res.summary != nil && res.summary.InstanceType != "" {
 						runner = "runs-on:" + res.summary.InstanceType
 					} else if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
+						runner = runsOnName
+					}
+				} else if runsOnCost, isEstimate := calculateRunsOnCost(job.Labels, duration); runsOnCost > 0 {
+					cost = runsOnCost
+					costEstimate = isEstimate
+					if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
 						runner = runsOnName
 					}
 				}

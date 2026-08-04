@@ -1025,7 +1025,7 @@ func byteScale(maxBytes uint64) (divisor float64, unit string) {
 func sanitizeMermaidName(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > 80 {
-		s = s[:77] + "..."
+		s = "..." + s[len(s)-77:]
 	}
 	s = strings.ReplaceAll(s, ":", "#colon;")
 	s = strings.ReplaceAll(s, ",", "#comma;")

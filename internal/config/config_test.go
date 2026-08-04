@@ -127,3 +127,47 @@ func TestLoad_FlagsOverrideEnv(t *testing.T) {
 	require.NoError(t, err, "failed to load config")
 	assert.Equal(t, "test-token-2", cfg.GitHubToken)
 }
+
+func TestValidateWorkflowFilters(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		cfg     Config
+		wantErr string
+	}{
+		{
+			name: "both exclude and include set",
+			cfg: Config{
+				ExcludeWorkflows: []string{"a"},
+				IncludeWorkflows: []string{"b"},
+			},
+			wantErr: "mutually exclusive",
+		},
+		{
+			name: "only exclude set",
+			cfg:  Config{ExcludeWorkflows: []string{"a"}},
+		},
+		{
+			name: "only include set",
+			cfg:  Config{IncludeWorkflows: []string{"b"}},
+		},
+		{
+			name: "neither set",
+			cfg:  Config{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := tt.cfg.ValidateWorkflowFilters()
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}

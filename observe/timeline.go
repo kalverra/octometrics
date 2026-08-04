@@ -37,14 +37,43 @@ type Timeline struct {
 
 // TimelineItem represents a single task or job in the timeline.
 type TimelineItem struct {
-	Name       string
-	ID         string
-	StartTime  time.Time
-	Duration   time.Duration
-	Conclusion string
-	Link       string
-	IsRequired bool
-	Runner     string
+	Name         string
+	ID           string
+	StartTime    time.Time
+	Duration     time.Duration
+	Conclusion   string
+	Link         string
+	IsRequired   bool
+	Runner       string
+	Cost         int64 // Cost in tenths of a cent
+	CostEstimate bool
+	CostGathered bool
+}
+
+// HasRunner returns true if any item in the timeline has a non-empty runner.
+func (g *Timeline) HasRunner() bool {
+	if g == nil {
+		return false
+	}
+	for _, item := range g.Items {
+		if item.Runner != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// HasCost returns true if any item in the timeline has cost data.
+func (g *Timeline) HasCost() bool {
+	if g == nil {
+		return false
+	}
+	for _, item := range g.Items {
+		if item.Cost != 0 || item.CostGathered {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *Timeline) normalize() error {
@@ -124,7 +153,7 @@ func (g *Timeline) ItemsByDuration() []TimelineItem {
 func sanitizeMermaidName(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > 80 {
-		s = s[:77] + "..."
+		s = "..." + s[len(s)-77:]
 	}
 	s = strings.ReplaceAll(s, ":", "#colon;")
 	s = strings.ReplaceAll(s, ",", "#comma;")

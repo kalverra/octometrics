@@ -215,20 +215,20 @@ func fetchRunsOnCostFromLogs(
 
 	if cacheFileExists(cacheFile) {
 		if summary, err := readJSONFile[*RunsOnCostSummary](cacheFile); err == nil && summary != nil {
-			log.Trace().Int64("job_id", jobID).Msg("loaded runs-on cost summary from disk cache")
+			log.Debug().Int64("job_id", jobID).Msg("loaded runs-on cost summary from disk cache")
 			return summary.CostInTenthsOfCent(), summary, nil
 		}
 	}
 
 	logs, err := fetchJobLogs(client, owner, repo, jobID)
 	if err != nil {
-		log.Trace().Err(err).Int64("job_id", jobID).Msg("failed to fetch job logs for runs-on cost")
+		log.Debug().Err(err).Int64("job_id", jobID).Msg("failed to fetch job logs for runs-on cost")
 		return 0, nil, err
 	}
 
 	summary, ok := ParseRunsOnCostSummary(logs)
 	if !ok || summary == nil {
-		log.Trace().Int64("job_id", jobID).Int("log_size", len(logs)).Msg("no runs-on cost summary found in job logs")
+		log.Debug().Int64("job_id", jobID).Int("log_size", len(logs)).Msg("no runs-on cost summary found in job logs")
 		return 0, nil, nil
 	}
 

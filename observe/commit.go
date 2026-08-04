@@ -135,12 +135,15 @@ func buildCommitTimelineData(
 			}
 
 			newItem := TimelineItem{
-				Name:       workflowRun.GetName(),
-				ID:         fmt.Sprint(workflowRun.GetID()),
-				StartTime:  workflowRun.GetRunStartedAt().Time,
-				Conclusion: conclusionToGanttStatus(conclusion),
-				Duration:   duration,
-				Link:       workflowRunLink(owner, repo, workflowRun.GetID()) + ".html",
+				Name:         workflowRun.GetName(),
+				ID:           fmt.Sprint(workflowRun.GetID()),
+				StartTime:    workflowRun.GetRunStartedAt().Time,
+				Conclusion:   conclusionToGanttStatus(conclusion),
+				Duration:     duration,
+				Link:         workflowRunLink(owner, repo, workflowRun.GetID()) + ".html",
+				Cost:         workflowRun.GetCost(),
+				CostEstimate: workflowRun.GetCostEstimate(),
+				CostGathered: workflowRun.GetCostGathered(),
 			}
 			if inProgress {
 				newItem.Name = fmt.Sprintf("%s (in progress)", workflowRun.GetName())

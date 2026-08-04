@@ -537,6 +537,39 @@ h3 {
     white-space: nowrap;
 }
 
+.runtime-table .rt-cost {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.runtime-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.runtime-table th.sortable:hover {
+    background: var(--color-surface-border);
+}
+
+.runtime-table th.sortable::after {
+    content: "⇅";
+    margin-left: 0.3rem;
+    opacity: 0.4;
+    font-size: 0.75em;
+}
+
+.runtime-table th.sorted-asc::after {
+    content: "↑";
+    opacity: 0.8;
+}
+
+.runtime-table th.sorted-desc::after {
+    content: "↓";
+    opacity: 0.8;
+}
+
 .rt-badge {
     display: inline-block;
     padding: 0.1rem 0.5rem;

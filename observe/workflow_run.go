@@ -121,13 +121,16 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*Timelin
 		}
 
 		newTask := TimelineItem{
-			Name:       job.GetName(),
-			ID:         fmt.Sprint(job.GetID()),
-			StartTime:  startedAt,
-			Conclusion: conclusionToGanttStatus(conclusion),
-			Duration:   duration,
-			Link:       jobRunLink(owner, repo, job.GetID()) + ".html",
-			Runner:     job.GetRunner(),
+			Name:         job.GetName(),
+			ID:           fmt.Sprint(job.GetID()),
+			StartTime:    startedAt,
+			Conclusion:   conclusionToGanttStatus(conclusion),
+			Duration:     duration,
+			Link:         jobRunLink(owner, repo, job.GetID()) + ".html",
+			Runner:       job.GetRunner(),
+			Cost:         job.GetCost(),
+			CostEstimate: job.GetCostEstimate(),
+			CostGathered: job.GetCostGathered(),
 		}
 		if inProgress {
 			newTask.Name = fmt.Sprintf("%s (in progress)", job.GetName())

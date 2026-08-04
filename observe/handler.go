@@ -93,6 +93,16 @@ func (h *OnDemandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.ServeFile(w, r, targetOutFile)
 				return
 			}
+		} else if category == "job_runs" {
+			// job_runs source JSON is the parent workflow run's file, not <jobID>.json.
+			// If the output exists, serve it — job data is immutable once completed.
+			http.ServeFile(w, r, targetOutFile)
+			return
+		} else if category == "comparisons" {
+			// Comparisons are rendered by the compare command and have no single source JSON.
+			// If the output exists, serve it directly.
+			http.ServeFile(w, r, targetOutFile)
+			return
 		}
 	}
 
@@ -135,11 +145,32 @@ func (h *OnDemandHandler) renderEntity(owner, repo, category, id, format string)
 
 	switch category {
 	case "workflow_runs", "job_runs":
-		runID, err := strconv.ParseInt(id, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid workflow run ID '%s': %w", id, err)
+		var workflowRunID int64
+		if category == "job_runs" {
+			jobID, err := strconv.ParseInt(id, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid job run ID '%s': %w", id, err)
+			}
+			workflowRunID, err = gather.FindWorkflowRunIDForJob(h.dataDir, owner, repo, jobID)
+			if err != nil {
+				return fmt.Errorf("failed to find parent workflow run for job '%s': %w", id, err)
+			}
+		} else {
+			var err error
+			workflowRunID, err = strconv.ParseInt(id, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid workflow run ID '%s': %w", id, err)
+			}
 		}
-		wfData, _, err := gather.WorkflowRun(h.log, h.client, owner, repo, runID, gather.CustomDataFolder(h.dataDir))
+		wfData, _, err := gather.WorkflowRun(
+			h.log,
+			h.client,
+			owner,
+			repo,
+			workflowRunID,
+			gather.CustomDataFolder(h.dataDir),
+			gather.SkipMemoryCache(),
+		)
 		if err != nil {
 			return err
 		}

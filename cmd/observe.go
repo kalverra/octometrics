@@ -26,6 +26,7 @@ func buildObserveOptions(cfg *config.Config) []observe.Option {
 	return []observe.Option{
 		observe.WithGatherOptions(gatherOpts...),
 		observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
+		observe.IncludeWorkflows(cfg.IncludeWorkflows),
 	}
 }
 

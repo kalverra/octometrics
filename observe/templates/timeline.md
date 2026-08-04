@@ -11,12 +11,14 @@ gantt
     {{ sanitizeMermaidName .Name }} :{{ if .Conclusion }}{{ .Conclusion }},{{ end }} {{ .ID }}, {{ .StartTime.Format $dateFormat }}, {{ .Duration.Seconds }}s{{ end }}
 ```
 
+{{ $hasRunner := .HasRunner }}
+{{ $hasCost := .HasCost }}
 <details>
-<summary>Runtimes ({{ len .Items }} items)</summary>
+<summary>Runs ({{ len .Items }} items)</summary>
 
-| Name | Duration | Status |
-|------|----------|--------|
-{{ range .ItemsByDuration }}| {{ .Name }} | {{ .Duration }} | {{ conclusionText .Conclusion }} |
+| Name{{ if $hasRunner }} | Runner{{ end }}{{ if $hasCost }} | Cost{{ end }} | Duration | Status |
+|------{{ if $hasRunner }}|--------{{ end }}{{ if $hasCost }}|------{{ end }}|----------|--------|
+{{ range .ItemsByDuration }}| {{ .Name }} {{ if $hasRunner }}| {{ .Runner }} {{ end }}{{ if $hasCost }}| {{ if .CostGathered }}${{ printf "%.2f" (divideBy1000 .Cost) }}{{ if .CostEstimate }} (est.){{ end }}{{ else }}—{{ end }} {{ end }}| {{ .Duration }} | {{ conclusionText .Conclusion }} |
 {{ end }}
 
 </details>

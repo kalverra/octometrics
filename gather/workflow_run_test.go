@@ -585,7 +585,7 @@ func TestSafeMonitorJSONLZipEntry(t *testing.T) {
 	require.False(t, safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "wrong.log.jsonl"}}))
 }
 
-func TestProcessJobs_RunsOnSkipLogFetch(t *testing.T) {
+func TestProcessJobs_RunsOnAlwaysFetchLogs(t *testing.T) {
 	t.Parallel()
 
 	logCalled := false
@@ -635,10 +635,15 @@ func TestProcessJobs_RunsOnSkipLogFetch(t *testing.T) {
 	log, tempDir := testhelpers.Setup(t)
 	processJobs(log, client, "owner", "repo", data, []*github.WorkflowJob{skippedJob, pricedJob}, nil, true, tempDir)
 
-	assert.False(t, logCalled, "fetchRunsOnCostFromLogs should not be called for skipped job or priced job")
+	assert.True(
+		t,
+		logCalled,
+		"fetchRunsOnCostFromLogs should be called for runs-on jobs even when label estimate is available",
+	)
 	assert.Len(t, data.Jobs, 2)
 	assert.Equal(t, int64(0), data.Jobs[0].Cost)
 	assert.Positive(t, data.Jobs[1].Cost)
+	assert.True(t, data.Jobs[1].CostEstimate, "cost should be estimate when log fetch fails to return exact cost")
 }
 
 func TestWorkflowRun_ReadCacheAndSingleflight(t *testing.T) {

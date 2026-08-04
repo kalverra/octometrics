@@ -171,6 +171,7 @@ type options struct {
 	outputDir        string
 	gatherOptions    []gather.Option
 	excludeWorkflows []string
+	includeWorkflows []string
 }
 
 func defaultOptions() *options {
@@ -201,6 +202,29 @@ func ExcludeWorkflows(names []string) Option {
 	return func(o *options) {
 		o.excludeWorkflows = names
 	}
+}
+
+// IncludeWorkflows sets workflow display names to include in observations.
+// When set, only workflows matching these names are observed.
+func IncludeWorkflows(names []string) Option {
+	return func(o *options) {
+		o.includeWorkflows = names
+	}
+}
+
+// shouldIncludeWorkflow returns true if the workflow name should be included
+// based on the observe options. Exclude takes precedence over include.
+func shouldIncludeWorkflow(name string, opts *options) bool {
+	if opts == nil {
+		return true
+	}
+	if slices.Contains(opts.excludeWorkflows, name) {
+		return false
+	}
+	if len(opts.includeWorkflows) == 0 {
+		return true
+	}
+	return slices.Contains(opts.includeWorkflows, name)
 }
 
 // IndexPage is the data passed to the index_html template for navigation pages.
@@ -311,12 +335,6 @@ func (o *Observation) Render(
 		Str("output_type", outputType).
 		Str("observation_file", observationFile).
 		Logger()
-
-	if _, err := os.Stat(observationFile); err == nil {
-		log.Trace().
-			Msg("Observation file already exists")
-		return observationFile, nil
-	}
 
 	var (
 		start = time.Now()
@@ -551,7 +569,7 @@ func generateAllObserveData(
 			if err != nil {
 				return fmt.Errorf("failed to generate workflow run observation: %w", err)
 			}
-			if slices.Contains(observeOpts.excludeWorkflows, observation.Name) {
+			if !shouldIncludeWorkflow(observation.Name, observeOpts) {
 				log.Debug().
 					Str("workflow", observation.Name).
 					Int64("workflow_run_id", workflowRunID).

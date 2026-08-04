@@ -120,3 +120,41 @@ func TestWorkflowRun_CostPropagated(t *testing.T) {
 	expectedCost := int64(40)
 	assert.Equal(t, expectedCost, obs.Cost, "Observation.Cost should match workflow run cost")
 }
+
+func TestWorkflowRunTimelineData_CostPropagated(t *testing.T) {
+	t.Parallel()
+
+	wfRun := &github.WorkflowRun{
+		ID:           new(int64(1)),
+		Name:         new("wf"),
+		Event:        new("push"),
+		RunStartedAt: &github.Timestamp{Time: testStartTime},
+		Repository: &github.Repository{
+			Name:  new("repo"),
+			Owner: &github.User{Login: new("owner")},
+		},
+	}
+	job := &github.WorkflowJob{
+		ID:          new(int64(10)),
+		Name:        new("build"),
+		Status:      new("completed"),
+		Conclusion:  new("success"),
+		StartedAt:   &github.Timestamp{Time: testStartTime},
+		CompletedAt: &github.Timestamp{Time: testEndTime},
+	}
+	jobData := &gather.JobData{
+		WorkflowJob:  job,
+		Cost:         40,
+		CostGathered: true,
+	}
+	wfData := &gather.WorkflowRunData{
+		WorkflowRun: wfRun,
+		Jobs:        []*gather.JobData{jobData},
+	}
+
+	timeline, err := buildWorkflowRunTimelineData(wfData)
+	require.NoError(t, err)
+	require.Len(t, timeline.Items, 1)
+	assert.Equal(t, int64(40), timeline.Items[0].Cost, "TimelineItem.Cost should be propagated from job data")
+	assert.True(t, timeline.Items[0].CostGathered, "TimelineItem.CostGathered should be propagated from job data")
+}

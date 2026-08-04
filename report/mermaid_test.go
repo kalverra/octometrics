@@ -485,7 +485,10 @@ func TestSanitizeMermaidName(t *testing.T) {
 	assert.Equal(t, "hello", sanitizeMermaidName("hello"))
 	assert.Equal(t, "has#colon;colons", sanitizeMermaidName("has:colons"))
 	assert.Equal(t, "has#comma;commas", sanitizeMermaidName("has,commas"))
-	assert.Len(t, sanitizeMermaidName(string(make([]byte, 100))), 80)
+	longName := "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz"
+	expected := "..." + longName[len(longName)-77:]
+	assert.Equal(t, expected, sanitizeMermaidName(longName))
+	assert.Len(t, sanitizeMermaidName(longName), 80)
 }
 
 func TestConclusionToGanttStatus(t *testing.T) {

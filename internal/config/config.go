@@ -32,6 +32,7 @@ type Config struct {
 	ExcludeCosts      bool      `mapstructure:"exclude_costs"`
 	DataDir           string    `mapstructure:"data_dir"`
 	ExcludeWorkflows  []string  `mapstructure:"exclude_workflows"`
+	IncludeWorkflows  []string  `mapstructure:"include_workflows"`
 	CPUProfile        string    `mapstructure:"cpu_profile"`
 }
 
@@ -175,6 +176,14 @@ func (c *Config) ValidateCompare() error {
 	}
 	if c.Repo == "" {
 		return errors.New("repo is required")
+	}
+	return nil
+}
+
+// ValidateWorkflowFilters returns an error if both include and exclude workflow filters are set.
+func (c *Config) ValidateWorkflowFilters() error {
+	if len(c.ExcludeWorkflows) > 0 && len(c.IncludeWorkflows) > 0 {
+		return errors.New("exclude-workflows and include-workflows are mutually exclusive")
 	}
 	return nil
 }

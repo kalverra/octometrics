@@ -20,3 +20,15 @@ func TestBuildObserveOptions(t *testing.T) {
 	opts := buildObserveOptions(cfg)
 	assert.NotEmpty(t, opts)
 }
+
+func TestBuildObserveOptions_IncludeWorkflows(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		DataDir:          "/tmp/custom-data-dir",
+		IncludeWorkflows: []string{"included-wf"},
+	}
+
+	opts := buildObserveOptions(cfg)
+	assert.NotEmpty(t, opts)
+}
