@@ -67,6 +67,8 @@ func JobRuns(
 				Runner:         job.GetRunner(),
 				MonitoringData: jobRunMonitoringData,
 				Cost:           job.GetCost(),
+				CostEstimate:   job.GetCostEstimate(),
+				CostGathered:   job.GetCostGathered(),
 			}
 			return nil
 		})

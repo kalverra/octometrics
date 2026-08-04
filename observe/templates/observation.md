@@ -8,7 +8,7 @@
 | **State** | {{ .State }} |
 | **Actor** | {{ .Actor }} |
 {{ if not .CostGathered }}| **Cost** | not gathered |
-{{ else }}| **Cost{{ if .CostEstimate }} (est.){{ else }} (exact){{ end }}** | ${{ printf "%.2f" (divideBy1000 .Cost) }} |
+{{ else }}| **Cost{{ if .CostEstimate }} (est.){{ end }}** | ${{ printf "%.2f" (divideBy1000 .Cost) }} |
 {{ end }}{{ if .RequiredWorkflows }}| **Required** | {{ joinStrings .RequiredWorkflows ", " }} |
 {{ end }}
 {{ if .BranchProtectionWarning }}
@@ -16,7 +16,7 @@
 {{ end }}
 {{ range .TimelineData }}
 <details open>
-<summary><strong>{{ .Event }}</strong> — {{ .Duration }}, {{ if not $.CostGathered }}cost not gathered{{ else }}${{ printf "%.2f" (divideBy1000 $.Cost) }}{{ if $.CostEstimate }} (est.){{ else }} (exact){{ end }}{{ end }} ({{ .StartTime.Format "2006-01-02T15:04:05" }} to {{ .EndTime.Format "2006-01-02T15:04:05" }})</summary>
+<summary><strong>{{ .Event }}</strong> — {{ .Duration }}, {{ if not $.CostGathered }}cost not gathered{{ else }}${{ printf "%.2f" (divideBy1000 $.Cost) }}{{ if $.CostEstimate }} (est.){{ end }}{{ end }} ({{ .StartTime.Format "2006-01-02T15:04:05" }} to {{ .EndTime.Format "2006-01-02T15:04:05" }})</summary>
 
 {{ template "timeline_md" . }}
 {{ if $.MonitoringData }}{{ range $.MonitoringData.Charts }}

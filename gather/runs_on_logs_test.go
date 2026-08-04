@@ -17,24 +17,26 @@ func TestParseRunsOnCostSummary(t *testing.T) {
 		wantOk bool
 	}{
 		{
-			name: "full cost summary",
-			logs: `Post job cleanup.
-Running post-execution phase...
-## Execution Cost Summary
-
-| metric                 | value           |
-| ---------------------- | --------------- |
-| Instance Type          | m7i.4xlarge     |
-| Instance Lifecycle     | spot            |
-| Region                 | us-east-2       |
-| Platform               | Linux/UNIX      |
-| Arch                   | x64             |
-| Az                     | us-east-2c      |
-| Zone ID                | use2-az3        |
-| Duration               | 6.25 minutes    |
-| Cost                   | $0.0280         |
-| GitHub equivalent cost | $0.2940         |
-| Savings                | $0.2660 (90.5%) |
+			name: "full cost summary with log timestamps",
+			logs: `2026-08-03T19:57:55.2040149Z Current runner version: '2.336.0'
+2026-08-03T19:59:35.7804837Z Mapped zone name us-east-2c to zone ID use2-az3
+2026-08-03T19:59:35.9822153Z ## Execution Cost Summary
+2026-08-03T19:59:35.9822405Z
+2026-08-03T19:59:35.9822527Z | metric                 | value           |
+2026-08-03T19:59:35.9822936Z | ---------------------- | --------------- |
+2026-08-03T19:59:35.9823200Z | Instance Type          | m7i.4xlarge     |
+2026-08-03T19:59:35.9823452Z | Instance Lifecycle     | spot            |
+2026-08-03T19:59:35.9823711Z | Region                 | us-east-2       |
+2026-08-03T19:59:35.9823966Z | Platform               | Linux/UNIX      |
+2026-08-03T19:59:35.9824209Z | Arch                   | x64             |
+2026-08-03T19:59:35.9824858Z | Az                     | us-east-2c      |
+2026-08-03T19:59:35.9825105Z | Zone ID                | use2-az3        |
+2026-08-03T19:59:35.9825343Z | Duration               | 6.25 minutes    |
+2026-08-03T19:59:35.9826000Z | Cost                   | $0.0280         |
+2026-08-03T19:59:35.9826100Z | GitHub equivalent cost | $0.2940         |
+2026-08-03T19:59:35.9826200Z | Savings                | $0.2660 (90.5%) |
+2026-08-03T19:59:36.0000000Z ## Some Other Section
+2026-08-03T19:59:36.0000001Z Some other content
 `,
 			want: &RunsOnCostSummary{
 				InstanceType:         "m7i.4xlarge",

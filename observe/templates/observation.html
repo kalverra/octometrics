@@ -42,7 +42,7 @@
                 </span>
                 {{ else }}
                 <span class="badge badge-cost">
-                    <span class="badge-label">Cost{{ if .CostEstimate }} (est.){{ else }} (exact){{ end }}</span> ${{ printf "%.2f" (divideBy1000 .Cost) }}
+                    <span class="badge-label">Cost{{ if .CostEstimate }} (est.){{ end }}</span> ${{ printf "%.2f" (divideBy1000 .Cost) }}
                 </span>
                 {{ end }}
                 {{ if .RequiredWorkflows }}
@@ -61,7 +61,7 @@
         {{ range .TimelineData }}
         <details class="section" open>
             <summary>
-                {{ .Event }} &mdash; {{ .Duration }}, {{ if not $.CostGathered }}cost not gathered{{ else }}${{ printf "%.2f" (divideBy1000 $.Cost) }}{{ if $.CostEstimate }} (est.){{ else }} (exact){{ end }}{{ end }} ({{ if not .RealStartTime.IsZero }}{{ .RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .RealEndTime.IsZero }}{{ .RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .EndTime.Format "2006-01-02T15:04:05" }}{{ end }})
+                {{ .Event }} &mdash; {{ .Duration }}, {{ if not $.CostGathered }}cost not gathered{{ else }}${{ printf "%.2f" (divideBy1000 $.Cost) }}{{ if $.CostEstimate }} (est.){{ end }}{{ end }} ({{ if not .RealStartTime.IsZero }}{{ .RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .RealEndTime.IsZero }}{{ .RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .EndTime.Format "2006-01-02T15:04:05" }}{{ end }})
             </summary>
             <div class="section-body">
                 {{ template "timeline_html" . }}

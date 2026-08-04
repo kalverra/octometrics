@@ -33,7 +33,14 @@ func (s *RunsOnCostSummary) CostInTenthsOfCent() int64 {
 }
 
 // costSummaryMarker is the marker that runs-on uses in job logs.
-const costSummaryMarker = "## Execution Cost Summary"
+const costSummaryMarker = "Execution Cost Summary"
+
+var logTimestampPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s`)
+
+// stripLogTimestamp removes the GitHub Actions log timestamp prefix from a line.
+func stripLogTimestamp(line string) string {
+	return logTimestampPattern.ReplaceAllString(line, "")
+}
 
 // tableRowPattern matches markdown table rows: | key | value |
 var tableRowPattern = regexp.MustCompile(`\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|`)
@@ -49,17 +56,22 @@ func ParseRunsOnCostSummary(logs string) (*RunsOnCostSummary, bool) {
 	// Get the section after the marker
 	section := after
 
-	// Find the next ## heading or end of string to bound the section
-	endIdx := strings.Index(section, "\n## ")
-	if endIdx >= 0 {
-		section = section[:endIdx]
+	// Find the next heading or end of string to bound the section
+	// Lines may have timestamp prefixes, so search for "## " on its own
+	restIdx := strings.Index(section, "\n")
+	if restIdx >= 0 {
+		rest := section[restIdx:]
+		nextHeading := strings.Index(rest[1:], "## ")
+		if nextHeading >= 0 {
+			section = section[:restIdx+1+nextHeading]
+		}
 	}
 
 	summary := &RunsOnCostSummary{}
 	foundAny := false
 
 	for line := range strings.SplitSeq(section, "\n") {
-		line = strings.TrimSpace(line)
+		line = stripLogTimestamp(strings.TrimSpace(line))
 		if !strings.HasPrefix(line, "|") {
 			continue
 		}
@@ -144,7 +156,9 @@ func fetchJobLogs(client *GitHubClient, owner, repo string, jobID int64) (string
 		)
 	}
 
-	downloadResp, err := client.Rest.Client().Get(logURL.String())
+	// Use a plain HTTP client for the blob download — the redirect URL is an Azure Blob Storage
+	// signed URL that rejects requests carrying GitHub OAuth Authorization headers.
+	downloadResp, err := http.Get(logURL.String())
 	if err != nil {
 		return "", fmt.Errorf("failed to download job logs for job %d: %w", jobID, err)
 	}
@@ -188,6 +202,7 @@ func fetchRunsOnCostFromLogs(
 
 	summary, ok := ParseRunsOnCostSummary(logs)
 	if !ok || summary == nil {
+		log.Trace().Int64("job_id", jobID).Int("log_size", len(logs)).Msg("no runs-on cost summary found in job logs")
 		return 0, nil, nil
 	}
 
