@@ -1,11 +1,11 @@
 [tools]
 go = "1.26.5"
 golangci-lint = "2.12.2"
-goreleaser = "2.17.0"
+goreleaser = "2.17.1"
 lefthook = "2.1.10"
 actionlint = "1.7.12"
-betterleaks = "1.6.1"
-"pipx:codespell" = "2.4.2"
+betterleaks = "1.7.3"
+typos = "1.48.0"
 
 [tasks.goreleaser]
 run = "goreleaser release --clean --snapshot"

@@ -43,15 +43,17 @@ func Commit(
 		}
 	}
 	observation := &Observation{
-		ID:         commitSHA,
-		Name:       "Commit " + commitSHA,
-		Owner:      owner,
-		Repo:       repo,
-		GitHubLink: commit.GetHTMLURL(),
-		DataType:   "commit",
-		State:      commit.GetConclusion(),
-		Actor:      commit.GetAuthor().GetLogin(),
-		Cost:       commit.GetCost(),
+		ID:           commitSHA,
+		Name:         "Commit " + commitSHA,
+		Owner:        owner,
+		Repo:         repo,
+		GitHubLink:   commit.GetHTMLURL(),
+		DataType:     "commit",
+		State:        commit.GetConclusion(),
+		Actor:        commit.GetAuthor().GetLogin(),
+		Cost:         commit.GetCost(),
+		CostEstimate: commit.GetCostEstimate(),
+		CostGathered: commit.GetCostGathered(),
 	}
 
 	filtered := make([]*gather.WorkflowRunData, 0, len(workflowRuns))

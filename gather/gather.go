@@ -75,7 +75,7 @@ func defaultOptions() *options {
 	return &options{
 		ForceUpdate: false,
 		DataDir:     defaultDataDir(),
-		gatherCost:  false,
+		gatherCost:  true,
 	}
 }
 
@@ -110,10 +110,18 @@ func withCommitData(commitData *CommitData) Option {
 	}
 }
 
-// WithCost enables gathering cost data for workflow runs
+// WithCost enables gathering cost data for workflow runs.
+// Cost gathering is now enabled by default; this option is kept for backward compatibility.
 func WithCost() Option {
 	return func(o *options) {
 		o.gatherCost = true
+	}
+}
+
+// WithoutCost disables gathering cost data for workflow runs.
+func WithoutCost() Option {
+	return func(o *options) {
+		o.gatherCost = false
 	}
 }
 

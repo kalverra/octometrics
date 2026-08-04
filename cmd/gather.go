@@ -82,8 +82,10 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			opts = append(opts, gather.ForceUpdate())
 		}
 
-		if cfg.GatherCost {
+		if !cfg.ExcludeCosts {
 			opts = append(opts, gather.WithCost())
+		} else {
+			opts = append(opts, gather.WithoutCost())
 		}
 
 		var (
@@ -171,7 +173,7 @@ func init() {
 		String("event", "all", "Filter gathered data by event type (all, pull_request, merge_group, push)")
 	gatherCmd.Flags().StringP("github-token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")
 	gatherCmd.Flags().
-		Bool("gather-cost", false, "Gather cost data for workflow runs (can significantly increase runtime)")
+		Bool("exclude-costs", false, "Skip gathering cost data for workflow runs (faster, but no cost estimates)")
 	gatherCmd.Flags().StringSlice("exclude-workflows", nil,
 		"Omit workflow display names from observations after gather (comma-separated or repeat flag)")
 

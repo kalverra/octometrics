@@ -29,7 +29,7 @@ type Config struct {
 	Event             string    `mapstructure:"event"`
 	From              time.Time `mapstructure:"from"`
 	To                time.Time `mapstructure:"to"`
-	GatherCost        bool      `mapstructure:"gather_cost"`
+	ExcludeCosts      bool      `mapstructure:"exclude_costs"`
 	DataDir           string    `mapstructure:"data_dir"`
 	ExcludeWorkflows  []string  `mapstructure:"exclude_workflows"`
 }

@@ -201,6 +201,7 @@ func TestCommit_FallbackToParentForMergeCommit(t *testing.T) {
 		"merge-sha",
 		ForceUpdate(),
 		CustomDataFolder(testDataDir),
+		WithoutCost(),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, commit)

@@ -35,14 +35,17 @@ func WorkflowRun(
 
 	var (
 		observationData = &Observation{
-			ID:         fmt.Sprint(workflowRunID),
-			Name:       workflowRun.GetName(),
-			GitHubLink: workflowRun.GetHTMLURL(),
-			Owner:      owner,
-			Repo:       repo,
-			State:      state,
-			Actor:      workflowRun.GetActor().GetLogin(),
-			DataType:   "workflow_run",
+			ID:           fmt.Sprint(workflowRunID),
+			Name:         workflowRun.GetName(),
+			GitHubLink:   workflowRun.GetHTMLURL(),
+			Owner:        owner,
+			Repo:         repo,
+			State:        state,
+			Actor:        workflowRun.GetActor().GetLogin(),
+			DataType:     "workflow_run",
+			Cost:         workflowRun.GetCost(),
+			CostEstimate: workflowRun.GetCostEstimate(),
+			CostGathered: workflowRun.GetCostGathered(),
 		}
 	)
 
@@ -51,6 +54,7 @@ func WorkflowRun(
 		return nil, fmt.Errorf("failed to generate timeline: %w", err)
 	}
 	observationData.TimelineData = []*Timeline{workflowRunTimelineData}
+	observationData.FlowChart = buildFlowChart(workflowRun.GetWorkflowDef(), workflowRun.GetJobs())
 
 	return observationData, nil
 }

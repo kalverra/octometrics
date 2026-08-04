@@ -68,6 +68,10 @@ type JobData struct {
 	Runner string `json:"runner"`
 	// Cost is the cost of the job run in tenths of a cent
 	Cost int64 `json:"cost"`
+	// CostEstimate is true when Cost is an estimate (e.g. runs-on runners) rather than exact billing
+	CostEstimate bool `json:"cost_estimate,omitempty"`
+	// CostGathered is true when cost data was gathered (billing API or log parsing), false if skipped
+	CostGathered bool `json:"cost_gathered,omitempty"`
 	// Analysis is monitoring analysis data for the job run
 	Analysis *monitor.Analysis `json:"analysis,omitempty"`
 }
@@ -88,6 +92,22 @@ func (j *JobData) GetCost() int64 {
 	return j.Cost
 }
 
+// GetCostEstimate returns true when Cost is an estimate rather than exact billing.
+func (j *JobData) GetCostEstimate() bool {
+	if j == nil || j.WorkflowJob == nil {
+		return false
+	}
+	return j.CostEstimate
+}
+
+// GetCostGathered returns true when cost data was gathered for this job.
+func (j *JobData) GetCostGathered() bool {
+	if j == nil || j.WorkflowJob == nil {
+		return false
+	}
+	return j.CostGathered
+}
+
 // GetAnalysis returns the monitoring analysis data for the job run.
 func (j *JobData) GetAnalysis() *monitor.Analysis {
 	if j == nil || j.Analysis == nil {
@@ -102,8 +122,11 @@ type WorkflowRunData struct {
 	*github.WorkflowRun
 	Jobs                     []*JobData               `json:"jobs"`
 	Cost                     int64                    `json:"cost"`
+	CostEstimate             bool                     `json:"cost_estimate,omitempty"`
+	CostGathered             bool                     `json:"cost_gathered,omitempty"`
 	RunCompletedAt           time.Time                `json:"completed_at"`
 	Usage                    *github.WorkflowRunUsage `json:"usage,omitempty"`
+	WorkflowDef              *WorkflowDef             `json:"workflow_def,omitempty"`
 	CorrespondingPRNum       int                      `json:"corresponding_pr_number,omitempty"`
 	CorrespondingPRCloseTime time.Time                `json:"corresponding_pr_close_time,omitzero"`
 	CorrespondingCommitSHA   string                   `json:"corresponding_commit_sha,omitempty"`
@@ -125,6 +148,22 @@ func (w *WorkflowRunData) GetCost() int64 {
 	return w.Cost
 }
 
+// GetCostEstimate returns true when Cost includes estimated costs (e.g. runs-on runners)
+func (w *WorkflowRunData) GetCostEstimate() bool {
+	if w == nil || w.WorkflowRun == nil {
+		return false
+	}
+	return w.CostEstimate
+}
+
+// GetCostGathered returns true when cost data was gathered for this workflow run
+func (w *WorkflowRunData) GetCostGathered() bool {
+	if w == nil || w.WorkflowRun == nil {
+		return false
+	}
+	return w.CostGathered
+}
+
 // GetRunCompletedAt returns the time the workflow run was completed
 func (w *WorkflowRunData) GetRunCompletedAt() time.Time {
 	if w == nil || w.WorkflowRun == nil {
@@ -139,6 +178,14 @@ func (w *WorkflowRunData) GetUsage() *github.WorkflowRunUsage {
 		return nil
 	}
 	return w.Usage
+}
+
+// GetWorkflowDef returns the parsed workflow definition
+func (w *WorkflowRunData) GetWorkflowDef() *WorkflowDef {
+	if w == nil || w.WorkflowRun == nil {
+		return nil
+	}
+	return w.WorkflowDef
 }
 
 // WorkflowRun gathers and processes a workflow run from GitHub or local disk.
@@ -255,7 +302,14 @@ func fetchWorkflowRunFromGitHub(
 		workflowRunJobs     []*github.WorkflowJob
 		workflowBillingData *github.WorkflowRunUsage
 		analyses            []*monitor.Analysis
+		workflowDef         *WorkflowDef
 	)
+
+	eg.Go(func() error {
+		var defErr error
+		workflowDef, defErr = workflowDefData(log, client, owner, repo, workflowRun)
+		return defErr
+	})
 
 	if completed {
 		eg.Go(func() error {
@@ -285,7 +339,8 @@ func fetchWorkflowRunFromGitHub(
 	}
 
 	data.Usage = workflowBillingData
-	processJobs(log, data, workflowRunJobs, workflowBillingData, opts.gatherCost)
+	data.WorkflowDef = workflowDef
+	processJobs(log, client, owner, repo, data, workflowRunJobs, workflowBillingData, opts.gatherCost)
 	processAnalyses(log, data, analyses)
 
 	return data, nil
@@ -294,6 +349,8 @@ func fetchWorkflowRunFromGitHub(
 // processJobs processes the jobs for a workflow run.
 func processJobs(
 	log zerolog.Logger,
+	client *GitHubClient,
+	owner, repo string,
 	data *WorkflowRunData,
 	jobs []*github.WorkflowJob,
 	billingData *github.WorkflowRunUsage,
@@ -311,8 +368,9 @@ func processJobs(
 		}
 
 		var (
-			runner string
-			cost   int64
+			runner       string
+			cost         int64
+			costEstimate bool
 		)
 
 		if completed && gatherCost {
@@ -330,11 +388,54 @@ func processJobs(
 			runner = getRunnerFromLabels(job.Labels)
 		}
 
+		// If no billing data and job uses runs-on, try exact cost from logs, then fall back to label estimate
+		if cost == 0 && gatherCost && completed {
+			startedAt := job.GetStartedAt().Time
+			duration := completedAt.Sub(startedAt)
+
+			// Only fetch logs for runs-on jobs (expensive API call)
+			if _, isRunsOn := parseRunsOnLabel(job.Labels); isRunsOn {
+				if logCost, logSummary, logErr := fetchRunsOnCostFromLogs(
+					log,
+					client,
+					owner,
+					repo,
+					job.GetID(),
+				); logErr == nil &&
+					logCost > 0 {
+					cost = logCost
+					costEstimate = false
+					if logSummary != nil && logSummary.InstanceType != "" {
+						runner = "runs-on:" + logSummary.InstanceType
+					} else if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
+						runner = runsOnName
+					}
+				} else {
+					// Fall back to label-based estimate
+					if runsOnCost, isEstimate := calculateRunsOnCost(job.Labels, duration); runsOnCost > 0 {
+						cost = runsOnCost
+						costEstimate = isEstimate
+						if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
+							runner = runsOnName
+						}
+					}
+				}
+			}
+		}
+
 		data.Cost += cost
+		if costEstimate {
+			data.CostEstimate = true
+		}
+		if gatherCost && completed {
+			data.CostGathered = true
+		}
 		data.Jobs = append(data.Jobs, &JobData{
-			WorkflowJob: job,
-			Runner:      runner,
-			Cost:        cost,
+			WorkflowJob:  job,
+			Runner:       runner,
+			Cost:         cost,
+			CostEstimate: costEstimate,
+			CostGathered: gatherCost && completed,
 		})
 	}
 }

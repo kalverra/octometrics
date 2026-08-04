@@ -229,6 +229,10 @@ type Observation struct {
 	Actor      string
 	Runner     string
 	Cost       int64 // Cost in tenths of a cent
+	// CostEstimate is true when Cost includes estimated costs (e.g. runs-on runners)
+	CostEstimate bool
+	// CostGathered is true when cost data was gathered (billing API or log parsing)
+	CostGathered bool
 
 	// Branch protection: required status checks for the default branch
 	RequiredWorkflows       []string
@@ -237,6 +241,8 @@ type Observation struct {
 	// Data used to show job, workflow, and commit runs
 	TimelineData   []*Timeline
 	MonitoringData *Monitoring
+	// FlowChart is a Mermaid flowchart TD string showing job dependencies
+	FlowChart string
 
 	// Data used to render a Pull Request with multiple commits
 	CommitData []*gather.CommitData

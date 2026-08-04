@@ -1,0 +1,25 @@
+[files]
+extend-exclude = [
+  # Images
+  "*.png", "*.gif", "*.jpg", "*.jpeg", "*.webp", "*.svg", "*.ico", "*.bmp", "*.tiff", "*.raw", "*.heic", "*.avif", "*.psd",
+  # Audio / video
+  "*.mp3", "*.mp4", "*.wav", "*.avi", "*.mkv", "*.mov", "*.flv", "*.webm", "*.aac", "*.flac", "*.m4a", "*.ogg", "*.opus",
+  # Archives
+  "*.zip", "*.tar", "*.gz", "*.bz2", "*.xz", "*.rar", "*.7z", "*.br", "*.zst",
+  # Binaries / executables
+  "*.exe", "*.dll", "*.so", "*.dylib", "*.bin", "*.obj", "*.o", "*.a", "*.lib", "*.test", "*.out", "*.app", "*.msi", "*.deb", "*.rpm", "*.iso", "*.dmg", "*.pkg", "*.AppImage", "*.flatpak",
+  # Documents
+  "*.pdf", "*.doc", "*.docx", "*.xls", "*.xlsx", "*.ppt", "*.pptx", "*.odt", "*.ods", "*.odp",
+  # Fonts
+  "*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot",
+  # Databases
+  "*.db", "*.sqlite", "*.sqlite3", "*.mdb",
+  # macOS
+  ".DS_Store",
+]
+
+[type.golangci]
+extend-glob = [".golangci.yaml", ".golangci.yml"]
+
+[type.golangci.extend-words]
+decorder = "decorder"

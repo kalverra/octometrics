@@ -35,6 +35,8 @@ type CommitData struct {
 	EndActionsTime     time.Time          `json:"end_actions_time"`
 	Conclusion         string             `json:"conclusion"`
 	Cost               int64              `json:"cost"`
+	CostEstimate       bool               `json:"cost_estimate,omitempty"`
+	CostGathered       bool               `json:"cost_gathered,omitempty"`
 	CorrespondingPRNum int                `json:"corresponding_pr_number,omitempty"`
 }
 
@@ -108,6 +110,22 @@ func (c *CommitData) GetCost() int64 {
 		return 0
 	}
 	return c.Cost
+}
+
+// GetCostEstimate returns true when Cost includes estimated costs (e.g. runs-on runners).
+func (c *CommitData) GetCostEstimate() bool {
+	if c == nil {
+		return false
+	}
+	return c.CostEstimate
+}
+
+// GetCostGathered returns true when cost data was gathered for this commit.
+func (c *CommitData) GetCostGathered() bool {
+	if c == nil {
+		return false
+	}
+	return c.CostGathered
 }
 
 // MergeQueueEvent details a commit being added or removed from the merge queue.
@@ -320,11 +338,13 @@ func setWorkflowRunsForCommit(
 	}
 
 	type workflowRunSummary struct {
-		id         int64
-		conclusion string
-		cost       int64
-		start      time.Time
-		end        time.Time
+		id           int64
+		conclusion   string
+		cost         int64
+		costEstimate bool
+		costGathered bool
+		start        time.Time
+		end          time.Time
 	}
 
 	workflowRunIDs := make([]int64, 0, len(workflowRunIDsSet))
@@ -349,11 +369,13 @@ func setWorkflowRunsForCommit(
 					conclusion = workflowRun.GetStatus()
 				}
 				summaries[index] = workflowRunSummary{
-					id:         workflowRunID,
-					conclusion: conclusion,
-					cost:       workflowRun.GetCost(),
-					start:      workflowRun.GetRunStartedAt().Time,
-					end:        workflowRun.GetRunCompletedAt(),
+					id:           workflowRunID,
+					conclusion:   conclusion,
+					cost:         workflowRun.GetCost(),
+					costEstimate: workflowRun.GetCostEstimate(),
+					costGathered: workflowRun.GetCostGathered(),
+					start:        workflowRun.GetRunStartedAt().Time,
+					end:          workflowRun.GetRunCompletedAt(),
 				}
 				workflowRuns[index] = workflowRun
 				return nil
@@ -368,6 +390,12 @@ func setWorkflowRunsForCommit(
 	for _, summary := range summaries {
 		commitData.Conclusion = establishPRChecksConclusion(commitData.Conclusion, summary.conclusion)
 		commitData.Cost += summary.cost
+		if summary.costEstimate {
+			commitData.CostEstimate = true
+		}
+		if summary.costGathered {
+			commitData.CostGathered = true
+		}
 		if summary.start.Before(commitData.StartActionsTime) || commitData.StartActionsTime.IsZero() {
 			commitData.StartActionsTime = summary.start
 		}

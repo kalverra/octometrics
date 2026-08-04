@@ -11,7 +11,7 @@
     <style>
         {{ template "styles_css" }}
     </style>
-    {{ if or .TimelineData .MonitoringData }}
+    {{ if or .TimelineData .MonitoringData .FlowChart }}
     {{ template "mermaid_init_html" }}
     {{ end }}
 </head>
@@ -36,9 +36,13 @@
                     <span class="badge-label">Runner</span> {{ .Runner }}
                 </span>
                 {{ end }}
-                {{ if .Cost }}
+                {{ if not .CostGathered }}
+                <span class="badge">
+                    <span class="badge-label">Cost</span> not gathered
+                </span>
+                {{ else }}
                 <span class="badge badge-cost">
-                    <span class="badge-label">Cost</span> ${{ printf "%.2f" (divideBy1000 .Cost) }}
+                    <span class="badge-label">Cost{{ if .CostEstimate }} (est.){{ else }} (exact){{ end }}</span> ${{ printf "%.2f" (divideBy1000 .Cost) }}
                 </span>
                 {{ end }}
                 {{ if .RequiredWorkflows }}
@@ -57,7 +61,7 @@
         {{ range .TimelineData }}
         <details class="section" open>
             <summary>
-                {{ .Event }} &mdash; {{ if not .RealStartTime.IsZero }}{{ .RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .RealEndTime.IsZero }}{{ .RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .EndTime.Format "2006-01-02T15:04:05" }}{{ end }} ({{ .Duration }})
+                {{ .Event }} &mdash; {{ .Duration }}, {{ if not $.CostGathered }}cost not gathered{{ else }}${{ printf "%.2f" (divideBy1000 $.Cost) }}{{ if $.CostEstimate }} (est.){{ else }} (exact){{ end }}{{ end }} ({{ if not .RealStartTime.IsZero }}{{ .RealStartTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .StartTime.Format "2006-01-02T15:04:05" }}{{ end }} to {{ if not .RealEndTime.IsZero }}{{ .RealEndTime.Format "2006-01-02T15:04:05" }}{{ else }}{{ .EndTime.Format "2006-01-02T15:04:05" }}{{ end }})
             </summary>
             <div class="section-body">
                 {{ template "timeline_html" . }}
@@ -85,6 +89,17 @@
 
         {{ if .CommitData }}
         {{ template "pull_request_html" .CommitData }}
+        {{ end }}
+
+        {{ if .FlowChart }}
+        <details class="section">
+            <summary>Job dependencies</summary>
+            <div class="section-body">
+                <div class="timeline-chart">
+                    <pre class="mermaid">{{ mermaidDiagram .FlowChart }}</pre>
+                </div>
+            </div>
+        </details>
         {{ end }}
     </div>
 </body>
