@@ -721,8 +721,10 @@ h3 {
 }
 
 .copyable-table-wrapper {
-    margin: 0 0 1.25rem;
-    display: inline-block;
+    margin: 0 auto 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     max-width: 100%;
 }
 
