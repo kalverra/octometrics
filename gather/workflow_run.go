@@ -61,6 +61,23 @@ var rateByRunner = map[string]int64{
 	"UBUNTU_16_CORE_ARM": 40,  // $0.04
 	"UBUNTU_32_CORE_ARM": 80,  // $0.08
 	"UBUNTU_64_CORE_ARM": 160, // $0.16
+
+	// Per-minute rates from https://docs.github.com/en/billing/reference/actions-runner-pricing
+	// Values are in tenths of a cent.
+	"WINDOWS":         10,  // $0.010
+	"WINDOWS_2_CORE":  10,  // $0.010
+	"WINDOWS_4_CORE":  22,  // $0.022
+	"WINDOWS_8_CORE":  42,  // $0.042
+	"WINDOWS_16_CORE": 82,  // $0.082
+	"WINDOWS_32_CORE": 162, // $0.162
+	"WINDOWS_64_CORE": 322, // $0.322
+	"WINDOWS_96_CORE": 552, // $0.552
+
+	"MACOS":         62,  // $0.062
+	"MACOS_4_CORE":  62,  // $0.062
+	"MACOS_12_CORE": 77,  // $0.077
+	"MACOS_5_CORE":  102, // $0.102
+	"MACOS_XL":      102, // $0.102
 }
 
 // JobData wraps standard GitHub WorkflowJob data with additional cost fields

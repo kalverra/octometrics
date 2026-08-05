@@ -1,209 +1,93 @@
 # Octometrics Design
 
-Octometrics is a Go CLI tool that gathers detailed GitHub Actions workflow runtime data via the GitHub REST and GraphQL APIs, stores it locally as JSON, and visualizes it as interactive Gantt-style timelines in the browser. It supports per-commit, per-PR, and aggregate percentile views of CI suite performance.
+Octometrics is a Go CLI that profiles GitHub Actions workflows. It fetches workflow data via the GitHub REST and GraphQL APIs, stores it locally as JSON, and renders it as interactive Mermaid charts in the browser or as markdown reports inside GitHub Actions.
 
-## Command Flow
+## Commands
+
+- `gather` — fetch workflow runs, commits, pull requests, and cost data.
+- `observe` — lazily serve cached data as HTML on `http://localhost:8080`.
+- `compare` — diff two runs or two commits side-by-side.
+- `monitor` — run inside a GitHub Action job to sample CPU, memory, disk, and network IO.
+- `report` — run as a GitHub Action post-step to summarize monitoring data in the job summary and as a PR comment.
+- `mcp` — start an stdio MCP server for AI agents.
+
+## Data Flow
+
+```mermaid
+flowchart LR
+    GitHub[GitHub REST / GraphQL / Artifacts] --> gather[gather package]
+    gather --> Cache[(OS cache dir / owner / repo / *.json + manifest.jsonl)]
+    Cache --> observe[observe package]
+    Cache --> compare[compare]
+    observe --> HTML[(observe_output/html)]
+    HTML --> Server[localhost:8080 lazy server]
+    Server --> Browser[Browser]
+    monitor --> JSONL[octometrics.monitor.jsonl]
+    JSONL --> report[report package]
+    report --> Summary[GITHUB_STEP_SUMMARY + PR comment]
+```
+
+## Gather Flow
 
 ```mermaid
 flowchart TD
-    subgraph commands [CLI Commands]
-        Gather[gather]
-        Survey[survey]
-        Observe[observe]
-        Compare[compare]
-        Monitor[monitor]
-        Report[report]
-    end
-
-    subgraph gatherPkg [gather package]
-        GatherCommit["Commit()"]
-        GatherPR["PullRequest()"]
-        GatherWF["WorkflowRun()"]
-        GatherSurvey["Survey()"]
-    end
-
-    subgraph observePkg [observe package]
-        ObsCommit["Commit()"]
-        ObsPR["PullRequest()"]
-        ObsWF["WorkflowRun()"]
-        ObsSurvey["SurveyFromFile()"]
-        ObsCompareWF["CompareWorkflowRuns()"]
-        ObsCompareCmt["CompareCommits()"]
-        Interactive["Interactive()"]
-        ServeHTML["ServeHTML()"]
-    end
-
-    Gather --> GatherCommit
-    Gather --> GatherPR
-    Gather --> GatherWF
-    Survey --> GatherSurvey
-    Survey --> GatherCommit
-
-    Observe --> Interactive
-    Interactive --> ObsCommit
-    Interactive --> ObsPR
-    Interactive --> ObsWF
-    Interactive --> ObsSurvey
-    Interactive --> ServeHTML
-
-    Compare --> ObsCompareWF
-    Compare --> ObsCompareCmt
-    ObsCompareWF --> ServeHTML
-    ObsCompareCmt --> ServeHTML
-
-    GatherCommit --> JSON[("~cache~/octometrics/owner/repo/*.json")]
-    GatherPR --> JSON
-    GatherWF --> JSON
-    GatherSurvey --> JSON
-
-    ObsCommit --> HTML[(observe_output/html/)]
-    ObsPR --> HTML
-    ObsWF --> HTML
-    ObsSurvey --> HTML
-    ObsCompareWF --> HTML
-    ObsCompareCmt --> HTML
-
-    HTML --> Browser[Browser :8080]
-
-    subgraph reportPkg [report package]
-        ReportRun["Run()"]
-        MermaidBuild["Mermaid builders"]
-        StepSummary["GITHUB_STEP_SUMMARY"]
-        PRComment["PR / commit comment"]
-    end
-
-    Report --> ReportRun
-    ReportRun --> MermaidBuild
-    MermaidBuild --> StepSummary
-    MermaidBuild --> PRComment
-    Monitor -.->|JSONL| ReportRun
+    Request[WorkflowRun / Commit / PR / Range] --> Cache{Memory cache hit?}
+    Cache -->|yes| Return
+    Cache -->|no| SingleFlight[singleflight de-duplicate]
+    SingleFlight --> Disk{Disk JSON?}
+    Disk -->|yes| Return
+    Disk -->|no| GitHub[GitHub API]
+    GitHub --> Billing[Billing usage]
+    GitHub --> Jobs[Workflow jobs + retry]
+    GitHub --> Def[Workflow definition]
+    GitHub --> Artifacts[Monitoring artifacts]
+    Billing & Jobs --> Cost[Job cost + runner estimation]
+    Artifacts --> Analyze[monitor.Analyze]
+    Cost & Analyze --> Save[Write JSON + manifest record]
+    Save --> Return
 ```
 
-## Survey Two-Phase Architecture
-
-The `survey` command efficiently identifies p50/p75/p95 CI suite runs without exhausting GitHub API rate limits. It uses a two-phase approach: a lightweight listing phase, then targeted detail gathering.
-
-```mermaid
-flowchart LR
-    subgraph phase1 [Phase 1: Survey]
-        A["ListRepositoryWorkflowRuns\n~10-50 API calls"] --> B[Group by HeadSHA]
-        B --> C[Compute per-commit duration]
-        C --> D[Sort and find p50/p75/p95]
-    end
-
-    subgraph phase2 [Phase 2: Detail]
-        D --> E["Commit(p50) ~30 calls"]
-        D --> F["Commit(p75) ~30 calls"]
-        D --> G["Commit(p95) ~30 calls"]
-    end
-
-    subgraph render [Visualize]
-        E --> H[Survey HTML with Gantt charts]
-        F --> H
-        G --> H
-    end
-```
-
-## Branch Protection Required Checks
-
-During observation rendering, octometrics fetches the default branch's required status checks via `Repositories.Get` (to discover the default branch name) and `Repositories.GetRequiredStatusChecks`. Results are cached per `owner/repo` to avoid redundant API calls across observations in the same repository. Timeline items whose names match a required check are marked `IsRequired` and highlighted in the visualization.
-
-```mermaid
-flowchart LR
-    subgraph bp [Branch Protection Lookup]
-        RepoGet["Repositories.Get"] --> DefaultBranch[default branch name]
-        DefaultBranch --> GetChecks["GetRequiredStatusChecks"]
-    end
-
-    subgraph outcomes [Outcomes]
-        GetChecks -->|200| RequiredList[Required checks list]
-        GetChecks -->|403| Warning[Permission warning banner]
-        GetChecks -->|"404 / not protected"| Empty[Empty list]
-    end
-```
-
-The `GetRequiredStatusChecks` endpoint requires **Administration: Read** permission. When the token lacks this permission (403), the observation renders a small warning banner instead of failing. When the branch is unprotected or has no required checks, the section is simply omitted.
-
-## Report: In-Action Monitoring Summary
-
-The `report` command runs in the GitHub Actions `post` step (after the monitor process is killed) and produces an inline Mermaid-based summary without generating or hosting images. It analyzes the monitor's JSONL output for resource metrics and calls the GitHub API for job step timing.
+## Observe Lazy Serving
 
 ```mermaid
 flowchart TD
-    subgraph actionPost [octometrics-action post.js]
-        KillMonitor[Kill monitor process]
-        RunReport["octometrics report -f monitor.jsonl"]
-        UploadArtifact[Upload JSONL artifact]
-    end
-
-    subgraph reportFlow [report package]
-        AnalyzeJSONL["monitor.Analyze(JSONL)"]
-        FetchSteps["Fetch job steps via API"]
-        BuildCharts["Build Mermaid charts"]
-        AssembleMD["Assemble markdown"]
-        WriteSummary["Append to GITHUB_STEP_SUMMARY"]
-        PostComment["Upsert PR comment"]
-    end
-
-    KillMonitor --> RunReport
-    RunReport --> AnalyzeJSONL
-    RunReport --> FetchSteps
-    AnalyzeJSONL --> BuildCharts
-    FetchSteps --> BuildCharts
-    BuildCharts --> AssembleMD
-    AssembleMD --> WriteSummary
-    AssembleMD --> PostComment
-    RunReport --> UploadArtifact
+    Request[GET /owner/repo/category/id.html] --> DiskCheck{Output exists & newer than source?}
+    DiskCheck -->|yes| Serve[http.ServeFile]
+    DiskCheck -->|no| SingleFlight
+    SingleFlight --> Load[gather.WorkflowRun / Commit / PullRequest]
+    Load --> Build[Build Observation]
+    Build --> BranchProtection[Branch protection required checks]
+    Build --> Render[Template render to HTML/Markdown]
+    Render --> Write[Write file]
+    Write --> Serve
 ```
 
-The report uses Mermaid `gantt` for the step timeline and `xychart-beta` for CPU, memory, disk, and I/O line charts. Monitoring data is downsampled to ~40 points per chart. A compact metric summary table with peak/average values accompanies the charts. For PR workflows, the report upserts a comment identified by an HTML marker so re-runs update in place rather than creating duplicates.
-
-## Comparison View
-
-The `compare` command lets users compare two like items (workflow runs or commits) side-by-side. It gathers both items, builds observations for each, matches timeline items by name, computes duration deltas and status changes, and renders an HTML comparison page.
+## Monitor + Report Flow
 
 ```mermaid
-flowchart LR
-    subgraph input [User Input]
-        IDs["Two workflow run IDs\nor two commit SHAs"]
-    end
-
-    subgraph build [Build Phase]
-        GatherBoth["Gather both items\nvia existing gather functions"]
-        BuildObs["Build Observation\nfor each item"]
-        MatchItems["Match timeline items\nby name"]
-        ComputeDelta["Compute duration deltas\nand status changes"]
-    end
-
-    subgraph output [Output]
-        GanttCharts["Single Mermaid Gantt\nLeft/Right sections"]
-        CompareTable["Per-event comparison table\nwith deltas"]
-        OnlyIn["Only-in-left /\nonly-in-right lists"]
-    end
-
-    IDs --> GatherBoth
-    GatherBoth --> BuildObs
-    BuildObs --> MatchItems
-    MatchItems --> ComputeDelta
-    ComputeDelta --> GanttCharts
-    ComputeDelta --> CompareTable
-    ComputeDelta --> OnlyIn
+flowchart TD
+    Start[monitor.Start] --> Spot[spot every interval]
+    Spot --> CPU[cpu.Times delta]
+    Spot --> Memory[mem.VirtualMemory]
+    Spot --> Disk[disk.Usage]
+    Spot --> IO[net.IOCounters delta]
+    CPU & Memory & Disk & IO --> JSONL[JSONL log file]
+    JSONL --> Artifact[Upload artifact]
+    Artifact --> Download[gather downloads zip]
+    Download --> Analyze[monitor.Analyze]
+    Analyze --> BuildReport[report buildReport]
+    BuildReport --> Summary[Step summary]
+    BuildReport --> Comment[Upsert PR comment]
 ```
-
-The comparison page renders one **combined** Mermaid Gantt per event: `section Left` and `section Right`, with each run shifted so both share the same start time on the axis (easier to compare parallelism and overlap than two separate charts). If neither side has timeline items for that event, it falls back to the usual `timeline_html` partials per side. Items are matched by name within each event; unmatched items appear in per-event "only in left" / "only in right" tables. Matched rows are sorted by absolute duration delta (biggest changes first), with color-coded deltas (green for faster, red for slower) and highlighted rows where status changed between runs. If performance monitoring artifacts are present, the CPU, Memory, Disk, and I/O xycharts are stacked side-by-side for comparison.
-
-The `compare` command renders comparisons recursively "all the way down". For matched items (workflow runs within a commit comparison, or job runs within a workflow-run comparison), the Gantt chart links point to a comparison page specifically for those two nested items, rather than their individual standalone observation pages. The `compare` command automatically evaluates `EnsureCompareObservationLinks` to generate these child comparisons and any necessary standalone pages (like "only-in-left" fallback pages) so no clicks 404.
 
 ## Key Design Decisions
 
-- **Local JSON cache**: All gathered data is stored as JSON in the OS user cache directory (e.g. `~/Library/Caches/octometrics` on macOS, `~/.cache/octometrics` on Linux) and re-read on subsequent runs, avoiding redundant API calls. Override with `--data-dir`, `DATA_DIR` env, or `data_dir` in config. `ForceUpdate` bypasses the cache.
-- **Rate limit awareness**: The REST client uses `go-github-ratelimit` to automatically sleep when rate-limited. Survey's two-phase design reduces total API calls from O(commits x workflows x jobs) to O(listing_pages + 3 x detail_calls).
-- **Real representative commits for percentiles**: Rather than constructing synthetic "average" timelines, the survey picks actual commits whose CI duration falls at each percentile. This shows real job distributions and integrates with existing Gantt visualization.
-- **Mermaid Gantt for timelines**: Workflow/job/step timing is rendered as Mermaid Gantt charts, giving a visual representation of parallelism and duration without requiring a charting library.
-- **Mermaid xychart-beta for monitoring metrics**: CPU, memory, disk, and I/O from optional `octometrics monitor` instrumentation use the same Mermaid `xychart-beta` definitions in both the `observe` HTML view and the `report` command (GitHub Step Summaries / PR comments).
-- **Observe chart width**: The interactive `observe` page sets shared Mermaid `useMaxWidth`, a common `xyChart` width/height, and CSS so Gantt and xychart SVGs fill the same column; GitHub-rendered reports are unchanged.
-- **Graceful degradation for branch protection**: Branch protection data enriches visualizations when available but never blocks rendering. A 403 produces a small UI warning; a 404 or unprotected branch silently omits the section.
-- **Commit conclusion aggregation**: Commit and PR check conclusions are folded with a fixed priority (`failure` > `timed_out` > `cancelled` > `in_progress` > `success`) after all workflow runs are gathered deterministically.
-- **Monitor sampling semantics**: CPU usage is computed from successive `cpu.Times` deltas; network I/O logs per-interval deltas rather than cumulative counters. Disk usage defaults to `GITHUB_WORKSPACE` when set.
-- **ID-first comparison matching**: The `compare` command matches timeline items by stable ID when present (matrix jobs), falling back to a normalized display name that strips `(in progress)`, `(cancelled)`, and `(attempt N)` suffixes.
-- **Name-based comparison matching**: When IDs are absent, comparison still falls back to normalized names. Status-only suffix differences no longer block pairing when the underlying job is the same.
+- **Local JSON cache**: All data is stored under the OS cache directory (`~/Library/Caches/octometrics` or `~/.cache/octometrics`). Override with `--data-dir`, `DATA_DIR`, or `data_dir` in config. `ForceUpdate` bypasses the cache.
+- **Rate limit awareness**: REST client uses `go-github-ratelimit`. `loggingTransport` logs per-request headers and warns when remaining calls drop below 50.
+- **Mermaid charts**: Timelines use `gantt`; monitoring metrics use `xychart-beta`. Shared xychart sizing is applied in HTML to keep Gantt and xychart widths aligned.
+- **Lazy observation server**: Pages are rendered on first request (or from disk if newer than source JSON). Index pages rebuild from `manifest.jsonl` if missing.
+- **Branch protection**: Required status checks for the default branch are fetched per repo and cached per session. A 403 renders a warning instead of failing; 404 omits the section.
+- **Commit conclusion aggregation**: Conclusions fold with priority `failure` > `timed_out` > `cancelled` > `in_progress` > `success` after all workflow runs are known.
+- **Monitor sampling**: CPU usage is computed from successive `cpu.Times` deltas; network IO logs per-interval deltas; disk usage defaults to `GITHUB_WORKSPACE` when set.
+- **Compare matching**: Items are matched by stable ID first, then by normalized name stripped of status suffixes like `(in progress)` or `(attempt N)`.
+- **Cost model**: Job costs are computed from GitHub's billing API when available, otherwise estimated from runner labels and duration. Rates are defined in `gather/workflow_run.go`.

@@ -699,3 +699,44 @@ func TestWorkflowRun_ReadCacheAndSingleflight(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(1), fetchCount.Load(), "Cache hit should not trigger additional GitHub API call")
 }
+
+func TestBuildJobBillingIndex_KnownRunners(t *testing.T) {
+	t.Parallel()
+
+	usage := &github.WorkflowRunUsage{
+		Billable: &github.WorkflowRunBillMap{
+			"UBUNTU": &github.WorkflowRunBill{
+				JobRuns: []*github.WorkflowRunJobRun{
+					{JobID: new(1), DurationMS: new(int64(60000))},
+				},
+			},
+			"MACOS": &github.WorkflowRunBill{
+				JobRuns: []*github.WorkflowRunJobRun{
+					{JobID: new(2), DurationMS: new(int64(60000))},
+				},
+			},
+			"WINDOWS": &github.WorkflowRunBill{
+				JobRuns: []*github.WorkflowRunJobRun{
+					{JobID: new(3), DurationMS: new(int64(60000))},
+				},
+			},
+		},
+	}
+
+	index := buildJobBillingIndex(usage)
+
+	runner, cost, err := calculateJobRunBilling(1, index)
+	require.NoError(t, err)
+	require.Equal(t, "UBUNTU", runner)
+	require.Equal(t, int64(8), cost, "ubuntu cost should be 0.8 cents per minute")
+
+	runner, cost, err = calculateJobRunBilling(2, index)
+	require.NoError(t, err)
+	require.Equal(t, "MACOS", runner)
+	require.Greater(t, cost, int64(0), "macOS job should have a non-zero cost")
+
+	runner, cost, err = calculateJobRunBilling(3, index)
+	require.NoError(t, err)
+	require.Equal(t, "WINDOWS", runner)
+	require.Greater(t, cost, int64(0), "Windows job should have a non-zero cost")
+}
