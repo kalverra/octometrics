@@ -561,7 +561,8 @@ func generateAllObserveData(
 		}
 
 		if filepath.Ext(path) != ".json" {
-			return fmt.Errorf("file %s is not a JSON file", path)
+			log.Debug().Str("path", path).Msg("Skipping non-JSON file")
+			return nil
 		}
 
 		relPath, relErr := filepath.Rel(dataDir, path)
@@ -570,61 +571,19 @@ func generateAllObserveData(
 		}
 		pathComponents := strings.Split(relPath, string(filepath.Separator))
 		if len(pathComponents) != 4 {
-			return fmt.Errorf("unexpected path format: %s (expected owner/repo/category/file.json)", path)
+			log.Debug().Str("path", path).Msg("Skipping path not matching owner/repo/category/file.json")
+			return nil
 		}
 		var (
-			owner        = pathComponents[0]
-			repo         = pathComponents[1]
-			dataCat      = pathComponents[2]
-			dataName     = strings.TrimSuffix(pathComponents[3], ".json")
-			observation  *Observation
-			observations []*Observation
+			owner    = pathComponents[0]
+			repo     = pathComponents[1]
+			dataCat  = pathComponents[2]
+			dataName = strings.TrimSuffix(pathComponents[3], ".json")
 		)
 
 		loadStart := time.Now()
-		switch dataCat {
-		case gather.WorkflowRunsDataDir:
-			var workflowRunID int64
-			workflowRunID, err = strconv.ParseInt(dataName, 10, 64)
-			if err != nil {
-				return fmt.Errorf("failed to parse workflow run ID: %w", err)
-			}
-			var wfData *gather.WorkflowRunData
-			wfData, _, err = gather.WorkflowRun(log, client, owner, repo, workflowRunID, observeOpts.gatherOptions...)
-			if err != nil {
-				return fmt.Errorf("failed to load workflow run data: %w", err)
-			}
-			observation, err = workflowRunObservation(wfData)
-			if err != nil {
-				return fmt.Errorf("failed to generate workflow run observation: %w", err)
-			}
-			if !shouldIncludeWorkflow(observation.Name, observeOpts) {
-				log.Debug().
-					Str("workflow", observation.Name).
-					Int64("workflow_run_id", workflowRunID).
-					Msg("Excluding workflow from visualization")
-				return nil
-			}
-			observations = append(observations, observation)
-			jobRuns, jobErr := jobRunObservations(wfData)
-			if jobErr != nil {
-				return fmt.Errorf("failed to generate job runs: %w", jobErr)
-			}
-			observations = append(observations, jobRuns...)
-		case gather.PullRequestsDataDir:
-			var pullRequestNumber int64
-			pullRequestNumber, err = strconv.ParseInt(dataName, 10, 64)
-			if err != nil {
-				return fmt.Errorf("failed to parse pull request number: %w", err)
-			}
-			observation, err = PullRequest(log, client, owner, repo, int(pullRequestNumber), opts...)
-			observations = append(observations, observation)
-		case gather.CommitsDataDir:
-			var commitSHA string
-			commitSHA = dataName
-			observation, err = Commit(log, client, owner, repo, commitSHA, opts...)
-			observations = append(observations, observation)
-		}
+		var observations []*Observation
+		observations, err = loadObservationsFromJSON(log, client, owner, repo, dataCat, dataName, observeOpts, opts...)
 		jsonLoadDur += time.Since(loadStart)
 
 		if err != nil {
@@ -656,11 +615,13 @@ func generateAllObserveData(
 					obs.DataType+"s",
 					fmt.Sprintf("%s.%s", obs.ID, outputType),
 				)
-				if _, statErr := os.Stat(targetPath); statErr == nil {
-					filesSkipped++
-				} else {
-					filesWritten++
+				if stat, statErr := os.Stat(targetPath); statErr == nil {
+					if srcStat, sErr := os.Stat(path); sErr == nil && stat.ModTime().After(srcStat.ModTime()) {
+						filesSkipped++
+						continue
+					}
 				}
+				filesWritten++
 				renderStart := time.Now()
 				_, err = obs.Render(log, outputType, opts...)
 				renderDur += time.Since(renderStart)
@@ -843,4 +804,59 @@ func isRequiredCheck(itemName string, requiredChecks []string) bool {
 		}
 	}
 	return false
+}
+
+func loadObservationsFromJSON(
+	log zerolog.Logger,
+	client *gather.GitHubClient,
+	owner, repo, dataCat, dataName string,
+	observeOpts *options,
+	opts ...Option,
+) ([]*Observation, error) {
+	var observations []*Observation
+	switch dataCat {
+	case gather.WorkflowRunsDataDir:
+		workflowRunID, err := strconv.ParseInt(dataName, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse workflow run ID: %w", err)
+		}
+		wfData, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, observeOpts.gatherOptions...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load workflow run data: %w", err)
+		}
+		observation, err := workflowRunObservation(wfData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate workflow run observation: %w", err)
+		}
+		if !shouldIncludeWorkflow(observation.Name, observeOpts) {
+			log.Debug().
+				Str("workflow", observation.Name).
+				Int64("workflow_run_id", workflowRunID).
+				Msg("Excluding workflow from visualization")
+			return nil, nil
+		}
+		observations = append(observations, observation)
+		jobRuns, jobErr := jobRunObservations(wfData)
+		if jobErr != nil {
+			return nil, fmt.Errorf("failed to generate job runs: %w", jobErr)
+		}
+		observations = append(observations, jobRuns...)
+	case gather.PullRequestsDataDir:
+		pullRequestNumber, err := strconv.ParseInt(dataName, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse pull request number: %w", err)
+		}
+		observation, err := PullRequest(log, client, owner, repo, int(pullRequestNumber), opts...)
+		if err != nil {
+			return nil, err
+		}
+		observations = append(observations, observation)
+	case gather.CommitsDataDir:
+		observation, err := Commit(log, client, owner, repo, dataName, opts...)
+		if err != nil {
+			return nil, err
+		}
+		observations = append(observations, observation)
+	}
+	return observations, nil
 }
