@@ -28,6 +28,7 @@ type mergeQueueRemovedEvent struct {
 }
 
 func prMergeQueueEvents(
+	parentCtx context.Context,
 	client *GitHubClient,
 	owner, repo string,
 	pullRequestNumber int,
@@ -42,17 +43,19 @@ func prMergeQueueEvents(
 	var (
 		addedEvents   []mergeQueueAddedEvent
 		removedEvents []mergeQueueRemovedEvent
-		eg            errgroup.Group
 	)
+	ghCtxInst, cancel := ghCtx(parentCtx)
+	defer cancel()
+	eg, egCtx := errgroup.WithContext(ghCtxInst)
 
 	eg.Go(func() error {
 		var err error
-		addedEvents, err = fetchMergeQueueAddedEvents(client, owner, repo, pullRequestNumber)
+		addedEvents, err = fetchMergeQueueAddedEvents(egCtx, client, owner, repo, pullRequestNumber)
 		return err
 	})
 	eg.Go(func() error {
 		var err error
-		removedEvents, err = fetchMergeQueueRemovedEvents(client, owner, repo, pullRequestNumber)
+		removedEvents, err = fetchMergeQueueRemovedEvents(egCtx, client, owner, repo, pullRequestNumber)
 		return err
 	})
 	if err := eg.Wait(); err != nil {
@@ -68,42 +71,30 @@ func prMergeQueueEvents(
 
 	mergeEvents := make([]*MergeQueueEvent, 0, len(addedEvents))
 	for index, added := range addedEvents {
-		mergeEvent := &MergeQueueEvent{
+		event := &MergeQueueEvent{
 			AddedTime:     added.CreatedAt.Time,
 			AddedActor:    added.Actor,
 			AddedEnqueuer: added.Enqueuer,
 			AddedID:       added.ID,
 		}
 
-		if index >= len(removedEvents) {
-			mergeEvents = append(mergeEvents, mergeEvent)
-			continue
+		if index < len(removedEvents) {
+			removed := removedEvents[index]
+			event.Commit = removed.Commit
+			event.RemovedTime = removed.CreatedAt.Time
+			event.RemovedActor = removed.Actor
+			event.RemovedReason = removed.Reason
+			event.RemovedID = removed.ID
 		}
 
-		removed := removedEvents[index]
-		if added.CreatedAt.After(removed.CreatedAt.Time) {
-			return nil, fmt.Errorf(
-				"'added' merge queue event %s at %s is after the corresponding 'removed' merge queue event %s at %s for pull request %d",
-				added.ID,
-				added.CreatedAt.Time,
-				removed.ID,
-				removed.CreatedAt.Time,
-				pullRequestNumber,
-			)
-		}
-
-		mergeEvent.RemovedTime = removed.CreatedAt.Time
-		mergeEvent.RemovedActor = removed.Actor
-		mergeEvent.RemovedID = removed.ID
-		mergeEvent.RemovedReason = removed.Reason
-		mergeEvent.Commit = removed.Commit
-		mergeEvents = append(mergeEvents, mergeEvent)
+		mergeEvents = append(mergeEvents, event)
 	}
 
 	return mergeEvents, nil
 }
 
 func fetchMergeQueueAddedEvents(
+	ctx context.Context,
 	client *GitHubClient,
 	owner, repo string,
 	pullRequestNumber int,
@@ -148,7 +139,7 @@ func fetchMergeQueueAddedEvents(
 			"after":    after,
 		}
 
-		if err := client.GraphQL.Query(context.Background(), &query, variables); err != nil {
+		if err := client.GraphQL.Query(ctx, &query, variables); err != nil {
 			return nil, fmt.Errorf("failed to query for added to merge queue events: %w", err)
 		}
 
@@ -173,6 +164,7 @@ func fetchMergeQueueAddedEvents(
 }
 
 func fetchMergeQueueRemovedEvents(
+	ctx context.Context,
 	client *GitHubClient,
 	owner, repo string,
 	pullRequestNumber int,
@@ -218,7 +210,7 @@ func fetchMergeQueueRemovedEvents(
 			"after":    after,
 		}
 
-		if err := client.GraphQL.Query(context.Background(), &query, variables); err != nil {
+		if err := client.GraphQL.Query(ctx, &query, variables); err != nil {
 			return nil, fmt.Errorf("failed to query for removed from merge queue events: %w", err)
 		}
 

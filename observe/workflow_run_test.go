@@ -95,6 +95,7 @@ func TestWorkflowRun_CostPropagated(t *testing.T) {
 	require.NoError(t, err)
 
 	obs, err := WorkflowRun(
+		t.Context(),
 		log,
 		client,
 		"owner",

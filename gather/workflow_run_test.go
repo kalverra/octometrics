@@ -63,6 +63,7 @@ func TestGatherWorkflowRun_InProgress(t *testing.T) {
 	require.NoError(t, err, "error creating GitHub client")
 
 	workflowRun, targetFile, err := WorkflowRun(
+		t.Context(),
 		log, client, testGatherOwner, testGatherRepo, mockWorkflowRunInProgress.GetID(), CustomDataFolder(testDataDir),
 	)
 	require.NoError(t, err, "error getting workflow run info")
@@ -159,6 +160,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 	require.NoError(t, err, "error creating GitHub client")
 
 	workflowRun, targetFile, err := WorkflowRun(
+		t.Context(),
 		log,
 		client,
 		testGatherOwner,
@@ -172,6 +174,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 	require.FileExists(t, targetFile, "workflow run file should exist")
 
 	readData, readFile, err := WorkflowRun(
+		t.Context(),
 		log,
 		client,
 		testGatherOwner,
@@ -540,7 +543,7 @@ func TestJobsData_RetryOn502(t *testing.T) {
 	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
 	require.NoError(t, err)
 
-	jobs, err := jobsData(client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID())
+	jobs, err := jobsData(t.Context(), client, testGatherOwner, testGatherRepo, mockWorkflowRun.GetID())
 	require.NoError(t, err)
 	require.Len(t, jobs, 1)
 	require.Equal(t, int32(2), attempts.Load())
@@ -633,7 +636,18 @@ func TestProcessJobs_RunsOnAlwaysFetchLogs(t *testing.T) {
 	}
 
 	log, tempDir := testhelpers.Setup(t)
-	processJobs(log, client, "owner", "repo", data, []*github.WorkflowJob{skippedJob, pricedJob}, nil, true, tempDir)
+	processJobs(
+		t.Context(),
+		log,
+		client,
+		"owner",
+		"repo",
+		data,
+		[]*github.WorkflowJob{skippedJob, pricedJob},
+		nil,
+		true,
+		tempDir,
+	)
 
 	assert.True(
 		t,
@@ -681,7 +695,7 @@ func TestWorkflowRun_ReadCacheAndSingleflight(t *testing.T) {
 	var eg errgroup.Group
 	for range n {
 		eg.Go(func() error {
-			_, _, err := WorkflowRun(log, client, "owner", "repo", 99999, CustomDataFolder(tempDir))
+			_, _, err := WorkflowRun(t.Context(), log, client, "owner", "repo", 99999, CustomDataFolder(tempDir))
 			return err
 		})
 	}
@@ -695,7 +709,7 @@ func TestWorkflowRun_ReadCacheAndSingleflight(t *testing.T) {
 	)
 
 	// Call again, should hit read cache directly
-	_, _, err = WorkflowRun(log, client, "owner", "repo", 99999, CustomDataFolder(tempDir))
+	_, _, err = WorkflowRun(t.Context(), log, client, "owner", "repo", 99999, CustomDataFolder(tempDir))
 	require.NoError(t, err)
 	assert.Equal(t, int32(1), fetchCount.Load(), "Cache hit should not trigger additional GitHub API call")
 }
@@ -771,6 +785,7 @@ func TestWorkflowRun_CacheKeyOptionAware(t *testing.T) {
 	require.NoError(t, err)
 
 	wfWithoutCost, _, err := WorkflowRun(
+		t.Context(),
 		log,
 		client,
 		"owner",
@@ -783,7 +798,7 @@ func TestWorkflowRun_CacheKeyOptionAware(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, wfWithoutCost.CostGathered)
 
-	wfWithCost, _, err := WorkflowRun(log, client, "owner", "repo", 88888, CustomDataFolder(tempDir))
+	wfWithCost, _, err := WorkflowRun(t.Context(), log, client, "owner", "repo", 88888, CustomDataFolder(tempDir))
 	require.NoError(t, err)
 	assert.True(t, wfWithCost.CostGathered)
 }

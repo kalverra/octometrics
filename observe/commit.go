@@ -2,6 +2,7 @@
 package observe
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 // Commit generates an observation for workflow runs triggered by a commit.
 func Commit(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -24,7 +26,7 @@ func Commit(
 		opt(options)
 	}
 
-	commit, err := gather.Commit(log, client, owner, repo, commitSHA, options.gatherOptions...)
+	commit, err := gather.Commit(ctx, log, client, owner, repo, commitSHA, options.gatherOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +37,14 @@ func Commit(
 	} else {
 		workflowRuns = make([]*gather.WorkflowRunData, 0, len(commit.WorkflowRunIDs))
 		for _, workflowRunID := range commit.WorkflowRunIDs {
-			workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
+			workflowRun, _, err := gather.WorkflowRun(
+				ctx,
+				log,
+				client,
+				owner,
+				repo,
+				workflowRunID,
+				options.gatherOptions...)
 			if err != nil {
 				return nil, err
 			}

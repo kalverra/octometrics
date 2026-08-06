@@ -48,12 +48,12 @@ Display the gathered Workflow/Job/Step data in your browser.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		rebuild, _ := cmd.Flags().GetBool("rebuild-manifest")
 		if rebuild {
-			if err := observe.RebuildManifest(logger, cfg.DataDir); err != nil {
+			if err := observe.RebuildManifest(cmd.Context(), logger, cfg.DataDir); err != nil {
 				return fmt.Errorf("failed to rebuild manifest: %w", err)
 			}
 			logger.Info().Msg("Manifest rebuilt successfully")
 		}
-		return observe.Interactive(logger, githubClient, "", cfg.DataDir, buildObserveOptions(cfg)...)
+		return observe.Interactive(cmd.Context(), logger, githubClient, "", cfg.DataDir, buildObserveOptions(cfg)...)
 	},
 }
 

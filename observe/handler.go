@@ -1,6 +1,7 @@
 package observe
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -109,7 +110,7 @@ func (h *OnDemandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Cache miss: render on demand with singleflight
 	sfKey := fmt.Sprintf("%s/%s/%s/%s", owner, repo, category, id)
 	_, err, _ := h.sf.Do(sfKey, func() (any, error) {
-		return nil, h.renderEntity(owner, repo, category, id, format)
+		return nil, h.renderEntity(r.Context(), owner, repo, category, id, format)
 	})
 	if err != nil {
 		h.log.Error().Err(err).Str("path", reqPath).Msg("Failed to render observation on demand")
@@ -137,7 +138,7 @@ func (h *OnDemandHandler) sourceJSONPath(owner, repo, category, id string) strin
 	}
 }
 
-func (h *OnDemandHandler) renderEntity(owner, repo, category, id, format string) error {
+func (h *OnDemandHandler) renderEntity(ctx context.Context, owner, repo, category, id, format string) error {
 	allOpts := make([]Option, 0, len(h.opts)+2)
 	allOpts = append(allOpts, WithCustomOutputDir(h.outputDir))
 	allOpts = append(allOpts, h.opts...)
@@ -163,6 +164,7 @@ func (h *OnDemandHandler) renderEntity(owner, repo, category, id, format string)
 			}
 		}
 		wfData, _, err := gather.WorkflowRun(
+			ctx,
 			h.log,
 			h.client,
 			owner,
@@ -193,7 +195,7 @@ func (h *OnDemandHandler) renderEntity(owner, repo, category, id, format string)
 		return nil
 
 	case "commits":
-		obs, err := Commit(h.log, h.client, owner, repo, id, allOpts...)
+		obs, err := Commit(ctx, h.log, h.client, owner, repo, id, allOpts...)
 		if err != nil {
 			return err
 		}
@@ -205,7 +207,7 @@ func (h *OnDemandHandler) renderEntity(owner, repo, category, id, format string)
 		if err != nil {
 			return fmt.Errorf("invalid pull request number '%s': %w", id, err)
 		}
-		obs, err := PullRequest(h.log, h.client, owner, repo, prNum, allOpts...)
+		obs, err := PullRequest(ctx, h.log, h.client, owner, repo, prNum, allOpts...)
 		if err != nil {
 			return err
 		}
@@ -220,7 +222,7 @@ func (h *OnDemandHandler) renderEntity(owner, repo, category, id, format string)
 func (h *OnDemandHandler) serveRootIndex(w http.ResponseWriter, r *http.Request) {
 	targetFile := filepath.Join(h.outputDir, "index.html")
 	if _, err := os.Stat(targetFile); err != nil {
-		h.rebuildIndexes()
+		h.rebuildIndexes(r.Context())
 	}
 	http.ServeFile(w, r, targetFile)
 }
@@ -228,7 +230,7 @@ func (h *OnDemandHandler) serveRootIndex(w http.ResponseWriter, r *http.Request)
 func (h *OnDemandHandler) serveRepoIndex(w http.ResponseWriter, r *http.Request, owner, repo string) {
 	targetFile := filepath.Join(h.outputDir, owner, repo, "index.html")
 	if _, err := os.Stat(targetFile); err != nil {
-		h.rebuildIndexes()
+		h.rebuildIndexes(r.Context())
 	}
 	http.ServeFile(w, r, targetFile)
 }
@@ -236,12 +238,12 @@ func (h *OnDemandHandler) serveRepoIndex(w http.ResponseWriter, r *http.Request,
 func (h *OnDemandHandler) serveCategoryIndex(w http.ResponseWriter, r *http.Request, owner, repo, category string) {
 	targetFile := filepath.Join(h.outputDir, owner, repo, category, "index.html")
 	if _, err := os.Stat(targetFile); err != nil {
-		h.rebuildIndexes()
+		h.rebuildIndexes(r.Context())
 	}
 	http.ServeFile(w, r, targetFile)
 }
 
-func (h *OnDemandHandler) rebuildIndexes() {
+func (h *OnDemandHandler) rebuildIndexes(ctx context.Context) {
 	collected := make(map[categoryKey][]IndexItem)
 
 	entries, err := os.ReadDir(h.dataDir)
@@ -264,7 +266,7 @@ func (h *OnDemandHandler) rebuildIndexes() {
 			repo := repoEntry.Name()
 			records, mErr := LoadManifest(h.dataDir, owner, repo)
 			if mErr != nil || len(records) == 0 {
-				_ = RebuildManifest(h.log, h.dataDir)
+				_ = RebuildManifest(ctx, h.log, h.dataDir)
 				records, _ = LoadManifest(h.dataDir, owner, repo)
 			}
 			for _, rec := range records {

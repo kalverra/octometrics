@@ -1,6 +1,7 @@
 package gather
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -29,6 +30,7 @@ func (p *PullRequestData) GetCommitData() []*CommitData {
 
 // PullRequest gathers the pull request data for a given pull request number.
 func PullRequest(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -81,7 +83,7 @@ func PullRequest(
 		return nil, fmt.Errorf("github client is nil")
 	}
 
-	ctx, cancel := ghCtx()
+	ctx, cancel := ghCtx(parentCtx)
 	pr, resp, err := client.Rest.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
 	cancel()
 	if err != nil {
@@ -94,20 +96,21 @@ func PullRequest(
 		return nil, fmt.Errorf("pull request '%d' not found on GitHub", pullRequestNumber)
 	}
 
-	mergeQueueEvents, err := prMergeQueueEvents(client, owner, repo, pullRequestNumber)
+	mergeQueueEvents, err := prMergeQueueEvents(parentCtx, client, owner, repo, pullRequestNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather merge queue events for pull request %d: %w", pullRequestNumber, err)
 	}
 
 	pullRequestData.PullRequest = pr
 	// Get the commits associated with the pull request
-	prCommits, err := prCommits(client, owner, repo, pullRequestNumber, mergeQueueEvents)
+	prCommits, err := prCommits(parentCtx, client, owner, repo, pullRequestNumber, mergeQueueEvents)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather commits for pull request %d: %w", pullRequestNumber, err)
 	}
 
 	opts = append(opts, withPullRequestData(pullRequestData))
 	pullRequestData.CommitData, err = prCommitData(
+		parentCtx,
 		log,
 		client,
 		owner,
@@ -143,6 +146,7 @@ func PullRequest(
 }
 
 func prCommits(
+	parentCtx context.Context,
 	client *GitHubClient,
 	owner, repo string,
 	pullRequestNumber int,
@@ -156,7 +160,7 @@ func prCommits(
 		}
 	)
 
-	ctx, cancel := ghCtx()
+	ctx, cancel := ghCtx(parentCtx)
 	defer cancel()
 
 	for commit, err := range client.Rest.PullRequests.ListCommitsIter(ctx, owner, repo, pullRequestNumber, listOpts) {
@@ -173,7 +177,7 @@ func prCommits(
 		}
 
 		if _, ok := commitsMap[event.Commit]; !ok {
-			ctx, cancel := ghCtx()
+			ctx, cancel := ghCtx(parentCtx)
 			commit, resp, err := client.Rest.Repositories.GetCommit(
 				ctx,
 				owner,
@@ -208,6 +212,7 @@ func prCommits(
 }
 
 func prCommitData(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -218,14 +223,17 @@ func prCommitData(
 	var (
 		commitData     []*CommitData
 		commitDataChan = make(chan *CommitData, len(prCommits))
-		eg             errgroup.Group
 	)
+
+	ghCtxInst, cancel := ghCtx(parentCtx)
+	defer cancel()
+	eg, egCtx := errgroup.WithContext(ghCtxInst)
 
 	eg.SetLimit(defaultGatherConcurrency)
 	for _, commit := range prCommits {
 		eg.Go(func() error {
 			commitOpts := append(slices.Clone(opts), withRepositoryCommit(commit))
-			data, err := Commit(log, client, owner, repo, commit.GetSHA(), commitOpts...)
+			data, err := Commit(egCtx, log, client, owner, repo, commit.GetSHA(), commitOpts...)
 			if err != nil {
 				return fmt.Errorf("failed to gather data for commit '%s': %w", commit.GetSHA(), err)
 			}

@@ -36,11 +36,14 @@ var (
 	defaultGatherConcurrency = 10
 )
 
-// ghCtx returns a standard context to use for GitHub API calls.
+// ghCtx returns a standard context to use for GitHub API calls, derived from parent context.
 // The per-request timeout is applied at the transport layer (loggingTransport.RoundTrip)
 // so that paginated iterators get a fresh timeout for each page.
-func ghCtx() (context.Context, func()) {
-	ctx, cancel := context.WithCancel(context.Background())
+func ghCtx(parent context.Context) (context.Context, func()) {
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
 	return context.WithValue(
 		ctx,
 		github.BypassRateLimitCheck,
@@ -196,6 +199,7 @@ func NewGitHubClient(
 // Range gathers all workflow runs for a repository within a given time range.
 // The returned int is the number of workflow runs that failed to gather.
 func Range(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -230,18 +234,18 @@ func Range(
 		}
 	)
 
-	ctx, cancel := ghCtx()
+	ghCtxInst, cancel := ghCtx(ctx)
 	defer cancel()
 
 	runCh := make(chan int64, defaultGatherConcurrency)
 	var failures atomic.Int32
-	var eg errgroup.Group
+	eg, egCtx := errgroup.WithContext(ghCtxInst)
 	eg.SetLimit(defaultGatherConcurrency + 1)
 
 	eg.Go(func() error {
 		defer close(runCh)
 		count := 0
-		for run, err := range client.Rest.Actions.ListRepositoryWorkflowRunsIter(ctx, owner, repo, listOpts) {
+		for run, err := range client.Rest.Actions.ListRepositoryWorkflowRunsIter(egCtx, owner, repo, listOpts) {
 			if err != nil {
 				return fmt.Errorf("failed to list workflow runs: %w", err)
 			}
@@ -255,7 +259,7 @@ func Range(
 	for range defaultGatherConcurrency {
 		eg.Go(func() error {
 			for runID := range runCh {
-				_, _, err := WorkflowRun(log, client, owner, repo, runID, opts...)
+				_, _, err := WorkflowRun(egCtx, log, client, owner, repo, runID, opts...)
 				if err != nil {
 					failures.Add(1)
 					log.Error().Err(err).Int64("workflow_run_id", runID).Msg("Failed to gather workflow run")

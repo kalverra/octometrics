@@ -66,51 +66,51 @@ type DefaultObserver struct{}
 
 // WorkflowRun gathers and processes a workflow run into an observation.
 func (d *DefaultObserver) WorkflowRun(
-	_ context.Context,
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
 	runID int64,
 	opts ...observe.Option,
 ) (*observe.Observation, error) {
-	return observe.WorkflowRun(log, client, owner, repo, runID, opts...)
+	return observe.WorkflowRun(ctx, log, client, owner, repo, runID, opts...)
 }
 
 // JobRuns observes all job runs for a given workflow run.
 func (d *DefaultObserver) JobRuns(
-	_ context.Context,
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
 	runID int64,
 	opts ...observe.Option,
 ) ([]*observe.Observation, error) {
-	return observe.JobRuns(log, client, owner, repo, runID, opts...)
+	return observe.JobRuns(ctx, log, client, owner, repo, runID, opts...)
 }
 
 // GatherWorkflowRun loads gathered workflow run data for MCP tools that need raw analysis.
 func (d *DefaultObserver) GatherWorkflowRun(
-	_ context.Context,
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
 	runID int64,
 	opts ...gather.Option,
 ) (*gather.WorkflowRunData, error) {
-	data, _, err := gather.WorkflowRun(log, client, owner, repo, runID, opts...)
+	data, _, err := gather.WorkflowRun(ctx, log, client, owner, repo, runID, opts...)
 	return data, err
 }
 
 // CompareWorkflowRuns builds a comparison between two workflow runs.
 func (d *DefaultObserver) CompareWorkflowRuns(
-	_ context.Context,
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
 	leftID, rightID int64,
 	opts ...observe.Option,
 ) (*observe.Comparison, error) {
-	return observe.CompareWorkflowRuns(log, client, owner, repo, leftID, rightID, opts...)
+	return observe.CompareWorkflowRuns(ctx, log, client, owner, repo, leftID, rightID, opts...)
 }
 
 // ListWorkflowRuns lists workflow runs for a repository within a given time range.

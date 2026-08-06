@@ -3,6 +3,7 @@ package gather
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -230,6 +231,7 @@ var (
 
 // WorkflowRun gathers and processes a workflow run from GitHub or local disk.
 func WorkflowRun(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -287,6 +289,7 @@ func WorkflowRun(
 		}
 
 		workflowRunData, fetchErr := fetchWorkflowRunFromGitHub(
+			ctx,
 			log,
 			client,
 			owner,
@@ -390,6 +393,7 @@ func saveWorkflowRunToDisk(data *WorkflowRunData, owner, repo, dataDir, targetFi
 
 // fetchWorkflowRunFromGitHub fetches a workflow run from GitHub.
 func fetchWorkflowRunFromGitHub(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -399,9 +403,9 @@ func fetchWorkflowRunFromGitHub(
 ) (*WorkflowRunData, error) {
 	log.Debug().Msg("Fetching workflow run data from GitHub")
 
-	ctx, cancel := ghCtx()
-	workflowRun, resp, err := client.Rest.Actions.GetWorkflowRunByID(ctx, owner, repo, workflowRunID)
-	cancel()
+	runCtx, runCancel := ghCtx(parentCtx)
+	workflowRun, resp, err := client.Rest.Actions.GetWorkflowRunByID(runCtx, owner, repo, workflowRunID)
+	runCancel()
 	if err != nil {
 		return nil, err
 	}
@@ -429,23 +433,26 @@ func fetchWorkflowRunFromGitHub(
 	}
 
 	var (
-		eg                  errgroup.Group
 		workflowRunJobs     []*github.WorkflowJob
 		workflowBillingData *github.WorkflowRunUsage
 		analyses            []*monitor.Analysis
 		workflowDef         *WorkflowDef
 	)
 
+	egCtxInst, egCancel := ghCtx(parentCtx)
+	defer egCancel()
+	eg, egCtx := errgroup.WithContext(egCtxInst)
+
 	eg.Go(func() error {
 		var defErr error
-		workflowDef, defErr = workflowDefData(log, client, owner, repo, workflowRun)
+		workflowDef, defErr = workflowDefData(egCtx, log, client, owner, repo, workflowRun)
 		return defErr
 	})
 
 	if completed {
 		eg.Go(func() error {
 			var analysisErr error
-			analyses, analysisErr = monitoringData(log, client, owner, repo, workflowRunID, targetDir)
+			analyses, analysisErr = monitoringData(egCtx, log, client, owner, repo, workflowRunID, targetDir)
 			return analysisErr
 		})
 
@@ -454,14 +461,14 @@ func fetchWorkflowRunFromGitHub(
 				return nil
 			}
 			var billingErr error
-			workflowBillingData, billingErr = billingData(client, owner, repo, workflowRunID)
+			workflowBillingData, billingErr = billingData(egCtx, client, owner, repo, workflowRunID)
 			return billingErr
 		})
 	}
 
 	eg.Go(func() error {
 		var jobsErr error
-		workflowRunJobs, jobsErr = jobsData(client, owner, repo, workflowRunID)
+		workflowRunJobs, jobsErr = jobsData(egCtx, client, owner, repo, workflowRunID)
 		return jobsErr
 	})
 
@@ -471,7 +478,18 @@ func fetchWorkflowRunFromGitHub(
 
 	data.Usage = workflowBillingData
 	data.WorkflowDef = workflowDef
-	processJobs(log, client, owner, repo, data, workflowRunJobs, workflowBillingData, opts.gatherCost, opts.DataDir)
+	processJobs(
+		parentCtx,
+		log,
+		client,
+		owner,
+		repo,
+		data,
+		workflowRunJobs,
+		workflowBillingData,
+		opts.gatherCost,
+		opts.DataDir,
+	)
 	processAnalyses(log, data, analyses)
 
 	return data, nil
@@ -484,6 +502,7 @@ type runsOnLogResult struct {
 
 // processJobs processes the jobs for a workflow run.
 func processJobs(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -500,7 +519,9 @@ func processJobs(
 	billingIndex := buildJobBillingIndex(billingData)
 
 	logResults := sync.Map{}
-	var logFetchGroup errgroup.Group
+	ghCtxInst, cancel := ghCtx(parentCtx)
+	defer cancel()
+	logFetchGroup, egCtx := errgroup.WithContext(ghCtxInst)
 	logFetchGroup.SetLimit(defaultGatherConcurrency)
 
 	// Pass 1: find RunCompletedAt and fetch logs in parallel for unpriced runs-on jobs
@@ -522,6 +543,7 @@ func processJobs(
 					jobID := job.GetID()
 					logFetchGroup.Go(func() error {
 						logCost, logSummary, logErr := fetchRunsOnCostFromLogs(
+							egCtx,
 							log,
 							client,
 							owner,
@@ -674,6 +696,7 @@ func isRetryableGitHubAPIError(err error) bool {
 }
 
 func listWorkflowJobsOnce(
+	parentCtx context.Context,
 	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
@@ -681,7 +704,7 @@ func listWorkflowJobsOnce(
 ) ([]*github.WorkflowJob, error) {
 	workflowJobs := []*github.WorkflowJob{}
 
-	ctx, cancel := ghCtx()
+	ctx, cancel := ghCtx(parentCtx)
 	defer cancel()
 
 	for job, err := range client.Rest.Actions.ListWorkflowJobsIter(ctx, owner, repo, workflowRunID, listOpts) {
@@ -699,6 +722,7 @@ func listWorkflowJobsOnce(
 
 // jobsData fetches all jobs for a workflow run from GitHub.
 func jobsData(
+	parentCtx context.Context,
 	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
@@ -712,7 +736,7 @@ func jobsData(
 
 	var lastErr error
 	for attempt := range workflowJobsMaxRetries {
-		jobs, err := listWorkflowJobsOnce(client, owner, repo, workflowRunID, listOpts)
+		jobs, err := listWorkflowJobsOnce(parentCtx, client, owner, repo, workflowRunID, listOpts)
 		if err == nil {
 			return jobs, nil
 		}
@@ -730,11 +754,12 @@ func jobsData(
 
 // billingData fetches the billing data for a workflow run from GitHub
 func billingData(
+	parentCtx context.Context,
 	client *GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 ) (*github.WorkflowRunUsage, error) {
-	ctx, cancel := ghCtx()
+	ctx, cancel := ghCtx(parentCtx)
 	usage, resp, err := client.Rest.Actions.GetWorkflowRunUsageByID(ctx, owner, repo, workflowRunID)
 	cancel()
 	if err != nil {
@@ -793,6 +818,7 @@ func billableMinutes(durationMS int64) int64 {
 }
 
 func monitoringData(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -808,7 +834,7 @@ func monitoringData(
 		analysesMu          sync.Mutex
 		eg                  errgroup.Group
 
-		ctx, cancel   = ghCtx()
+		ctx, cancel   = ghCtx(parentCtx)
 		artifactsIter = client.Rest.Actions.ListWorkflowRunArtifactsIter(ctx, owner, repo, workflowRunID, listOpts)
 	)
 
@@ -826,7 +852,7 @@ func monitoringData(
 	for _, artifact := range artifactsToDownload {
 		eg.Go(func(artifact *github.Artifact) func() error {
 			return func() error {
-				analysis, err := downloadAndAnalyzeArtifact(log, client, owner, repo, artifact, targetDir)
+				analysis, err := downloadAndAnalyzeArtifact(ctx, log, client, owner, repo, artifact, targetDir)
 				if err != nil {
 					return err
 				}
@@ -881,13 +907,14 @@ func safeMonitorJSONLZipEntry(zf *zip.File) bool {
 // (avoiding on-disk zip paths that race when multiple workflow runs share a data directory), extracts
 // the JSONL entry to a temp file, and runs monitor.Analyze.
 func downloadAndAnalyzeArtifact(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
 	artifact *github.Artifact,
 	targetDir string,
 ) (*monitor.Analysis, error) {
-	ctx, cancel := ghCtx()
+	ctx, cancel := ghCtx(parentCtx)
 	artifactURL, resp, err := client.Rest.Actions.DownloadArtifact(ctx, owner, repo, artifact.GetID(), 5)
 	cancel()
 	if err != nil {

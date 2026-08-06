@@ -1,6 +1,7 @@
 package observe
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 // WorkflowRun gathers and processes a workflow run into an observation to be rendered.
 func WorkflowRun(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -23,7 +25,7 @@ func WorkflowRun(
 		opt(options)
 	}
 
-	workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
+	workflowRun, _, err := gather.WorkflowRun(ctx, log, client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
 		return nil, err
 	}

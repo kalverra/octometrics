@@ -59,7 +59,7 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 		}
 		return nil
 	},
-	RunE: func(_ *cobra.Command, _ []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		startTime := time.Now()
 
 		logger = logger.With().Str("owner", cfg.Owner).Str("repo", cfg.Repo).Logger()
@@ -92,15 +92,31 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			err           error
 			rangeFailures int
 		)
+		ctx := cmd.Context()
 		action := func() {
 			if cfg.WorkflowRunID != 0 {
-				_, _, err = gather.WorkflowRun(logger, githubClient, cfg.Owner, cfg.Repo, cfg.WorkflowRunID, opts...)
+				_, _, err = gather.WorkflowRun(
+					ctx,
+					logger,
+					githubClient,
+					cfg.Owner,
+					cfg.Repo,
+					cfg.WorkflowRunID,
+					opts...)
 			} else if cfg.PullRequestNumber != 0 {
-				_, err = gather.PullRequest(logger, githubClient, cfg.Owner, cfg.Repo, cfg.PullRequestNumber, opts...)
+				_, err = gather.PullRequest(
+					ctx,
+					logger,
+					githubClient,
+					cfg.Owner,
+					cfg.Repo,
+					cfg.PullRequestNumber,
+					opts...)
 			} else if cfg.CommitSHA != "" {
-				_, err = gather.Commit(logger, githubClient, cfg.Owner, cfg.Repo, cfg.CommitSHA, opts...)
+				_, err = gather.Commit(ctx, logger, githubClient, cfg.Owner, cfg.Repo, cfg.CommitSHA, opts...)
 			} else if !cfg.From.IsZero() && !cfg.To.IsZero() {
 				rangeFailures, err = gather.Range(
+					ctx,
 					logger,
 					githubClient,
 					cfg.Owner,
@@ -164,7 +180,7 @@ octometrics gather -o kalverra -r octometrics -p 33 -u
 			pagePath = fmt.Sprintf("/%s/%s/", cfg.Owner, cfg.Repo)
 		}
 
-		return observe.Interactive(logger, githubClient, pagePath, cfg.DataDir, buildObserveOptions(cfg)...)
+		return observe.Interactive(ctx, logger, githubClient, pagePath, cfg.DataDir, buildObserveOptions(cfg)...)
 	},
 }
 

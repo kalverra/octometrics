@@ -1,6 +1,7 @@
 package gather
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,12 +19,17 @@ type BranchProtectionResult struct {
 // BranchProtection fetches the required status checks for the default branch of the given repository.
 // Returns PermissionDenied=true (not an error) when the token lacks admin read access.
 // Returns an empty RequiredChecks slice (not an error) when the branch has no protection rules.
-func BranchProtection(log zerolog.Logger, client *GitHubClient, owner, repo string) (*BranchProtectionResult, error) {
+func BranchProtection(
+	parentCtx context.Context,
+	log zerolog.Logger,
+	client *GitHubClient,
+	owner, repo string,
+) (*BranchProtectionResult, error) {
 	if client == nil {
 		return &BranchProtectionResult{PermissionDenied: true}, nil
 	}
 
-	ctx, cancel := ghCtx()
+	ctx, cancel := ghCtx(parentCtx)
 	defer cancel()
 
 	repoData, _, err := client.Rest.Repositories.Get(ctx, owner, repo)
@@ -39,7 +45,7 @@ func BranchProtection(log zerolog.Logger, client *GitHubClient, owner, repo stri
 		return &BranchProtectionResult{}, nil
 	}
 
-	ctx2, cancel2 := ghCtx()
+	ctx2, cancel2 := ghCtx(parentCtx)
 	defer cancel2()
 
 	checks, _, err := client.Rest.Repositories.GetRequiredStatusChecks(ctx2, owner, repo, defaultBranch)

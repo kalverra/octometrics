@@ -46,6 +46,7 @@ func TestGenerateAllObserveData_IgnoresNonJSONAndSkipsExisting(t *testing.T) {
 
 	// First run: should ignore non-JSON files and render 555.html
 	err := generateAllObserveData(
+		t.Context(),
 		log,
 		nil,
 		[]string{"html"},
@@ -68,6 +69,7 @@ func TestGenerateAllObserveData_IgnoresNonJSONAndSkipsExisting(t *testing.T) {
 
 	// Second run: should skip rendering 555.html because output exists and is up to date
 	err = generateAllObserveData(
+		t.Context(),
 		log,
 		nil,
 		[]string{"html"},

@@ -1,6 +1,7 @@
 package observe
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -14,6 +15,7 @@ const jobRunOutputDir = "job_runs"
 
 // JobRuns observes all job runs for a given workflow run.
 func JobRuns(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -25,7 +27,7 @@ func JobRuns(
 		opt(options)
 	}
 
-	workflowRun, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, options.gatherOptions...)
+	workflowRun, _, err := gather.WorkflowRun(ctx, log, client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
 		return nil, err
 	}

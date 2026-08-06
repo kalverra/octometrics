@@ -3,6 +3,7 @@
 package gather
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -147,6 +148,7 @@ type MergeQueueEvent struct {
 
 // Commit gathers commit data for a given commit SHA and enhances matches it with workflows that ran on that commit.
 func Commit(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo,
@@ -196,7 +198,7 @@ func Commit(
 			return nil, fmt.Errorf("failed to open commit file: %w", err)
 		}
 		for _, runID := range commitData.WorkflowRunIDs {
-			wf, _, loadErr := WorkflowRun(log, client, owner, repo, runID, opts...)
+			wf, _, loadErr := WorkflowRun(parentCtx, log, client, owner, repo, runID, opts...)
 			if loadErr == nil && wf != nil {
 				commitData.WorkflowRuns = append(commitData.WorkflowRuns, wf)
 			}
@@ -218,7 +220,7 @@ func Commit(
 		if client == nil {
 			return nil, fmt.Errorf("github client is nil")
 		}
-		ctx, cancel := ghCtx()
+		ctx, cancel := ghCtx(parentCtx)
 		var resp *github.Response
 		commit, resp, err = client.Rest.Repositories.GetCommit(ctx, owner, repo, sha, nil)
 		cancel()
@@ -231,7 +233,7 @@ func Commit(
 	}
 
 	commitData.RepositoryCommit = commit
-	checkRuns, err := checkRunsForCommit(client, owner, repo, sha)
+	checkRuns, err := checkRunsForCommit(parentCtx, client, owner, repo, sha)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +251,7 @@ func Commit(
 			log.Info().
 				Str("parent_sha", parentSHA).
 				Msg("Checking parent commit for check runs")
-			parentCheckRuns, err := checkRunsForCommit(client, owner, repo, parentSHA)
+			parentCheckRuns, err := checkRunsForCommit(parentCtx, client, owner, repo, parentSHA)
 			if err != nil {
 				log.Warn().
 					Str("parent_sha", parentSHA).
@@ -268,7 +270,7 @@ func Commit(
 		}
 	}
 	commitData.CheckRuns = checkRuns
-	err = setWorkflowRunsForCommit(log, client, owner, repo, commitData.CheckRuns, commitData, opts)
+	err = setWorkflowRunsForCommit(parentCtx, log, client, owner, repo, commitData.CheckRuns, commitData, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather workflow runs for commit '%s': %w", sha, err)
 	}
@@ -293,6 +295,7 @@ func Commit(
 }
 
 func checkRunsForCommit(
+	parentCtx context.Context,
 	client *GitHubClient,
 	owner, repo string,
 	sha string,
@@ -310,7 +313,7 @@ func checkRunsForCommit(
 		}
 	)
 
-	ctx, cancel := ghCtx()
+	ctx, cancel := ghCtx(parentCtx)
 	defer cancel()
 
 	for checkRun, err := range client.Rest.Checks.ListCheckRunsForRefIter(ctx, owner, repo, sha, listOpts) {
@@ -326,6 +329,7 @@ func checkRunsForCommit(
 // setWorkflowRunsForCommit gathers all the workflow runs for a commit
 // and sets the workflow run IDs in the commit data.
 func setWorkflowRunsForCommit(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -335,8 +339,11 @@ func setWorkflowRunsForCommit(
 ) error {
 	var (
 		workflowRunIDsSet = map[int64]struct{}{}
-		eg                errgroup.Group
 	)
+
+	ghCtxInst, cancel := ghCtx(parentCtx)
+	defer cancel()
+	eg, egCtx := errgroup.WithContext(ghCtxInst)
 
 	for _, checkRun := range checkRuns {
 		if checkRun.GetStatus() != "completed" {
@@ -383,7 +390,7 @@ func setWorkflowRunsForCommit(
 	for index, workflowRunID := range workflowRunIDs {
 		eg.Go(func(index int, workflowRunID int64) func() error {
 			return func() error {
-				workflowRun, _, err := WorkflowRun(log, client, owner, repo, workflowRunID, commitOpts...)
+				workflowRun, _, err := WorkflowRun(egCtx, log, client, owner, repo, workflowRunID, commitOpts...)
 				if err != nil {
 					return fmt.Errorf("failed to gather workflow run data for commit %s: %w", commitData.GetSHA(), err)
 				}

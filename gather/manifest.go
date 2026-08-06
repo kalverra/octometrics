@@ -2,6 +2,7 @@ package gather
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -102,7 +103,7 @@ func LoadManifest(dataDir, owner, repo string) ([]ManifestRecord, error) {
 }
 
 // RebuildManifest walks dataDir and reconstructs manifest.jsonl files.
-func RebuildManifest(log zerolog.Logger, dataDir string) error {
+func RebuildManifest(ctx context.Context, log zerolog.Logger, dataDir string) error {
 	byRepo := make(map[string][]ManifestRecord)
 
 	err := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
@@ -125,7 +126,7 @@ func RebuildManifest(log zerolog.Logger, dataDir string) error {
 		case WorkflowRunsDataDir:
 			runID, pErr := strconv.ParseInt(name, 10, 64)
 			if pErr == nil {
-				wfData, _, loadErr := WorkflowRun(log, nil, owner, repo, runID, CustomDataFolder(dataDir))
+				wfData, _, loadErr := WorkflowRun(ctx, log, nil, owner, repo, runID, CustomDataFolder(dataDir))
 				if loadErr == nil && wfData != nil {
 					state := wfData.GetConclusion()
 					if state == "" {
@@ -156,7 +157,7 @@ func RebuildManifest(log zerolog.Logger, dataDir string) error {
 				}
 			}
 		case CommitsDataDir:
-			cData, cErr := Commit(log, nil, owner, repo, name, CustomDataFolder(dataDir))
+			cData, cErr := Commit(ctx, log, nil, owner, repo, name, CustomDataFolder(dataDir))
 			if cErr == nil && cData != nil {
 				byRepo[repoKey] = append(byRepo[repoKey], ManifestRecord{
 					Type:      "commit",
@@ -170,7 +171,7 @@ func RebuildManifest(log zerolog.Logger, dataDir string) error {
 		case PullRequestsDataDir:
 			prNum, pErr := strconv.Atoi(name)
 			if pErr == nil {
-				prData, prErr := PullRequest(log, nil, owner, repo, prNum, CustomDataFolder(dataDir))
+				prData, prErr := PullRequest(ctx, log, nil, owner, repo, prNum, CustomDataFolder(dataDir))
 				if prErr == nil && prData != nil {
 					byRepo[repoKey] = append(byRepo[repoKey], ManifestRecord{
 						Type:      "pull_request",

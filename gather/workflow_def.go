@@ -1,6 +1,7 @@
 package gather
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
@@ -115,11 +116,16 @@ func (d *WorkflowDef) GetJobIDByName(name string) (string, bool) {
 // workflowDefData fetches and parses the workflow YAML file at the run's HeadSHA.
 // Returns nil (no error) if the file is not found (404) — the flow chart is omitted gracefully.
 func workflowDefData(
+	parentCtx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
 	workflowRun *github.WorkflowRun,
 ) (*WorkflowDef, error) {
+	if client == nil || workflowRun == nil {
+		return nil, nil
+	}
+
 	workflowPath := workflowRun.GetPath()
 	if workflowPath == "" {
 		return nil, nil
@@ -130,7 +136,7 @@ func workflowDefData(
 		return nil, nil
 	}
 
-	ctx, cancel := ghCtx()
+	ctx, cancel := ghCtx(parentCtx)
 	defer cancel()
 
 	fileContent, _, resp, err := client.Rest.Repositories.GetContents(ctx, owner, repo, workflowPath,

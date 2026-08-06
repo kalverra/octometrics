@@ -83,11 +83,13 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 			err        error
 		)
 
+		ctx := cmd.Context()
 		spinnerErr := spinner.New().
 			Title("Building comparison").
 			Action(func() {
 				if len(workflowRuns) == 2 {
 					comparison, err = observe.CompareWorkflowRuns(
+						ctx,
 						logger, githubClient,
 						cfg.Owner, cfg.Repo,
 						workflowRuns[0], workflowRuns[1],
@@ -95,6 +97,7 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 					)
 				} else {
 					comparison, err = observe.CompareCommits(
+						ctx,
 						logger, githubClient,
 						cfg.Owner, cfg.Repo,
 						commits[0], commits[1],
@@ -120,7 +123,7 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 			return fmt.Errorf("failed to render comparison markdown: %w", err)
 		}
 
-		if err := observe.EnsureCompareObservationLinks(logger, githubClient, comparison, opts...); err != nil {
+		if err := observe.EnsureCompareObservationLinks(ctx, logger, githubClient, comparison, opts...); err != nil {
 			return fmt.Errorf("failed to render pages linked from comparison: %w", err)
 		}
 

@@ -54,6 +54,7 @@ func TestGatherCommit(t *testing.T) {
 	require.NoError(t, err, "error creating GitHub client")
 
 	commit, err := Commit(
+		t.Context(),
 		log,
 		client,
 		testGatherOwner,
@@ -198,6 +199,7 @@ func TestCommit_FallbackToParentForMergeCommit(t *testing.T) {
 	require.NoError(t, err)
 
 	commit, err := Commit(
+		t.Context(),
 		log,
 		client,
 		"o",
@@ -227,6 +229,7 @@ func TestCommit_WithRepositoryCommit(t *testing.T) {
 	}
 
 	commitData, err := Commit(
+		t.Context(),
 		log,
 		nil,
 		"owner",
@@ -287,7 +290,7 @@ func TestCommit_WorkflowRunsNotPersistedAndHydrated(t *testing.T) {
 	commitFile := filepath.Join(commitDir, "abc1234.json")
 	require.NoError(t, os.WriteFile(commitFile, data, 0600))
 
-	loaded, err := Commit(log, nil, "owner", "repo", "abc1234", CustomDataFolder(tempDir))
+	loaded, err := Commit(t.Context(), log, nil, "owner", "repo", "abc1234", CustomDataFolder(tempDir))
 	require.NoError(t, err)
 	require.NotNil(t, loaded)
 	require.Len(t, loaded.WorkflowRuns, 1, "WorkflowRuns should be hydrated from disk cache using WorkflowRunIDs")

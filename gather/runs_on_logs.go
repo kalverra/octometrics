@@ -1,6 +1,7 @@
 package gather
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net/http"
@@ -143,9 +144,8 @@ func parseUSDValue(s string) float64 {
 }
 
 // fetchJobLogs downloads the logs for a single workflow job.
-// Uses a tail-Range request (256 KiB) first, falling back to full download if needed.
-func fetchJobLogs(client *GitHubClient, owner, repo string, jobID int64) (string, error) {
-	ctx, cancel := ghCtx()
+func fetchJobLogs(parentCtx context.Context, client *GitHubClient, owner, repo string, jobID int64) (string, error) {
+	ctx, cancel := ghCtx(parentCtx)
 	defer cancel()
 
 	logURL, resp, err := client.Rest.Actions.GetWorkflowJobLogs(ctx, owner, repo, jobID, 5)
@@ -205,6 +205,7 @@ func fetchJobLogs(client *GitHubClient, owner, repo string, jobID int64) (string
 // fetchRunsOnCostFromLogs fetches job logs and parses the runs-on cost summary.
 // Checks disk cache at data/<owner>/<repo>/runs_on_costs/<jobID>.json first.
 func fetchRunsOnCostFromLogs(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *GitHubClient,
 	owner, repo string,
@@ -220,7 +221,7 @@ func fetchRunsOnCostFromLogs(
 		}
 	}
 
-	logs, err := fetchJobLogs(client, owner, repo, jobID)
+	logs, err := fetchJobLogs(ctx, client, owner, repo, jobID)
 	if err != nil {
 		log.Debug().Err(err).Int64("job_id", jobID).Msg("failed to fetch job logs for runs-on cost")
 		return 0, nil, err

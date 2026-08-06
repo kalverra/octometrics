@@ -2,6 +2,7 @@ package observe
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"fmt"
 	"html/template"
@@ -9,14 +10,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"charm.land/huh/v2/spinner"
@@ -404,7 +403,13 @@ func (o *Observation) renderToFormat(outputType string) (bytes.Buffer, error) {
 
 // Interactive generates downloaded data in HTML lazily on demand and serves it on a local server.
 // If initialPath is non-empty, the target entity is rendered before the browser opens.
-func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath, dataDir string, opts ...Option) error {
+func Interactive(
+	ctx context.Context,
+	log zerolog.Logger,
+	client *gather.GitHubClient,
+	initialPath, dataDir string,
+	opts ...Option,
+) error {
 	startTime := time.Now()
 	observeOpts := defaultOptions()
 	for _, opt := range opts {
@@ -419,7 +424,7 @@ func Interactive(log zerolog.Logger, client *gather.GitHubClient, initialPath, d
 	handler := NewOnDemandHandler(log, client, dataDir, activeHTMLOutputDir, opts...)
 
 	if initialPath != "" {
-		req := httptest.NewRequest("GET", initialPath, nil)
+		req := httptest.NewRequest("GET", initialPath, nil).WithContext(ctx)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 	}
@@ -449,27 +454,19 @@ func ServeHTMLWithHandler(log zerolog.Logger, initialPath string, handler http.H
 		baseURL    = "http://localhost:8080"
 		browserURL = baseURL + initialPath
 	)
-	http.Handle("/", handler)
 
+	// Wait a moment for server to start before opening browser
 	go func() {
-		interruptChan := make(chan os.Signal, 1)
-		signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
-		defer signal.Stop(interruptChan)
-
-		err := openBrowser(browserURL)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to open browser")
-		}
-
-		<-interruptChan
-		log.Info().Msg("Shutting down server")
-		os.Exit(0)
+		time.Sleep(100 * time.Millisecond)
+		_ = openBrowser(log, browserURL)
 	}()
+
+	http.Handle("/", handler)
 	//nolint:gosec // I don't care
 	return http.ListenAndServe(":8080", nil)
 }
 
-func openBrowser(url string) error {
+func openBrowser(log zerolog.Logger, url string) error {
 	var cmd string
 	var args []string
 
@@ -489,11 +486,22 @@ func openBrowser(url string) error {
 
 	args = append(args, url)
 	//nolint:gosec // I don't care
-	return exec.Command(cmd, args...).Run()
+	if err := exec.Command(cmd, args...).Run(); err != nil {
+		log.Error().Err(err).Msg("Failed to open browser")
+		return err
+	}
+	return nil
 }
 
 // All generates observations for all gathered data in the specified output formats.
-func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string, dataDir string, opts ...Option) error {
+func All(
+	ctx context.Context,
+	log zerolog.Logger,
+	client *gather.GitHubClient,
+	outputTypes []string,
+	dataDir string,
+	opts ...Option,
+) error {
 	var (
 		startTime = time.Now()
 		err       error
@@ -501,7 +509,7 @@ func All(log zerolog.Logger, client *gather.GitHubClient, outputTypes []string, 
 	spinnerErr := spinner.New().
 		Title("Building observations").
 		Action(func() {
-			err = generateAllObserveData(log, client, outputTypes, dataDir, opts...)
+			err = generateAllObserveData(ctx, log, client, outputTypes, dataDir, opts...)
 		}).
 		Run()
 	if err != nil {
@@ -520,6 +528,7 @@ type categoryKey struct {
 }
 
 func generateAllObserveData(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	outputTypes []string,
@@ -583,7 +592,16 @@ func generateAllObserveData(
 
 		loadStart := time.Now()
 		var observations []*Observation
-		observations, err = loadObservationsFromJSON(log, client, owner, repo, dataCat, dataName, observeOpts, opts...)
+		observations, err = loadObservationsFromJSON(
+			ctx,
+			log,
+			client,
+			owner,
+			repo,
+			dataCat,
+			dataName,
+			observeOpts,
+			opts...)
 		jsonLoadDur += time.Since(loadStart)
 
 		if err != nil {
@@ -592,7 +610,7 @@ func generateAllObserveData(
 
 		repoKey := owner + "/" + repo
 		if _, ok := bpCache[repoKey]; !ok {
-			bp, bpErr := gather.BranchProtection(log, client, owner, repo)
+			bp, bpErr := gather.BranchProtection(ctx, log, client, owner, repo)
 			if bpErr != nil {
 				log.Warn().Err(bpErr).
 					Str("owner", owner).Str("repo", repo).
@@ -807,6 +825,7 @@ func isRequiredCheck(itemName string, requiredChecks []string) bool {
 }
 
 func loadObservationsFromJSON(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo, dataCat, dataName string,
@@ -820,7 +839,7 @@ func loadObservationsFromJSON(
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse workflow run ID: %w", err)
 		}
-		wfData, _, err := gather.WorkflowRun(log, client, owner, repo, workflowRunID, observeOpts.gatherOptions...)
+		wfData, _, err := gather.WorkflowRun(ctx, log, client, owner, repo, workflowRunID, observeOpts.gatherOptions...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load workflow run data: %w", err)
 		}
@@ -846,13 +865,13 @@ func loadObservationsFromJSON(
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse pull request number: %w", err)
 		}
-		observation, err := PullRequest(log, client, owner, repo, int(pullRequestNumber), opts...)
+		observation, err := PullRequest(ctx, log, client, owner, repo, int(pullRequestNumber), opts...)
 		if err != nil {
 			return nil, err
 		}
 		observations = append(observations, observation)
 	case gather.CommitsDataDir:
-		observation, err := Commit(log, client, owner, repo, dataName, opts...)
+		observation, err := Commit(ctx, log, client, owner, repo, dataName, opts...)
 		if err != nil {
 			return nil, err
 		}

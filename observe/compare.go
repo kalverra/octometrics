@@ -2,6 +2,7 @@ package observe
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -133,17 +134,18 @@ type ComparisonSummary struct {
 
 // CompareWorkflowRuns builds a comparison between two workflow runs.
 func CompareWorkflowRuns(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
 	leftID, rightID int64,
 	opts ...Option,
 ) (*Comparison, error) {
-	left, err := WorkflowRun(log, client, owner, repo, leftID, opts...)
+	left, err := WorkflowRun(ctx, log, client, owner, repo, leftID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build left observation (run %d): %w", leftID, err)
 	}
-	right, err := WorkflowRun(log, client, owner, repo, rightID, opts...)
+	right, err := WorkflowRun(ctx, log, client, owner, repo, rightID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build right observation (run %d): %w", rightID, err)
 	}
@@ -152,17 +154,18 @@ func CompareWorkflowRuns(
 
 // CompareCommits builds a comparison between two commits.
 func CompareCommits(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
 	leftSHA, rightSHA string,
 	opts ...Option,
 ) (*Comparison, error) {
-	left, err := Commit(log, client, owner, repo, leftSHA, opts...)
+	left, err := Commit(ctx, log, client, owner, repo, leftSHA, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build left observation (commit %s): %w", leftSHA, err)
 	}
-	right, err := Commit(log, client, owner, repo, rightSHA, opts...)
+	right, err := Commit(ctx, log, client, owner, repo, rightSHA, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build right observation (commit %s): %w", rightSHA, err)
 	}
@@ -171,6 +174,7 @@ func CompareCommits(
 
 // CompareJobRuns builds a comparison between two job runs.
 func CompareJobRuns(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -178,7 +182,7 @@ func CompareJobRuns(
 	leftJobID, rightJobID int64,
 	opts ...Option,
 ) (*Comparison, error) {
-	leftJobs, err := JobRuns(log, client, owner, repo, leftWfID, opts...)
+	leftJobs, err := JobRuns(ctx, log, client, owner, repo, leftWfID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather jobs for left workflow %d: %w", leftWfID, err)
 	}
@@ -193,7 +197,7 @@ func CompareJobRuns(
 		return nil, fmt.Errorf("job %d not found in workflow %d", leftJobID, leftWfID)
 	}
 
-	rightJobs, err := JobRuns(log, client, owner, repo, rightWfID, opts...)
+	rightJobs, err := JobRuns(ctx, log, client, owner, repo, rightWfID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to gather jobs for right workflow %d: %w", rightWfID, err)
 	}
@@ -674,15 +678,17 @@ func collectWorkflowRunIDsFromObservation(obs *Observation) []int64 {
 // It also recursively generates nested comparison pages for matched items (e.g. comparing
 // matched workflow runs within a commit comparison).
 func EnsureCompareObservationLinks(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	c *Comparison,
 	opts ...Option,
 ) error {
-	return ensureCompareObservationLinks(log, client, c, make(map[string]struct{}), opts...)
+	return ensureCompareObservationLinks(ctx, log, client, c, make(map[string]struct{}), opts...)
 }
 
 func ensureCompareObservationLinks(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	c *Comparison,
@@ -714,7 +720,7 @@ func ensureCompareObservationLinks(
 				continue
 			}
 			seen[key] = struct{}{}
-			if err := renderWorkflowRunAndJobs(log, client, obs.Owner, obs.Repo, wfID, opts...); err != nil {
+			if err := renderWorkflowRunAndJobs(ctx, log, client, obs.Owner, obs.Repo, wfID, opts...); err != nil {
 				return fmt.Errorf("workflow run %d: %w", wfID, err)
 			}
 		}
@@ -731,7 +737,7 @@ func ensureCompareObservationLinks(
 				leftWfID, errL := strconv.ParseInt(item.LeftID, 10, 64)
 				rightWfID, errR := strconv.ParseInt(item.RightID, 10, 64)
 				if errL == nil && errR == nil {
-					childC, err = CompareWorkflowRuns(log, client, c.Owner, c.Repo, leftWfID, rightWfID, opts...)
+					childC, err = CompareWorkflowRuns(ctx, log, client, c.Owner, c.Repo, leftWfID, rightWfID, opts...)
 				}
 			case "workflow_run":
 				leftWfID, errLW := strconv.ParseInt(c.Left.ID, 10, 64)
@@ -740,6 +746,7 @@ func ensureCompareObservationLinks(
 				rightJobID, errRJ := strconv.ParseInt(item.RightID, 10, 64)
 				if errLW == nil && errRW == nil && errLJ == nil && errRJ == nil {
 					childC, err = CompareJobRuns(
+						ctx,
 						log,
 						client,
 						c.Owner,
@@ -764,7 +771,7 @@ func ensureCompareObservationLinks(
 					if _, err := childC.Render(log, "html"); err != nil {
 						return fmt.Errorf("failed to render nested comparison for %s: %w", item.Name, err)
 					}
-					if err := ensureCompareObservationLinks(log, client, childC, seen, opts...); err != nil {
+					if err := ensureCompareObservationLinks(ctx, log, client, childC, seen, opts...); err != nil {
 						return err
 					}
 				}
@@ -776,20 +783,21 @@ func ensureCompareObservationLinks(
 }
 
 func renderWorkflowRunAndJobs(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
 	workflowRunID int64,
 	opts ...Option,
 ) error {
-	wfObs, err := WorkflowRun(log, client, owner, repo, workflowRunID, opts...)
+	wfObs, err := WorkflowRun(ctx, log, client, owner, repo, workflowRunID, opts...)
 	if err != nil {
 		return err
 	}
 	if _, err := wfObs.Render(log, "html"); err != nil {
 		return err
 	}
-	jobs, err := JobRuns(log, client, owner, repo, workflowRunID, opts...)
+	jobs, err := JobRuns(ctx, log, client, owner, repo, workflowRunID, opts...)
 	if err != nil {
 		return err
 	}

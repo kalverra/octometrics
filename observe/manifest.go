@@ -1,6 +1,8 @@
 package observe
 
 import (
+	"context"
+
 	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/gather"
@@ -20,6 +22,6 @@ func LoadManifest(dataDir, owner, repo string) ([]ManifestRecord, error) {
 }
 
 // RebuildManifest delegates to gather.RebuildManifest.
-func RebuildManifest(log zerolog.Logger, dataDir string) error {
-	return gather.RebuildManifest(log, dataDir)
+func RebuildManifest(ctx context.Context, log zerolog.Logger, dataDir string) error {
+	return gather.RebuildManifest(ctx, log, dataDir)
 }

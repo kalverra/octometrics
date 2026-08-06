@@ -1,6 +1,7 @@
 package observe
 
 import (
+	"context"
 	"fmt"
 	"path"
 
@@ -11,6 +12,7 @@ import (
 
 // PullRequest creates an Observation for a given pull request number.
 func PullRequest(
+	ctx context.Context,
 	log zerolog.Logger,
 	client *gather.GitHubClient,
 	owner, repo string,
@@ -22,7 +24,7 @@ func PullRequest(
 		opt(options)
 	}
 
-	prData, err := gather.PullRequest(log, client, owner, repo, pullRequestNumber, options.gatherOptions...)
+	prData, err := gather.PullRequest(ctx, log, client, owner, repo, pullRequestNumber, options.gatherOptions...)
 	if err != nil {
 		return nil, err
 	}
