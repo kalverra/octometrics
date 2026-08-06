@@ -9,7 +9,6 @@ Octometrics is a Go CLI that profiles GitHub Actions workflows. It fetches workf
 - `monitor` — run inside a GitHub Action job to sample CPU, memory, disk, and network IO.
 - `report` — run as a GitHub Action post-step to summarize monitoring data in the job summary and as a PR comment.
 
-
 ## Data Flow
 
 ```mermaid
