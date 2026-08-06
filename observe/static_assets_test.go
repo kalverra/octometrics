@@ -11,9 +11,8 @@ import (
 	"github.com/kalverra/octometrics/internal/testhelpers"
 )
 
+//nolint:paralleltest
 func TestExternalStaticAssets(t *testing.T) {
-	t.Parallel()
-
 	log, tempDir := testhelpers.Setup(t)
 
 	obs := &Observation{

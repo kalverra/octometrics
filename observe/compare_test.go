@@ -172,9 +172,8 @@ func TestFormatCostDelta(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest
 func TestCompareHTMLVisualFixes(t *testing.T) {
-	t.Parallel()
-
 	log, tempDir := testhelpers.Setup(t)
 
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)

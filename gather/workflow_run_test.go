@@ -733,10 +733,10 @@ func TestBuildJobBillingIndex_KnownRunners(t *testing.T) {
 	runner, cost, err = calculateJobRunBilling(2, index)
 	require.NoError(t, err)
 	require.Equal(t, "MACOS", runner)
-	require.Greater(t, cost, int64(0), "macOS job should have a non-zero cost")
+	require.Positive(t, cost, "macOS job should have a non-zero cost")
 
 	runner, cost, err = calculateJobRunBilling(3, index)
 	require.NoError(t, err)
 	require.Equal(t, "WINDOWS", runner)
-	require.Greater(t, cost, int64(0), "Windows job should have a non-zero cost")
+	require.Positive(t, cost, "Windows job should have a non-zero cost")
 }

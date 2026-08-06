@@ -17,7 +17,8 @@ func TestLoadManifest_DedupesByTypeAndID(t *testing.T) {
 	p := ManifestPath(dir, owner, repo)
 	require.NoError(t, os.MkdirAll(filepath.Dir(p), 0750))
 
-	f, err := os.Create(p)
+	//nolint:gosec
+	f, err := os.Create(filepath.Clean(p))
 	require.NoError(t, err)
 	_, err = fmt.Fprintf(
 		f,

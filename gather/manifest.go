@@ -79,6 +79,7 @@ func LoadManifest(dataDir, owner, repo string) ([]ManifestRecord, error) {
 	defer func() { _ = f.Close() }()
 
 	var records []ManifestRecord
+	indexMap := make(map[string]int)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -87,7 +88,13 @@ func LoadManifest(dataDir, owner, repo string) ([]ManifestRecord, error) {
 		}
 		var rec ManifestRecord
 		if err := json.Unmarshal(line, &rec); err == nil {
-			records = append(records, rec)
+			key := rec.Type + ":" + rec.ID
+			if idx, ok := indexMap[key]; ok {
+				records[idx] = rec
+			} else {
+				indexMap[key] = len(records)
+				records = append(records, rec)
+			}
 		}
 	}
 

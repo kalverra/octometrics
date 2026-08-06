@@ -28,9 +28,8 @@ func TestExportStaticAssetWritten(t *testing.T) {
 	assert.Contains(t, string(exportJsContent), "Export to PNG")
 }
 
+//nolint:paralleltest
 func TestObservationHTMLIncludesExportScript(t *testing.T) {
-	t.Parallel()
-
 	log, tempDir := testhelpers.Setup(t)
 
 	obs := &Observation{
@@ -60,8 +59,8 @@ func TestObservationHTMLIncludesExportScript(t *testing.T) {
 	assert.Contains(t, htmlStr, `class="section event-section"`)
 }
 
+//nolint:paralleltest
 func TestCompareHTMLIncludesExportScript(t *testing.T) {
-	t.Parallel()
 
 	log, tempDir := testhelpers.Setup(t)
 
