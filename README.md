@@ -22,20 +22,20 @@ export GITHUB_TOKEN=$(gh auth token)
 # Show help menu
 octometrics -h
 
-# To see all workflows run on all commits a part of this PR (including merge queue runs): https://github.com/kalverra/octometrics/pull/33
-octometrics -o kalverra -r octometrics -p 33
+# To see all workflows run on all commits a part of this PR (including merge queue runs): https://github.com/kalverra/octometrics/pull/55
+octometrics -o kalverra -r octometrics -p 55
 
-# To see all workflows run on a specific commit: https://github.com/kalverra/octometrics/pull/33/changes/94ad3f7e2f45852a99791326847ea12c94b964dc
-octometrics -o kalverra -r octometrics -c 94ad3f7e2f45852a99791326847ea12c94b964dc
+# To see all workflows run on a specific commit: https://github.com/kalverra/octometrics/pull/33/changes/7751768667a19f0a21e7ff1199240a70db9ca31d
+octometrics -o kalverra -r octometrics -c 7751768667a19f0a21e7ff1199240a70db9ca31d
 
 # To see a specific workflow run: https://github.com/kalverra/octometrics/actions/runs/22918636165
-octometrics -o kalverra -r octometrics -w 22918636165
+octometrics -o kalverra -r octometrics -w 31115256027
 
 # Use '-u' to force update local data if it already exists
-octometrics -o kalverra -r octometrics -p 33 -u
+octometrics -o kalverra -r octometrics -p 55 -u
 
 # Compare two like-types in a handy view
-octometrics compare -o kalverra -r octometrics --commits 51f80a592a2776c509e7a3c00951a241461ae4a6,169427803c7fa43a4b9403137a9834b9e7102825
+octometrics compare -o kalverra -r octometrics --commits 7751768667a19f0a21e7ff1199240a70db9ca31d,169427803c7fa43a4b9403137a9834b9e7102825
 ```
 
 ## GitHub Action
