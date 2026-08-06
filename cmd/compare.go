@@ -113,6 +113,20 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 			return spinnerErr
 		}
 
+		format, toStdout, err := determineFormat(cmd)
+		if err != nil {
+			return err
+		}
+
+		if toStdout || format == "md" {
+			outStr, err := comparison.RenderString(logger, format)
+			if err != nil {
+				return fmt.Errorf("failed to render comparison: %w", err)
+			}
+			fmt.Print(outStr)
+			return nil
+		}
+
 		pagePath, err := comparison.Render(logger, "html")
 		if err != nil {
 			return fmt.Errorf("failed to render comparison: %w", err)
@@ -140,6 +154,8 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 }
 
 func init() {
+	compareCmd.Flags().String("format", "html", "Output format: html or md")
+	compareCmd.Flags().Bool("stdout", false, "Output raw result to stdout without starting web server")
 	compareCmd.Flags().StringP("owner", "o", "", "Repository owner")
 	compareCmd.Flags().StringP("repo", "r", "", "Repository name")
 	compareCmd.Flags().StringP("github-token", "t", "", "GitHub API token (env: GITHUB_TOKEN)")

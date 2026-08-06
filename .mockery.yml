@@ -25,6 +25,4 @@ packages:
   github.com/kalverra/octometrics/gather:
     config:
       all: true
-  github.com/kalverra/octometrics/mcp:
-    config:
-      all: true
+

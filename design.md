@@ -4,12 +4,11 @@ Octometrics is a Go CLI that profiles GitHub Actions workflows. It fetches workf
 
 ## Commands
 
-- `gather` — fetch workflow runs, commits, pull requests, and cost data.
-- `observe` — lazily serve cached data as HTML on `http://localhost:8080`.
+- `octometrics` (root) — fetch and observe workflow runs, commits, pull requests, and cost data.
 - `compare` — diff two runs or two commits side-by-side.
 - `monitor` — run inside a GitHub Action job to sample CPU, memory, disk, and network IO.
 - `report` — run as a GitHub Action post-step to summarize monitoring data in the job summary and as a PR comment.
-- `mcp` — start an stdio MCP server for AI agents.
+
 
 ## Data Flow
 

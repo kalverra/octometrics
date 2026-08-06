@@ -842,3 +842,17 @@ func (c *Comparison) Render(log zerolog.Logger, outputType string) (string, erro
 	}
 	return targetFile, nil
 }
+
+// RenderString renders the comparison to a string in the given format ("html" or "md").
+func (c *Comparison) RenderString(_ zerolog.Logger, outputType string) (string, error) {
+	if len(c.EventPairs) == 0 {
+		c.EventPairs = buildEventPairs(c.Left.TimelineData, c.Right.TimelineData, c.Owner, c.Repo, c.CompareType)
+	}
+
+	tmpl, _, compareName := templateForFormat(outputType)
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, compareName, c); err != nil {
+		return "", fmt.Errorf("failed to render comparison %s: %w", outputType, err)
+	}
+	return buf.String(), nil
+}

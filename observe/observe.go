@@ -392,6 +392,21 @@ func (o *Observation) Render(
 	return observationFile, nil
 }
 
+// RenderString renders the observation to a string in the specified format ("html" or "md").
+func (o *Observation) RenderString(
+	_ zerolog.Logger,
+	outputType string,
+) (string, error) {
+	sort.Slice(o.TimelineData, func(i, j int) bool {
+		return o.TimelineData[i].StartTime.Before(o.TimelineData[j].StartTime)
+	})
+	buf, err := o.renderToFormat(outputType)
+	if err != nil {
+		return "", fmt.Errorf("failed to render observation to %s: %w", outputType, err)
+	}
+	return buf.String(), nil
+}
+
 func (o *Observation) renderToFormat(outputType string) (bytes.Buffer, error) {
 	tmpl, name, _ := templateForFormat(outputType)
 	var buf bytes.Buffer
