@@ -5,7 +5,7 @@ goreleaser = "2.17.1"
 lefthook = "2.1.10"
 actionlint = "1.7.12"
 betterleaks = "1.7.3"
-typos = "1.48.0"
+typos = "1.49.0"
 
 [tasks.goreleaser]
 run = "goreleaser release --clean --snapshot"
@@ -31,3 +31,7 @@ run = "go generate ./..."
 [tasks.hooks]
 description = "Install lefthook git hooks"
 run = "lefthook install"
+
+[tasks.install]
+description = "Install latest build to path"
+run = "go install ./..."
