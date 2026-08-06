@@ -30,7 +30,7 @@ type CommitData struct {
 	CheckRuns          []*github.CheckRun `json:"-"`
 	MergeQueueEvents   []*MergeQueueEvent `json:"merge_queue_events"`
 	WorkflowRunIDs     []int64            `json:"workflow_run_ids"`
-	WorkflowRuns       []*WorkflowRunData `json:"workflow_runs,omitempty"`
+	WorkflowRuns       []*WorkflowRunData `json:"-"`
 	StartActionsTime   time.Time          `json:"start_actions_time"`
 	EndActionsTime     time.Time          `json:"end_actions_time"`
 	Conclusion         string             `json:"conclusion"`
@@ -194,6 +194,12 @@ func Commit(
 		commitData, err := readJSONFile[*CommitData](targetFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open commit file: %w", err)
+		}
+		for _, runID := range commitData.WorkflowRunIDs {
+			wf, _, loadErr := WorkflowRun(log, client, owner, repo, runID, opts...)
+			if loadErr == nil && wf != nil {
+				commitData.WorkflowRuns = append(commitData.WorkflowRuns, wf)
+			}
 		}
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).

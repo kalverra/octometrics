@@ -740,3 +740,50 @@ func TestBuildJobBillingIndex_KnownRunners(t *testing.T) {
 	require.Equal(t, "WINDOWS", runner)
 	require.Positive(t, cost, "Windows job should have a non-zero cost")
 }
+
+func TestWorkflowRun_CacheKeyOptionAware(t *testing.T) {
+	t.Parallel()
+
+	mockedHTTPClient := mock.NewMockedHTTPClient(
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsRunsByOwnerByRepoByRunId,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id": 88888, "status": "completed", "conclusion": "success"}`))
+			}),
+		),
+		mock.WithRequestMatchPages(
+			mock.GetReposActionsRunsJobsByOwnerByRepoByRunId,
+			&github.Jobs{TotalCount: new(0), Jobs: []*github.WorkflowJob{}},
+		),
+		mock.WithRequestMatch(
+			mock.GetReposActionsRunsTimingByOwnerByRepoByRunId,
+			&github.WorkflowRunUsage{Billable: &github.WorkflowRunBillMap{}},
+		),
+		mock.WithRequestMatchPages(
+			mock.GetReposActionsRunsArtifactsByOwnerByRepoByRunId,
+			&github.ArtifactList{TotalCount: new(int64(0)), Artifacts: []*github.Artifact{}},
+		),
+	)
+
+	log, tempDir := testhelpers.Setup(t)
+	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
+	require.NoError(t, err)
+
+	wfWithoutCost, _, err := WorkflowRun(
+		log,
+		client,
+		"owner",
+		"repo",
+		88888,
+		CustomDataFolder(tempDir),
+		WithoutCost(),
+		ForceUpdate(),
+	)
+	require.NoError(t, err)
+	assert.False(t, wfWithoutCost.CostGathered)
+
+	wfWithCost, _, err := WorkflowRun(log, client, "owner", "repo", 88888, CustomDataFolder(tempDir))
+	require.NoError(t, err)
+	assert.True(t, wfWithCost.CostGathered)
+}

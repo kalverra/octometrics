@@ -251,7 +251,7 @@ func WorkflowRun(
 	log = log.With().Str("target_file", targetFile).Int64("workflow_run_id", workflowRunID).Logger()
 	startTime := time.Now()
 
-	cacheKey := targetFile
+	cacheKey := fmt.Sprintf("%s:cost=%t", targetFile, opts.gatherCost)
 
 	if !opts.ForceUpdate && !opts.SkipMemoryCache {
 		if cached, ok := workflowRunCache.Load(cacheKey); ok {
@@ -271,12 +271,14 @@ func WorkflowRun(
 				}
 			}
 			if data, loadErr := loadWorkflowRunFromDisk(targetFile); loadErr == nil {
-				workflowRunCache.Store(cacheKey, data)
-				log.Debug().
-					Str("duration", time.Since(startTime).String()).
-					Str("source", "local file").
-					Msg("Gathered workflow run data")
-				return data, nil
+				if !opts.gatherCost || data.CostGathered || client == nil {
+					workflowRunCache.Store(cacheKey, data)
+					log.Debug().
+						Str("duration", time.Since(startTime).String()).
+						Str("source", "local file").
+						Msg("Gathered workflow run data")
+					return data, nil
+				}
 			}
 		}
 
@@ -492,6 +494,9 @@ func processJobs(
 	dataDir string,
 ) {
 	completed := data.GetStatus() == "completed"
+	if gatherCost && completed {
+		data.CostGathered = true
+	}
 	billingIndex := buildJobBillingIndex(billingData)
 
 	logResults := sync.Map{}
