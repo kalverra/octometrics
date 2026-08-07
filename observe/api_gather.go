@@ -53,7 +53,7 @@ func (h *OnDemandHandler) serveGatherAPI(w http.ResponseWriter, r *http.Request)
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": fmt.Sprintf("/%s/%s/workflow_runs/%d.html", owner, repo, id)})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": fmt.Sprintf("/%s/%s/workflow_runs/%d.html", owner, repo, id)})
 
 	case "pull":
 		numStr := r.URL.Query().Get("number")
@@ -67,7 +67,7 @@ func (h *OnDemandHandler) serveGatherAPI(w http.ResponseWriter, r *http.Request)
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": fmt.Sprintf("/%s/%s/pull_requests/%d.html", owner, repo, num)})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": fmt.Sprintf("/%s/%s/pull_requests/%d.html", owner, repo, num)})
 
 	case "commit":
 		sha := r.URL.Query().Get("sha")
@@ -80,7 +80,7 @@ func (h *OnDemandHandler) serveGatherAPI(w http.ResponseWriter, r *http.Request)
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": fmt.Sprintf("/%s/%s/commits/%s.html", owner, repo, sha)})
+		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "url": fmt.Sprintf("/%s/%s/commits/%s.html", owner, repo, sha)})
 
 	default:
 		http.NotFound(w, r)

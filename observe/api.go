@@ -33,35 +33,50 @@ func (h *OnDemandHandler) serveAPI(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "workflows":
-		runs, _, err := h.client.Rest.Actions.ListRepositoryWorkflowRuns(ctx, owner, repo, &github.ListWorkflowRunsOptions{
-			ListOptions: github.ListOptions{PerPage: 15},
-		})
+		runs, _, err := h.client.Rest.Actions.ListRepositoryWorkflowRuns(
+			ctx,
+			owner,
+			repo,
+			&github.ListWorkflowRunsOptions{
+				ListOptions: github.ListOptions{PerPage: 15},
+			},
+		)
 		if err != nil {
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(runs.WorkflowRuns)
+		_ = json.NewEncoder(w).Encode(runs.WorkflowRuns)
 	case "pulls":
-		pulls, _, err := h.client.Rest.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{
-			State:       "all",
-			Sort:        "updated",
-			Direction:   "desc",
-			ListOptions: github.ListOptions{PerPage: 15},
-		})
+		pulls, _, err := h.client.Rest.PullRequests.List(
+			ctx,
+			owner,
+			repo,
+			&github.PullRequestListOptions{
+				State:       "all",
+				Sort:        "updated",
+				Direction:   "desc",
+				ListOptions: github.ListOptions{PerPage: 15},
+			},
+		)
 		if err != nil {
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(pulls)
+		_ = json.NewEncoder(w).Encode(pulls)
 	case "commits":
-		commits, _, err := h.client.Rest.Repositories.ListCommits(ctx, owner, repo, &github.CommitsListOptions{
-			ListOptions: github.ListOptions{PerPage: 15},
-		})
+		commits, _, err := h.client.Rest.Repositories.ListCommits(
+			ctx,
+			owner,
+			repo,
+			&github.CommitsListOptions{
+				ListOptions: github.ListOptions{PerPage: 15},
+			},
+		)
 		if err != nil {
 			http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(commits)
+		_ = json.NewEncoder(w).Encode(commits)
 	default:
 		http.NotFound(w, r)
 	}
