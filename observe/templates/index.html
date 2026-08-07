@@ -9,6 +9,82 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ .Title }} | Octometrics</title>
     <link rel="stylesheet" href="/styles.css">
+    <style>
+        .search-container {
+            margin-bottom: 1.5rem;
+        }
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            border: 1px solid var(--color-surface-border);
+            border-radius: var(--radius);
+            background: var(--color-surface);
+            color: var(--color-text);
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: var(--color-link);
+            box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.3);
+        }
+        .api-results {
+            margin-top: 1.5rem;
+            border-top: 1px solid var(--color-surface-border);
+            padding-top: 1.5rem;
+        }
+        .api-results h3 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+        }
+        .download-btn {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-surface-border);
+            border-radius: var(--radius);
+            color: var(--color-text);
+            cursor: pointer;
+            margin-left: 1rem;
+        }
+        .download-btn:hover {
+            background: var(--color-badge-bg);
+        }
+        .download-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .remote-data-section {
+            margin-bottom: 2rem;
+            background: var(--color-surface);
+            border: 1px solid var(--color-surface-border);
+            border-radius: var(--radius-lg);
+            padding: 1.25rem;
+        }
+        .remote-data-section h3 {
+            margin-top: 0;
+        }
+        .loader {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0,0,0,0.1);
+            border-radius: 50%;
+            border-top-color: var(--color-link);
+            animation: spin 1s ease-in-out infinite;
+            vertical-align: middle;
+            margin-left: 0.5rem;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .remote-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--color-surface-border);
+            border-radius: var(--radius);
+            background: var(--color-bg);
+        }
+    </style>
 </head>
 
 <body>
@@ -21,41 +97,211 @@
             <h1>{{ .Title }}</h1>
         </header>
 
-        {{ if .Dirs }}
-        <ul class="index-list">
-            {{ range .Dirs }}
-            <li class="index-item">
-                <a href="{{ .Path }}" class="index-item-link">
-                    <span class="index-item-name">{{ .Name }}</span>
-                    {{ if .Count }}<span class="badge">{{ .Count }}</span>{{ end }}
-                </a>
-            </li>
-            {{ end }}
-        </ul>
+        <div class="search-container">
+            <input type="text" id="searchInput" class="search-input" placeholder="Search...">
+        </div>
+
+        {{ if eq (len .Breadcrumbs) 1 }}
+        <div class="remote-data-section" id="repoSearchSection">
+            <h3>Search repositories to monitor</h3>
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                <input type="text" id="ownerInput" class="search-input" placeholder="Owner (e.g. kalverra)" style="flex: 1;">
+                <input type="text" id="repoInput" class="search-input" placeholder="Repo (e.g. octometrics)" style="flex: 1;">
+                <button class="download-btn" onclick="goToRepo()">View Repo</button>
+            </div>
+            <script>
+                function goToRepo() {
+                    const owner = document.getElementById('ownerInput').value.trim();
+                    const repo = document.getElementById('repoInput').value.trim();
+                    if (owner && repo) {
+                        window.location.href = `/${owner}/${repo}/`;
+                    }
+                }
+            </script>
+        </div>
         {{ end }}
 
-        {{ if .Items }}
-        <ul class="index-list">
-            {{ range .Items }}
-            <li class="index-item">
-                <a href="{{ .Path }}" class="index-item-link">
-                    <span class="index-item-name">{{ .Name }}</span>
-                    {{ if .State }}
-                    <span class="badge badge-{{ .State }}">{{ .State }}</span>
-                    {{ end }}
-                    {{ if .Actor }}
-                    <span class="index-item-meta">{{ .Actor }}</span>
-                    {{ end }}
-                </a>
-            </li>
-            {{ end }}
-        </ul>
+        {{ if eq (len .Breadcrumbs) 2 }}
+        <div class="remote-data-section" id="remoteDataSection">
+            <h3>Explore GitHub Data <button class="download-btn" onclick="loadRemoteData()">Load Data</button><span id="remoteLoader" style="display:none;" class="loader"></span></h3>
+            <div id="remoteContent" style="display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div>
+                        <h4>Recent Pull Requests</h4>
+                        <div class="remote-list" id="remotePullsList"></div>
+                    </div>
+                    <div>
+                        <h4>Recent Workflow Runs</h4>
+                        <div class="remote-list" id="remoteRunsList"></div>
+                    </div>
+                </div>
+            </div>
+            <script>
+                const pathParts = window.location.pathname.split('/').filter(Boolean);
+                const owner = pathParts[0];
+                const repo = pathParts[1];
+
+                async function loadRemoteData() {
+                    document.getElementById('remoteLoader').style.display = 'inline-block';
+                    document.getElementById('remoteContent').style.display = 'block';
+
+                    try {
+                        const [pullsRes, runsRes] = await Promise.all([
+                            fetch(`/api/github/${owner}/${repo}/pulls`),
+                            fetch(`/api/github/${owner}/${repo}/workflows`)
+                        ]);
+
+                        if (pullsRes.ok) {
+                            const pulls = await pullsRes.json();
+                            renderPulls(pulls);
+                        } else {
+                            document.getElementById('remotePullsList').innerHTML = '<div style="padding: 1rem;">Error loading pull requests. Make sure you have a valid GITHUB_TOKEN.</div>';
+                        }
+
+                        if (runsRes.ok) {
+                            const runs = await runsRes.json();
+                            renderRuns(runs);
+                        } else {
+                            document.getElementById('remoteRunsList').innerHTML = '<div style="padding: 1rem;">Error loading workflow runs. Make sure you have a valid GITHUB_TOKEN.</div>';
+                        }
+                    } catch (e) {
+                        console.error('Failed to load remote data', e);
+                    } finally {
+                        document.getElementById('remoteLoader').style.display = 'none';
+                    }
+                }
+
+                function renderPulls(pulls) {
+                    const container = document.getElementById('remotePullsList');
+                    if (!pulls || pulls.length === 0) {
+                        container.innerHTML = '<div style="padding: 1rem;">No pull requests found.</div>';
+                        return;
+                    }
+
+                    container.innerHTML = pulls.map(pr => `
+                        <div class="index-item" style="padding: 0.75rem 1rem; display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <div style="font-weight: 500;">#${pr.number} ${pr.title}</div>
+                                <div style="font-size: 0.8rem; color: var(--color-text-secondary);">by ${pr.user?.login}</div>
+                            </div>
+                            <button class="download-btn" onclick="gatherPull(this, ${pr.number})">Gather Data</button>
+                        </div>
+                    `).join('');
+                }
+
+                function renderRuns(runs) {
+                    const container = document.getElementById('remoteRunsList');
+                    if (!runs || runs.length === 0) {
+                        container.innerHTML = '<div style="padding: 1rem;">No workflow runs found.</div>';
+                        return;
+                    }
+
+                    container.innerHTML = runs.map(run => `
+                        <div class="index-item" style="padding: 0.75rem 1rem; display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <div style="font-weight: 500;">${run.name}</div>
+                                <div style="font-size: 0.8rem; color: var(--color-text-secondary);">${run.head_branch} - ${run.status} ${run.conclusion || ''}</div>
+                            </div>
+                            <button class="download-btn" onclick="gatherRun(this, ${run.id})">Gather Data</button>
+                        </div>
+                    `).join('');
+                }
+
+                async function gatherPull(btn, number) {
+                    btn.disabled = true;
+                    btn.innerHTML = 'Gathering...';
+                    try {
+                        const res = await fetch(`/api/gather/${owner}/${repo}/pull?number=${number}`, { method: 'POST' });
+                        if (res.ok) {
+                            const data = await res.json();
+                            window.location.href = data.url;
+                        } else {
+                            const data = await res.json();
+                            alert(`Failed to gather: ${data.error}`);
+                            btn.disabled = false;
+                            btn.innerHTML = 'Gather Data';
+                        }
+                    } catch (e) {
+                        alert(`Error: ${e.message}`);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Gather Data';
+                    }
+                }
+
+                async function gatherRun(btn, id) {
+                    btn.disabled = true;
+                    btn.innerHTML = 'Gathering...';
+                    try {
+                        const res = await fetch(`/api/gather/${owner}/${repo}/workflow?id=${id}`, { method: 'POST' });
+                        if (res.ok) {
+                            const data = await res.json();
+                            window.location.href = data.url;
+                        } else {
+                            const data = await res.json();
+                            alert(`Failed to gather: ${data.error}`);
+                            btn.disabled = false;
+                            btn.innerHTML = 'Gather Data';
+                        }
+                    } catch (e) {
+                        alert(`Error: ${e.message}`);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Gather Data';
+                    }
+                }
+            </script>
+        </div>
         {{ end }}
 
-        {{ if and (not .Dirs) (not .Items) }}
-        <p class="empty-state">No data gathered yet. Run <code>octometrics gather</code> to get started.</p>
-        {{ end }}
+        <div id="localContent">
+            {{ if .Dirs }}
+            <ul class="index-list">
+                {{ range .Dirs }}
+                <li class="index-item" data-search="{{ .Name }}">
+                    <a href="{{ .Path }}" class="index-item-link">
+                        <span class="index-item-name">{{ .Name }}</span>
+                        {{ if .Count }}<span class="badge">{{ .Count }}</span>{{ end }}
+                    </a>
+                </li>
+                {{ end }}
+            </ul>
+            {{ end }}
+
+            {{ if .Items }}
+            <ul class="index-list">
+                {{ range .Items }}
+                <li class="index-item" data-search="{{ .Name }} {{ .Actor }} {{ .State }}">
+                    <a href="{{ .Path }}" class="index-item-link">
+                        <span class="index-item-name">{{ .Name }}</span>
+                        {{ if .State }}
+                        <span class="badge badge-{{ .State }}">{{ .State }}</span>
+                        {{ end }}
+                        {{ if .Actor }}
+                        <span class="index-item-meta">{{ .Actor }}</span>
+                        {{ end }}
+                    </a>
+                </li>
+                {{ end }}
+            </ul>
+            {{ end }}
+
+            {{ if and (not .Dirs) (not .Items) }}
+            <p class="empty-state">No local data gathered yet. Run <code>octometrics gather</code> or explore remote data above.</p>
+            {{ end }}
+        </div>
     </div>
+    <script>
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.index-item[data-search]');
+            items.forEach(item => {
+                if (item.getAttribute('data-search').toLowerCase().includes(term)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    </script>
 </body>
 
 </html>

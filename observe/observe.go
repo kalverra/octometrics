@@ -177,7 +177,6 @@ func init() {
 		cssClass := strings.ReplaceAll(text, " ", "-")
 		return template.HTML(fmt.Sprintf(`<span class="rt-badge rt-%s">%s</span>`, cssClass, text))
 	}
-	htmlFuncs["lower"] = strings.ToLower
 
 	htmlTemplate, err = template.New("observation_html").Funcs(htmlFuncs).
 		ParseFS(templateFS, "templates/*.html")

@@ -45,6 +45,15 @@ func NewOnDemandHandler(
 func (h *OnDemandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqPath := filepath.Clean(r.URL.Path)
 
+	if strings.HasPrefix(reqPath, "/api/github/") {
+		h.serveAPI(w, r)
+		return
+	}
+	if strings.HasPrefix(reqPath, "/api/gather/") {
+		h.serveGatherAPI(w, r)
+		return
+	}
+
 	if reqPath == "/styles.css" || reqPath == "/mermaid-init.js" || reqPath == "/export-png.js" {
 		filePath := filepath.Join(h.outputDir, reqPath)
 		if _, err := os.Stat(filePath); err != nil {
