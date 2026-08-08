@@ -46,3 +46,17 @@ release:
     ---
 
     Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
+
+brews:
+  - name: octometrics
+    repository:
+      owner: kalverra
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/kalverra/octometrics"
+    description: "Profiles GitHub Actions workflows"
+    license: "MIT"
+    install: |
+      bin.install "octometrics"
+
