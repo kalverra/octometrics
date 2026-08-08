@@ -81,9 +81,10 @@ flowchart TD
 ## Key Design Decisions
 
 - **Local JSON cache**: All data is stored under the OS cache directory (`~/Library/Caches/octometrics` or `~/.cache/octometrics`). Override with `--data-dir`, `DATA_DIR`, or `data_dir` in config. `ForceUpdate` bypasses the cache.
+- **UI Navigation & Browsing**: The web interface features a home page (`GET /`) with live GitHub search and local data search, persistent favorites and recents (`ui_state.json`), and repo overview pages (`GET /{owner}/{repo}`) listing live workflows, runs, commits, and PRs with click-to-fetch affordances (`↓`). Read-only GitHub listing calls in `gather/browse.go` are cached in memory with a 60s TTL.
+- **Cache-Miss Interstitials**: Entity cache misses return `202 Accepted` with a `<meta http-equiv="refresh">` pending interstitial (`pending.html`) while gathering and rendering in the background, avoiding blocked requests.
 - **Rate limit awareness**: REST client uses `go-github-ratelimit`. `loggingTransport` logs per-request headers and warns when remaining calls drop below 50.
 - **Mermaid charts**: Timelines use `gantt`; monitoring metrics use `xychart-beta`. Shared xychart sizing is applied in HTML to keep Gantt and xychart widths aligned.
-- **Lazy observation server**: Pages are rendered on first request (or from disk if newer than source JSON). Index pages rebuild from `manifest.jsonl` if missing.
 - **Branch protection**: Required status checks for the default branch are fetched per repo and cached per session. A 403 renders a warning instead of failing; 404 omits the section.
 - **Commit conclusion aggregation**: Conclusions fold with priority `failure` > `timed_out` > `cancelled` > `in_progress` > `success` after all workflow runs are known.
 - **Monitor sampling**: CPU usage is computed from successive `cpu.Times` deltas; network IO logs per-interval deltas; disk usage defaults to `GITHUB_WORKSPACE` when set.

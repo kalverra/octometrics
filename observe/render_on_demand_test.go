@@ -44,7 +44,6 @@ func TestRenderOnDemandHandler(t *testing.T) {
 
 	log, tempDir := testhelpers.Setup(t)
 
-	// Create dummy data dir structure
 	dataDir := filepath.Join(tempDir, "data")
 	outputDir := filepath.Join(tempDir, "output")
 	wfDir := filepath.Join(dataDir, "owner", "repo", "workflow_runs")
@@ -65,13 +64,22 @@ func TestRenderOnDemandHandler(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	// Request 1: Cold hit (misses disk cache, renders on demand)
+	// Request 1: Cold hit returns 202 Pending and triggers background job
 	req := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusAccepted, rr.Code)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Body.String(), "on-demand-wf")
+	// Wait for background job to finish
+	time.Sleep(100 * time.Millisecond)
+
+	// Request 2: Job done -> returns 200 with rendered page
+	req2 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+
+	assert.Equal(t, http.StatusOK, rr2.Code)
+	assert.Contains(t, rr2.Body.String(), "on-demand-wf")
 
 	// Verify file was written to outputDir
 	outPath := filepath.Join(outputDir, "owner", "repo", "workflow_runs", "555.html")
@@ -80,13 +88,13 @@ func TestRenderOnDemandHandler(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(outContent), "on-demand-wf")
 
-	// Request 2: Warm hit (serves from disk cache)
-	req2 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
-	rr2 := httptest.NewRecorder()
-	handler.ServeHTTP(rr2, req2)
+	// Request 3: Warm hit (serves directly from disk cache)
+	req3 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	rr3 := httptest.NewRecorder()
+	handler.ServeHTTP(rr3, req3)
 
-	assert.Equal(t, http.StatusOK, rr2.Code)
-	assert.Equal(t, string(outContent), rr2.Body.String())
+	assert.Equal(t, http.StatusOK, rr3.Code)
+	assert.Equal(t, string(outContent), rr3.Body.String())
 }
 
 func TestRenderOnDemandHandler_JobRun(t *testing.T) {
@@ -99,7 +107,6 @@ func TestRenderOnDemandHandler_JobRun(t *testing.T) {
 	wfDir := filepath.Join(dataDir, "owner", "repo", "workflow_runs")
 	require.NoError(t, os.MkdirAll(wfDir, 0750))
 
-	// Workflow run JSON containing a job with ID 777
 	jsonPath := filepath.Join(wfDir, "555.json")
 	sampleJSON := []byte(`{
 		"id": 555,
@@ -130,15 +137,22 @@ func TestRenderOnDemandHandler_JobRun(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	// Request the job run page — should find parent workflow run 555 and render
+	// First request -> 202 Pending
 	req := httptest.NewRequest("GET", "/owner/repo/job_runs/777.html", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusAccepted, rr.Code)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Body.String(), "test-job")
+	time.Sleep(100 * time.Millisecond)
 
-	// Verify job run file was written to outputDir
+	// Second request -> 200 OK
+	req2 := httptest.NewRequest("GET", "/owner/repo/job_runs/777.html", nil)
+	rr2 := httptest.NewRecorder()
+	handler.ServeHTTP(rr2, req2)
+
+	assert.Equal(t, http.StatusOK, rr2.Code)
+	assert.Contains(t, rr2.Body.String(), "test-job")
+
 	outPath := filepath.Join(outputDir, "owner", "repo", "job_runs", "777.html")
 	//nolint:gosec // test file read
 	outContent, err := os.ReadFile(outPath)
@@ -154,7 +168,6 @@ func TestRenderOnDemandHandler_Comparison(t *testing.T) {
 	dataDir := filepath.Join(tempDir, "data")
 	outputDir := filepath.Join(tempDir, "output")
 
-	// Pre-render a comparison HTML file as the compare command does.
 	compPath := filepath.Join(outputDir, "owner", "repo", "comparisons", "111_vs_222.html")
 	require.NoError(t, os.MkdirAll(filepath.Dir(compPath), 0750))
 	require.NoError(t, os.WriteFile(compPath, []byte("<html>Left vs Right</html>"), 0600))
@@ -179,7 +192,6 @@ func TestRenderOnDemandHandler_StaleHTMLRefreshed(t *testing.T) {
 	wfDir := filepath.Join(dataDir, "owner", "repo", "workflow_runs")
 	require.NoError(t, os.MkdirAll(wfDir, 0750))
 
-	// Write initial JSON
 	jsonPath := filepath.Join(wfDir, "555.json")
 	writeJSON := func(content string) {
 		require.NoError(t, os.WriteFile(jsonPath, []byte(content), 0600))
@@ -197,20 +209,25 @@ func TestRenderOnDemandHandler_StaleHTMLRefreshed(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	// First request renders the page
+	// First request -> 202, wait -> 200
 	req := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
-	require.Equal(t, http.StatusOK, rr.Code)
-	require.Contains(t, rr.Body.String(), "stale-wf")
+	require.Equal(t, http.StatusAccepted, rr.Code)
 
-	// Write stale HTML with old content that should be overwritten
+	time.Sleep(100 * time.Millisecond)
+
+	reqFirst200 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	rrFirst200 := httptest.NewRecorder()
+	handler.ServeHTTP(rrFirst200, reqFirst200)
+	require.Equal(t, http.StatusOK, rrFirst200.Code)
+	require.Contains(t, rrFirst200.Body.String(), "stale-wf")
+
+	// Write stale HTML with old content
 	outPath := filepath.Join(outputDir, "owner", "repo", "workflow_runs", "555.html")
 	require.NoError(t, os.MkdirAll(filepath.Dir(outPath), 0750))
 	require.NoError(t, os.WriteFile(outPath, []byte("<html>STALE CONTENT</html>"), 0600))
 
-	// Touch JSON to be newer than the stale HTML
-	time.Sleep(10 * time.Millisecond)
 	writeJSON(`{
 		"id": 555,
 		"name": "fresh-wf",
@@ -221,13 +238,23 @@ func TestRenderOnDemandHandler_StaleHTMLRefreshed(t *testing.T) {
 		"actor": {"login": "user"},
 		"jobs": []
 	}`)
+	now := time.Now()
+	require.NoError(t, os.Chtimes(outPath, now.Add(-1*time.Hour), now.Add(-1*time.Hour)))
+	require.NoError(t, os.Chtimes(jsonPath, now, now))
 
-	// Second request should detect stale HTML and re-render with new data
+	// Second request detects stale HTML -> 202, triggers background job
 	req2 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
+	assert.Equal(t, http.StatusAccepted, rr2.Code)
 
-	assert.Equal(t, http.StatusOK, rr2.Code)
-	assert.NotContains(t, rr2.Body.String(), "STALE CONTENT")
-	assert.Contains(t, rr2.Body.String(), "fresh-wf")
+	time.Sleep(100 * time.Millisecond)
+
+	req3 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	rr3 := httptest.NewRecorder()
+	handler.ServeHTTP(rr3, req3)
+
+	assert.Equal(t, http.StatusOK, rr3.Code)
+	assert.NotContains(t, rr3.Body.String(), "STALE CONTENT")
+	assert.Contains(t, rr3.Body.String(), "fresh-wf")
 }

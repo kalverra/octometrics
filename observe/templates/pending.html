@@ -1,0 +1,35 @@
+{{define "pending"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    {{if not .ErrorMsg}}
+    <meta http-equiv="refresh" content="2">
+    {{end}}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{if .ErrorMsg}}Error{{else}}Gathering...{{end}} - Octometrics</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container pending-container">
+        <header class="page-header">
+            <h1><a href="/">Octometrics</a></h1>
+        </header>
+
+        {{if .ErrorMsg}}
+        <div class="card error-card">
+            <h2>Error Gathering {{.EntityName}}</h2>
+            <p class="error-msg">{{.ErrorMsg}}</p>
+            <p><a href="javascript:history.back()" class="btn-back">← Go back</a></p>
+        </div>
+        {{else}}
+        <div class="card pending-card">
+            <div class="spinner"></div>
+            <h2>Gathering {{.EntityName}}...</h2>
+            <p>Fetching observation data from GitHub. This page will automatically refresh when ready.</p>
+        </div>
+        {{end}}
+    </div>
+</body>
+</html>
+{{end}}

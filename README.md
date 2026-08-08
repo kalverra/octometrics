@@ -22,6 +22,9 @@ export GITHUB_TOKEN=$(gh auth token)
 # Show help menu
 octometrics -h
 
+# Launch interactive UI home page with live search, favorites, and recents
+octometrics
+
 # To see all workflows run on all commits a part of this PR (including merge queue runs): https://github.com/kalverra/octometrics/pull/55
 octometrics -o kalverra -r octometrics -p 55
 

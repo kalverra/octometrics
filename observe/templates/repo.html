@@ -1,0 +1,147 @@
+{{define "repo"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Owner}}/{{.Name}} - Octometrics</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="page-header repo-header">
+            <div class="repo-title">
+                <h1><a href="/">Octometrics</a> / <a href="/{{.Owner}}/{{.Name}}">{{.Owner}}/{{.Name}}</a></h1>
+                <form method="post" action="/favorites" class="fav-form">
+                    <input type="hidden" name="owner" value="{{.Owner}}">
+                    <input type="hidden" name="repo" value="{{.Name}}">
+                    <button type="submit" class="btn-fav">{{if .IsFavorite}}★ Favorited{{else}}☆ Favorite{{end}}</button>
+                </form>
+            </div>
+            {{if .Repo}}
+            {{if .Repo.Description}}<p class="subtitle">{{.Repo.Description}}</p>{{end}}
+            {{end}}
+        </header>
+
+        {{if .NotConnected}}
+        <div class="notice warn-notice">
+            Not connected to GitHub (showing local data only)
+        </div>
+        {{end}}
+
+        <nav class="tab-nav">
+            <a href="/{{.Owner}}/{{.Name}}?tab=workflows" class="tab-item {{if eq .ActiveTab "workflows"}}active{{end}}">Workflows</a>
+            <a href="/{{.Owner}}/{{.Name}}?tab=commits" class="tab-item {{if eq .ActiveTab "commits"}}active{{end}}">Commits</a>
+            <a href="/{{.Owner}}/{{.Name}}?tab=pulls" class="tab-item {{if eq .ActiveTab "pulls"}}active{{end}}">Pull Requests</a>
+        </nav>
+
+        <div class="tab-content">
+            {{if eq .ActiveTab "workflows"}}
+                {{if .Workflows}}
+                <div class="workflow-filter">
+                    <span>Filter by Workflow:</span>
+                    <a href="/{{$.Owner}}/{{$.Name}}?tab=workflows" class="filter-chip {{if eq $.WorkflowID 0}}active{{end}}">All</a>
+                    {{range .Workflows}}
+                    <a href="/{{$.Owner}}/{{$.Name}}?tab=workflows&workflow_id={{.ID}}" class="filter-chip {{if eq $.WorkflowID .ID}}active{{end}}">{{.Name}}</a>
+                    {{end}}
+                </div>
+                {{end}}
+
+                <h3>Workflow Runs</h3>
+                {{if .Runs}}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Run</th>
+                            <th>Status</th>
+                            <th>Event</th>
+                            <th>Branch</th>
+                            <th>Commit</th>
+                            <th>Actor</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Runs}}
+                        <tr>
+                            <td>
+                                <a href="/{{$.Owner}}/{{$.Name}}/workflow_runs/{{.ID}}.html">{{.Name}} #{{.ID}}</a>
+                                {{if not .Downloaded}}<span class="dl-icon" title="Click to fetch">↓</span>{{end}}
+                            </td>
+                            <td>{{conclusionBadge .Conclusion}}</td>
+                            <td><span class="badge">{{.Event}}</span></td>
+                            <td><code>{{.HeadBranch}}</code></td>
+                            <td><code>{{shortSHA .HeadSHA}}</code></td>
+                            <td>{{.Actor}}</td>
+                            <td>{{formatTime .CreatedAt}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+                {{else}}
+                <p class="empty-state">No workflow runs found.</p>
+                {{end}}
+            {{else if eq .ActiveTab "commits"}}
+                <h3>Recent Commits</h3>
+                {{if .Commits}}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Commit</th>
+                            <th>Message</th>
+                            <th>Author</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Commits}}
+                        <tr>
+                            <td>
+                                <a href="/{{$.Owner}}/{{$.Name}}/commits/{{.SHA}}.html"><code>{{shortSHA .SHA}}</code></a>
+                                {{if not .Downloaded}}<span class="dl-icon" title="Click to fetch">↓</span>{{end}}
+                            </td>
+                            <td>{{.Message}}</td>
+                            <td>{{.Author}}</td>
+                            <td>{{formatTime .CommittedAt}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+                {{else}}
+                <p class="empty-state">No commits found.</p>
+                {{end}}
+            {{else if eq .ActiveTab "pulls"}}
+                <h3>Pull Requests</h3>
+                {{if .PRs}}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>PR</th>
+                            <th>State</th>
+                            <th>Author</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .PRs}}
+                        <tr>
+                            <td>
+                                <a href="/{{$.Owner}}/{{$.Name}}/pull_requests/{{.Number}}.html">#{{.Number}} {{.Title}}</a>
+                                {{if not .Downloaded}}<span class="dl-icon" title="Click to fetch">↓</span>{{end}}
+                            </td>
+                            <td><span class="badge">{{.State}}</span></td>
+                            <td>{{.Actor}}</td>
+                            <td>{{formatTime .CreatedAt}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+                {{else}}
+                <p class="empty-state">No pull requests found.</p>
+                {{end}}
+            {{end}}
+        </div>
+    </div>
+</body>
+</html>
+{{end}}
