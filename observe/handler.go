@@ -60,6 +60,10 @@ func NewOnDemandHandler(
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", h.handleHome)
+	mux.HandleFunc("GET /index.html", func(w http.ResponseWriter, r *http.Request) {
+		//nolint:gosec // safe redirect to home
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("GET /search", h.handleSearch)
 	mux.HandleFunc("GET /favorites", h.handleFavorites)
 	mux.HandleFunc("POST /favorites", h.handleFavorites)
@@ -68,6 +72,26 @@ func NewOnDemandHandler(
 	mux.HandleFunc("GET /export-png.js", h.handleStatic)
 	mux.HandleFunc("GET /search.js", h.handleStatic)
 	mux.HandleFunc("GET /{owner}/{repo}", h.handleRepo)
+	mux.HandleFunc("GET /{owner}/{repo}/index.html", func(w http.ResponseWriter, r *http.Request) {
+		owner := r.PathValue("owner")
+		repo := r.PathValue("repo")
+		//nolint:gosec // safe redirect to repo page
+		http.Redirect(w, r, fmt.Sprintf("/%s/%s", owner, repo), http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("GET /{owner}/{repo}/{category}/index.html", func(w http.ResponseWriter, r *http.Request) {
+		owner := r.PathValue("owner")
+		repo := r.PathValue("repo")
+		cat := r.PathValue("category")
+		tab := "workflows"
+		switch cat {
+		case "commits":
+			tab = "commits"
+		case "pull_requests":
+			tab = "pulls"
+		}
+		//nolint:gosec // safe redirect to repo tab
+		http.Redirect(w, r, fmt.Sprintf("/%s/%s?tab=%s", owner, repo, tab), http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("GET /{owner}/{repo}/{category}/{filename}", h.handleEntity)
 
 	h.mux = mux
@@ -75,6 +99,7 @@ func NewOnDemandHandler(
 }
 
 func (h *OnDemandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	h.mux.ServeHTTP(w, r)
 }
 

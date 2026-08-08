@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -152,6 +153,18 @@ func WriteStaticAssets(outputDir string) error {
 	if err := os.WriteFile(filepath.Join(outputDir, "search.js"), searchJS, 0600); err != nil {
 		return fmt.Errorf("failed to write search.js: %w", err)
 	}
+
+	// Clean up legacy index.html files in outputDir
+	_ = filepath.WalkDir(outputDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() && d.Name() == "index.html" {
+			//nolint:gosec // safe removal of legacy index.html
+			_ = os.Remove(path)
+		}
+		return nil
+	})
 
 	return nil
 }
@@ -455,15 +468,20 @@ func ServeHTMLWithHandler(log zerolog.Logger, initialPath string, handler http.H
 		browserURL = baseURL + initialPath
 	)
 
+	//nolint:gosec // I don't care
+	l, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		return fmt.Errorf("failed to listen on :8080: %w", err)
+	}
+
 	// Wait a moment for server to start before opening browser
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		_ = openBrowser(log, browserURL)
 	}()
 
-	http.Handle("/", handler)
 	//nolint:gosec // I don't care
-	return http.ListenAndServe(":8080", nil)
+	return http.Serve(l, handler)
 }
 
 func openBrowser(log zerolog.Logger, url string) error {

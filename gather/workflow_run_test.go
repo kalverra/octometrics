@@ -98,7 +98,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 
 	var (
 		mockGitHubDownloadPath = "/mock/artifact/download"
-		mockGitHubDownloadURL  = "http://api.github.com" + mockGitHubDownloadPath
+		mockGitHubDownloadURL  = "https://api.github.com" + mockGitHubDownloadPath
 		mockZipFile            = filepath.Join(testDataDir, fmt.Sprintf("%s.zip", monitor.DataFile))
 	)
 	require.FileExists(t, mockZipFile, "test zip file should exist")

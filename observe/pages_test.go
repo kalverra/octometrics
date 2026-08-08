@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -121,4 +122,7 @@ func TestHandler_PendingInterstitial(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, "http-equiv=\"refresh\"")
 	assert.Contains(t, body, "Gathering")
+
+	// Wait for background job to finish before test cleanup
+	time.Sleep(50 * time.Millisecond)
 }

@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -929,7 +930,21 @@ func downloadAndAnalyzeArtifact(
 		Str("url", artifactURL.String()).
 		Msg("Downloading octometrics monitoring data")
 
-	downloadResp, err := client.Rest.Client().Get(artifactURL.String())
+	dlCtx, dlCancel := ghCtx(parentCtx)
+	defer dlCancel()
+
+	req, err := http.NewRequestWithContext(dlCtx, http.MethodGet, artifactURL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create artifact download request: %w", err)
+	}
+
+	httpClient := client.Rest.Client()
+	restBaseURL, pErr := url.Parse(client.Rest.BaseURL())
+	if pErr == nil && restBaseURL.Host != "" && artifactURL.Host != restBaseURL.Host {
+		httpClient = &http.Client{Timeout: 60 * time.Second}
+	}
+
+	downloadResp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download monitor data artifact: %w", err)
 	}

@@ -136,14 +136,17 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 		hasTarget := cfg.WorkflowRunID != 0 || cfg.PullRequestNumber != 0 || cfg.CommitSHA != "" ||
 			(!cfg.From.IsZero() && !cfg.To.IsZero())
 
+		if cfg.GitHubToken != "" {
+			var clientErr error
+			githubClient, clientErr = gather.NewGitHubClient(logger, cfg.GitHubToken, nil)
+			if clientErr != nil {
+				return fmt.Errorf("failed to create GitHub client: %w", clientErr)
+			}
+		}
+
 		if hasTarget {
 			if err := cfg.ValidateGather(); err != nil {
 				return err
-			}
-
-			githubClient, err = gather.NewGitHubClient(logger, cfg.GitHubToken, nil)
-			if err != nil {
-				return fmt.Errorf("failed to create GitHub client: %w", err)
 			}
 
 			ctx := cmd.Context()
