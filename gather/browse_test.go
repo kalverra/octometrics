@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,21 +20,24 @@ func TestBrowse_CacheHit(t *testing.T) {
 
 	log, _ := testhelpers.Setup(t)
 	var requestCount atomic.Int32
+	owner := "owner"
+	repo := fmt.Sprintf("repo-%d", time.Now().UnixNano())
+	expectedPath := fmt.Sprintf("/repos/%s/%s", owner, repo)
 
 	httpClient := &http.Client{
 		Transport: &mockRoundTripper{
 			roundTrip: func(req *http.Request) (*http.Response, error) {
 				requestCount.Add(1)
-				if req.URL.Path == "/repos/owner/repo" {
-					respJSON := `{
+				if req.URL.Path == expectedPath {
+					respJSON := fmt.Sprintf(`{
 						"id": 123,
-						"name": "repo",
-						"full_name": "owner/repo",
+						"name": "%s",
+						"full_name": "%s/%s",
 						"description": "Test Repo",
 						"default_branch": "main",
-						"html_url": "https://github.com/owner/repo",
-						"owner": {"login": "owner"}
-					}`
+						"html_url": "https://github.com/%s/%s",
+						"owner": {"login": "%s"}
+					}`, repo, owner, repo, owner, repo, owner)
 					return &http.Response{
 						StatusCode: http.StatusOK,
 						Body:       io.NopCloser(strings.NewReader(respJSON)),
@@ -50,13 +54,13 @@ func TestBrowse_CacheHit(t *testing.T) {
 	require.NoError(t, err)
 
 	// First call -> HTTP request
-	summary1, err := RepoInfo(t.Context(), log, client, "owner", "repo")
+	summary1, err := RepoInfo(t.Context(), log, client, owner, repo)
 	require.NoError(t, err)
-	assert.Equal(t, "owner/repo", summary1.FullName)
+	assert.Equal(t, fmt.Sprintf("%s/%s", owner, repo), summary1.FullName)
 	assert.Equal(t, int32(1), requestCount.Load())
 
 	// Second call -> cached, no HTTP request
-	summary2, err := RepoInfo(t.Context(), log, client, "owner", "repo")
+	summary2, err := RepoInfo(t.Context(), log, client, owner, repo)
 	require.NoError(t, err)
 	assert.Equal(t, summary1, summary2)
 	assert.Equal(t, int32(1), requestCount.Load())

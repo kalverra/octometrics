@@ -1,6 +1,6 @@
 # Octometrics
 
-A simple CLI tool to visualize and profile your GitHub Actions workflows. See all the processes that run as part of a PR, workflow, or job in a simple, interactive chart. It can also run [directly in your GitHub Actions flow](https://github.com/kalverra/octometrics-action), useful for debugging changes and performance issues.
+A simple CLI (and now GUI!) tool to visualize and profile your GitHub Actions workflows. See all the processes that run as part of a PR, workflow, or job in a simple, interactive chart. It can also run [directly in your GitHub Actions flow](https://github.com/kalverra/octometrics-action), useful for debugging changes and performance issues.
 
 <div align="center">
 
@@ -10,35 +10,39 @@ A simple CLI tool to visualize and profile your GitHub Actions workflows. See al
 
 ## Run
 
-Before running, make sure to provide GitHub API token, either through the `GITHUB_TOKEN` env var, or the `-t` flag.
-
 ```sh
-# Install
-go install github.com/kalverra/octometrics@latest
-
 # Set your GITHUB_TOKEN to avoid rate limits
 export GITHUB_TOKEN=$(gh auth token)
 
-# Show help menu
-octometrics -h
-
-# Launch interactive UI home page with live search, favorites, and recents
+# Launch interactive UI home page
 octometrics
 
-# To see all workflows run on all commits a part of this PR (including merge queue runs): https://github.com/kalverra/octometrics/pull/55
-octometrics -o kalverra -r octometrics -p 55
+# Show CLI help menu
+octometrics -h
+```
 
-# To see all workflows run on a specific commit: https://github.com/kalverra/octometrics/pull/33/changes/7751768667a19f0a21e7ff1199240a70db9ca31d
-octometrics -o kalverra -r octometrics -c 7751768667a19f0a21e7ff1199240a70db9ca31d
+## Install
 
-# To see a specific workflow run: https://github.com/kalverra/octometrics/actions/runs/22918636165
-octometrics -o kalverra -r octometrics -w 31115256027
+### Go
 
-# Use '-u' to force update local data if it already exists
-octometrics -o kalverra -r octometrics -p 55 -u
+```sh
+go install github.com/kalverra/octometrics@latest
+```
 
-# Compare two like-types in a handy view
-octometrics compare -o kalverra -r octometrics --commits 7751768667a19f0a21e7ff1199240a70db9ca31d,169427803c7fa43a4b9403137a9834b9e7102825
+### Homebrew
+
+```sh
+brew install kalverra/tap/octometrics
+```
+
+### mise
+
+```sh
+# Prebuilt GitHub release binary
+mise use github:kalverra/octometrics
+
+# Compile from Go source
+mise use go:github.com/kalverra/octometrics@latest
 ```
 
 ## GitHub Action

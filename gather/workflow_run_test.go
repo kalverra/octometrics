@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -801,4 +802,55 @@ func TestWorkflowRun_CacheKeyOptionAware(t *testing.T) {
 	wfWithCost, _, err := WorkflowRun(t.Context(), log, client, "owner", "repo", 88888, CustomDataFolder(tempDir))
 	require.NoError(t, err)
 	assert.True(t, wfWithCost.CostGathered)
+}
+
+func TestWorkflowRun_MemoryCacheBypassedWhenDiskFileDeleted(t *testing.T) {
+	t.Parallel()
+
+	mockedHTTPClient := mock.NewMockedHTTPClient(
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsRunsByOwnerByRepoByRunId,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id": 77777, "status": "completed", "conclusion": "success"}`))
+			}),
+		),
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsRunsJobsByOwnerByRepoByRunId,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"total_count": 0, "jobs": []}`))
+			}),
+		),
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsRunsTimingByOwnerByRepoByRunId,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"billable": {}}`))
+			}),
+		),
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsRunsArtifactsByOwnerByRepoByRunId,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"total_count": 0, "artifacts": []}`))
+			}),
+		),
+	)
+
+	log, tempDir := testhelpers.Setup(t)
+	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
+	require.NoError(t, err)
+
+	_, targetFile, err := WorkflowRun(t.Context(), log, client, "owner", "repo", 77777, CustomDataFolder(tempDir))
+	require.NoError(t, err)
+	require.FileExists(t, targetFile)
+
+	// Simulate external deletion of data file
+	require.NoError(t, os.Remove(targetFile))
+
+	// Calling WorkflowRun again must recreate targetFile on disk even if in memory cache
+	_, targetFile2, err := WorkflowRun(t.Context(), log, client, "owner", "repo", 77777, CustomDataFolder(tempDir))
+	require.NoError(t, err)
+	require.FileExists(t, targetFile2, "file on disk should be recreated after deletion")
 }
