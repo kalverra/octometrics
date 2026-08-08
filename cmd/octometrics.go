@@ -261,8 +261,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			pagePath = fmt.Sprintf("/%s/%s/pull_requests/%d.html", cfg.Owner, cfg.Repo, cfg.PullRequestNumber)
 		} else if cfg.CommitSHA != "" {
 			pagePath = fmt.Sprintf("/%s/%s/commits/%s.html", cfg.Owner, cfg.Repo, cfg.CommitSHA)
-		} else if !cfg.From.IsZero() && !cfg.To.IsZero() {
-			pagePath = fmt.Sprintf("/%s/%s/", cfg.Owner, cfg.Repo)
+		} else if cfg.Owner != "" && cfg.Repo != "" {
+			pagePath = fmt.Sprintf("/%s/%s", cfg.Owner, cfg.Repo)
 		}
 
 		return observe.Interactive(cmd.Context(), logger, githubClient, pagePath, cfg.DataDir, obsOpts...)

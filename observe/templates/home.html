@@ -1,0 +1,66 @@
+{{define "home"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Octometrics</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/search.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <h1><a href="/">Octometrics</a></h1>
+            <p class="subtitle">GitHub Actions Workflow Profiler</p>
+        </header>
+
+        {{if .NotConnected}}
+        <div class="notice warn-notice">
+            Not connected to GitHub (showing local data only)
+        </div>
+        {{end}}
+
+        <section class="search-section">
+            <form action="/search" method="get" class="search-form">
+                <input type="text" name="q" id="search-input" placeholder="Search repositories or pull requests..." autocomplete="off" value="">
+                <button type="submit">Search</button>
+            </form>
+            <div id="search-results-container"></div>
+        </section>
+
+        <div class="grid-2col">
+            <section class="card">
+                <h2>Favorites</h2>
+                {{if .Favorites}}
+                <ul class="repo-list">
+                    {{range .Favorites}}
+                    <li>
+                        <a href="/{{.Owner}}/{{.Repo}}"><strong>{{.Owner}}/{{.Repo}}</strong></a>
+                    </li>
+                    {{end}}
+                </ul>
+                {{else}}
+                <p class="empty-state">No favorites yet. Visit a repository page to favorite it.</p>
+                {{end}}
+            </section>
+
+            <section class="card">
+                <h2>Recents</h2>
+                {{if .Recents}}
+                <ul class="repo-list">
+                    {{range .Recents}}
+                    <li>
+                        <a href="/{{.Owner}}/{{.Repo}}"><strong>{{.Owner}}/{{.Repo}}</strong></a>
+                    </li>
+                    {{end}}
+                </ul>
+                {{else}}
+                <p class="empty-state">No recent repositories.</p>
+                {{end}}
+            </section>
+        </div>
+    </div>
+</body>
+</html>
+{{end}}

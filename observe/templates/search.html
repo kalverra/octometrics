@@ -1,0 +1,110 @@
+{{define "search"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search - Octometrics</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/search.js" defer></script>
+</head>
+<body>
+    <div class="container">
+        <header class="page-header">
+            <h1><a href="/">Octometrics</a> / Search</h1>
+        </header>
+
+        {{if .NotConnected}}
+        <div class="notice warn-notice">
+            Not connected to GitHub (showing local data only)
+        </div>
+        {{end}}
+
+        <section class="search-section">
+            <form action="/search" method="get" class="search-form">
+                <input type="text" name="q" id="search-input" placeholder="Search repositories or pull requests..." autocomplete="off" value="{{.Query}}">
+                <button type="submit">Search</button>
+            </form>
+        </section>
+
+        <div id="search-results-container">
+            {{template "search_results" .}}
+        </div>
+    </div>
+</body>
+</html>
+{{end}}
+
+{{define "search_results"}}
+<div class="search-results">
+    {{if .GitHubRepos}}
+    <section class="results-group">
+        <h3>GitHub Repositories</h3>
+        <ul class="repo-list">
+            {{range .GitHubRepos}}
+            <li>
+                <a href="/{{.Owner}}/{{.Name}}"><strong>{{.FullName}}</strong></a>
+                {{if .Description}}<p class="desc">{{.Description}}</p>{{end}}
+            </li>
+            {{end}}
+        </ul>
+    </section>
+    {{end}}
+
+    {{if .GitHubPRs}}
+    <section class="results-group">
+        <h3>GitHub Pull Requests</h3>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>PR</th>
+                    <th>Repo</th>
+                    <th>Author</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .GitHubPRs}}
+                <tr>
+                    <td><a href="/{{.Owner}}/{{.Repo}}/pull_requests/{{.Number}}.html">#{{.Number}} {{.Title}}</a> {{if not .Downloaded}}<span class="dl-icon" title="Click to fetch">↓</span>{{end}}</td>
+                    <td><a href="/{{.Owner}}/{{.Repo}}">{{.Owner}}/{{.Repo}}</a></td>
+                    <td>{{.Actor}}</td>
+                    <td>{{formatTime .CreatedAt}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </section>
+    {{end}}
+
+    {{if .LocalMatches}}
+    <section class="results-group">
+        <h3>Local Data Matches</h3>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Name / ID</th>
+                    <th>Repo</th>
+                    <th>Actor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .LocalMatches}}
+                <tr>
+                    <td><span class="badge">{{.Type}}</span></td>
+                    <td><a href="/{{.Owner}}/{{.Repo}}/{{.Type}}s/{{.ID}}.html">{{.Name}}</a></td>
+                    <td><a href="/{{.Owner}}/{{.Repo}}">{{.Owner}}/{{.Repo}}</a></td>
+                    <td>{{.Actor}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </section>
+    {{end}}
+
+    {{if not (or .GitHubRepos .GitHubPRs .LocalMatches)}}
+    <p class="empty-state">No results found for "{{.Query}}".</p>
+    {{end}}
+</div>
+{{end}}

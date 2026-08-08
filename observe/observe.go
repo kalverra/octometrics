@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,6 +145,14 @@ func WriteStaticAssets(outputDir string) error {
 		return fmt.Errorf("failed to write export-png.js: %w", err)
 	}
 
+	searchJS, err := templateFS.ReadFile("templates/search.js")
+	if err != nil {
+		return fmt.Errorf("failed to read search.js: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "search.js"), searchJS, 0600); err != nil {
+		return fmt.Errorf("failed to write search.js: %w", err)
+	}
+
 	return nil
 }
 
@@ -171,6 +178,12 @@ func init() {
 			return "delta-faster"
 		}
 		return ""
+	}
+	htmlFuncs["formatTime"] = func(t time.Time) string {
+		if t.IsZero() {
+			return "-"
+		}
+		return t.Format("2006-01-02 15:04:05")
 	}
 	htmlFuncs["conclusionBadge"] = func(conclusion string) template.HTML {
 		text := conclusionText(conclusion)
@@ -253,46 +266,6 @@ func shouldIncludeWorkflow(name string, opts *options) bool {
 		return true
 	}
 	return slices.Contains(opts.includeWorkflows, name)
-}
-
-// IndexPage is the data passed to the index_html template for navigation pages.
-type IndexPage struct {
-	Title       string
-	Breadcrumbs []Breadcrumb
-	Dirs        []IndexDir
-	Items       []IndexItem
-}
-
-// Breadcrumb is a single segment of the breadcrumb navigation.
-type Breadcrumb struct {
-	Name string
-	Path string
-}
-
-// IndexDir is a subdirectory entry in an index page.
-type IndexDir struct {
-	Name  string
-	Path  string
-	Count int
-}
-
-// IndexItem is an observation entry in an index page.
-type IndexItem struct {
-	Name  string
-	Path  string
-	State string
-	Actor string
-}
-
-func renderIndex(targetFile string, page IndexPage) error {
-	var buf bytes.Buffer
-	if err := htmlTemplate.ExecuteTemplate(&buf, "index_html", page); err != nil {
-		return fmt.Errorf("failed to render index page: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(targetFile), 0750); err != nil {
-		return fmt.Errorf("failed to create index directory: %w", err)
-	}
-	return os.WriteFile(targetFile, buf.Bytes(), 0600)
 }
 
 // Observation represents a single observation of a PR, commit, or workflow run, or job.
@@ -378,10 +351,12 @@ func (o *Observation) Render(
 		return "", fmt.Errorf("failed to render observation to %s: %w", outputType, err)
 	}
 
+	//nolint:gosec // directory path built safely
 	err = os.MkdirAll(filepath.Dir(observationFile), 0750)
 	if err != nil {
 		return "", fmt.Errorf("failed to create observation file directory: %w", err)
 	}
+	//nolint:gosec // observation file path built safely
 	err = os.WriteFile(observationFile, buf.Bytes(), 0600)
 	if err != nil {
 		return "", fmt.Errorf("failed to write observation file: %w", err)
@@ -439,9 +414,19 @@ func Interactive(
 	handler := NewOnDemandHandler(log, client, dataDir, activeHTMLOutputDir, opts...)
 
 	if initialPath != "" {
-		req := httptest.NewRequest("GET", initialPath, nil).WithContext(ctx)
-		rr := httptest.NewRecorder()
-		handler.ServeHTTP(rr, req)
+		parts := strings.Split(strings.Trim(initialPath, "/"), "/")
+		if len(parts) == 4 {
+			owner, repo, category, filename := parts[0], parts[1], parts[2], parts[3]
+			ext := filepath.Ext(filename)
+			id := strings.TrimSuffix(filename, ext)
+			format := strings.TrimPrefix(ext, ".")
+			if format == "" {
+				format = "html"
+			}
+			if err := handler.renderEntity(ctx, owner, repo, category, id, format); err != nil {
+				log.Warn().Err(err).Str("path", initialPath).Msg("failed synchronous pre-warm for initialPath")
+			}
+		}
 	}
 
 	log.Info().
@@ -538,10 +523,6 @@ func All(
 	return nil
 }
 
-type categoryKey struct {
-	owner, repo, category string
-}
-
 func generateAllObserveData(
 	ctx context.Context,
 	log zerolog.Logger,
@@ -559,7 +540,6 @@ func generateAllObserveData(
 		return fmt.Errorf("failed to write static assets: %w", err)
 	}
 
-	collected := make(map[categoryKey][]IndexItem)
 	bpCache := make(map[string]*gather.BranchProtectionResult)
 
 	var (
@@ -664,139 +644,18 @@ func generateAllObserveData(
 			}
 		}
 
-		for _, obs := range observations {
-			if obs == nil {
-				continue
-			}
-			key := categoryKey{obs.Owner, obs.Repo, obs.DataType + "s"}
-			collected[key] = append(collected[key], IndexItem{
-				Name:  obs.Name,
-				Path:  obs.ID + ".html",
-				State: obs.State,
-				Actor: obs.Actor,
-			})
-		}
-
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 
-	indexStart := time.Now()
-	err = generateIndexPages(collected)
-	indexDur := time.Since(indexStart)
-
 	log.Debug().
 		Str("json_load_dur", jsonLoadDur.String()).
 		Str("render_dur", renderDur.String()).
-		Str("index_dur", indexDur.String()).
 		Int("files_written", filesWritten).
 		Int("files_skipped", filesSkipped).
 		Msg("Observe phase timings")
-
-	return err
-}
-
-func generateIndexPages(collected map[categoryKey][]IndexItem) error {
-	homeBreadcrumb := Breadcrumb{Name: "Home", Path: "/"}
-
-	repos := make(map[string]map[string]int)
-	for key, items := range collected {
-		repoPath := key.owner + "/" + key.repo
-		if repos[repoPath] == nil {
-			repos[repoPath] = make(map[string]int)
-		}
-		repos[repoPath][key.category] += len(items)
-	}
-
-	// Root index: list all owner/repo combos
-	rootDirs := make([]IndexDir, 0, len(repos))
-	for repoPath, categories := range repos {
-		total := 0
-		for _, count := range categories {
-			total += count
-		}
-		rootDirs = append(rootDirs, IndexDir{
-			Name:  repoPath,
-			Path:  "/" + repoPath + "/",
-			Count: total,
-		})
-	}
-	sort.Slice(rootDirs, func(i, j int) bool { return rootDirs[i].Name < rootDirs[j].Name })
-	err := renderIndex(filepath.Join(activeHTMLOutputDir, "index.html"), IndexPage{
-		Title:       "Octometrics",
-		Breadcrumbs: []Breadcrumb{homeBreadcrumb},
-		Dirs:        rootDirs,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to render root index: %w", err)
-	}
-
-	repoCategoryDisplay := map[string]string{
-		"workflow_runs": "Workflow Runs",
-		"job_runs":      "Job Runs",
-		"commits":       "Commits",
-		"pull_requests": "Pull Requests",
-		"comparisons":   "Comparisons",
-		"surveys":       "Surveys",
-	}
-
-	// Repo indexes: list primary categories for each owner/repo
-	for repoPath, categories := range repos {
-		parts := strings.SplitN(repoPath, "/", 2)
-		owner, repo := parts[0], parts[1]
-
-		catDirs := make([]IndexDir, 0, len(repoCategoryDisplay))
-		for cat, displayName := range repoCategoryDisplay {
-			count := categories[cat]
-			if count == 0 {
-				continue
-			}
-			catDirs = append(catDirs, IndexDir{
-				Name:  displayName,
-				Path:  "/" + repoPath + "/" + cat + "/",
-				Count: count,
-			})
-		}
-		sort.Slice(catDirs, func(i, j int) bool { return catDirs[i].Name < catDirs[j].Name })
-
-		err := renderIndex(filepath.Join(activeHTMLOutputDir, owner, repo, "index.html"), IndexPage{
-			Title: repoPath,
-			Breadcrumbs: []Breadcrumb{
-				homeBreadcrumb,
-				{Name: repoPath, Path: "/" + repoPath + "/"},
-			},
-			Dirs: catDirs,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to render repo index for %s: %w", repoPath, err)
-		}
-	}
-
-	// Category indexes: list observations for each owner/repo/category
-	for key, items := range collected {
-		repoPath := key.owner + "/" + key.repo
-		catPath := repoPath + "/" + key.category
-
-		sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
-
-		err := renderIndex(
-			filepath.Join(activeHTMLOutputDir, key.owner, key.repo, key.category, "index.html"),
-			IndexPage{
-				Title: key.category,
-				Breadcrumbs: []Breadcrumb{
-					homeBreadcrumb,
-					{Name: repoPath, Path: "/" + repoPath + "/"},
-					{Name: key.category, Path: "/" + catPath + "/"},
-				},
-				Items: items,
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("failed to render category index for %s: %w", catPath, err)
-		}
-	}
 
 	return nil
 }
