@@ -256,7 +256,7 @@ func WorkflowRun(
 
 	cacheKey := fmt.Sprintf("%s:cost=%t", targetFile, opts.gatherCost)
 
-	if !opts.ForceUpdate && !opts.SkipMemoryCache {
+	if !opts.ForceUpdate && !opts.SkipMemoryCache && cacheFileExists(targetFile) {
 		if cached, ok := workflowRunCache.Load(cacheKey); ok {
 			log.Debug().
 				Str("duration", time.Since(startTime).String()).
@@ -268,7 +268,7 @@ func WorkflowRun(
 
 	val, err, _ := workflowRunGroup.Do(cacheKey, func() (any, error) {
 		if !opts.ForceUpdate {
-			if !opts.SkipMemoryCache {
+			if !opts.SkipMemoryCache && cacheFileExists(targetFile) {
 				if cached, ok := workflowRunCache.Load(cacheKey); ok {
 					return cached.(*WorkflowRunData), nil
 				}
