@@ -39,6 +39,9 @@ junit.xml
 cover.out
 # binary
 octometrics
+tmp/
+.air/
 
 # Added by goreleaser init:
 dist/
+

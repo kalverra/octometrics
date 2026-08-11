@@ -16,6 +16,7 @@ import (
 
 	"github.com/kalverra/octometrics/gather"
 	"github.com/kalverra/octometrics/internal/config"
+	"github.com/kalverra/octometrics/internal/githuburl"
 	"github.com/kalverra/octometrics/internal/logging"
 	"github.com/kalverra/octometrics/observe"
 )
@@ -82,7 +83,8 @@ func buildObserveOptions(cfg *config.Config) []observe.Option {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "octometrics",
+	Use:   "octometrics [url]",
+	Args:  cobra.MaximumNArgs(1),
 	Short: "See metrics and profiling of your GitHub Actions",
 	Long: `See metrics and profiling of your GitHub Actions.
 
@@ -119,7 +121,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 
 		return nil
 	},
-	RunE: func(cmd *cobra.Command, _ []string) error {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		rebuild, _ := cmd.Flags().GetBool("rebuild-manifest")
 		if rebuild {
 			if err := observe.RebuildManifest(cmd.Context(), logger, cfg.DataDir); err != nil {
@@ -131,6 +133,24 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 		format, toStdout, err := determineFormat(cmd)
 		if err != nil {
 			return err
+		}
+
+		if len(args) > 0 {
+			res, err := githuburl.Parse(args[0])
+			if err != nil {
+				return err
+			}
+			cfg.Owner = res.Owner
+			cfg.Repo = res.Repo
+			if res.WorkflowRunID != 0 {
+				cfg.WorkflowRunID = res.WorkflowRunID
+			}
+			if res.CommitSHA != "" {
+				cfg.CommitSHA = res.CommitSHA
+			}
+			if res.PullRequestNumber != 0 {
+				cfg.PullRequestNumber = res.PullRequestNumber
+			}
 		}
 
 		hasTarget := cfg.WorkflowRunID != 0 || cfg.PullRequestNumber != 0 || cfg.CommitSHA != "" ||

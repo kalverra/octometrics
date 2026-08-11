@@ -1,6 +1,7 @@
 package observe
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -44,6 +45,7 @@ type repoViewModel struct {
 	IsFavorite   bool
 	ActiveTab    string
 	WorkflowID   int64
+	Query        string
 	Workflows    []gather.WorkflowSummary
 	Runs         []gather.RunSummary
 	Commits      []gather.CommitSummary
@@ -137,6 +139,8 @@ func (h *OnDemandHandler) handleRepo(w http.ResponseWriter, r *http.Request) {
 		tab = "workflows"
 	}
 
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+
 	var wfID int64
 	if wfStr := r.URL.Query().Get("workflow_id"); wfStr != "" {
 		if parsed, err := strconv.ParseInt(wfStr, 10, 64); err == nil {
@@ -152,6 +156,7 @@ func (h *OnDemandHandler) handleRepo(w http.ResponseWriter, r *http.Request) {
 		IsFavorite:   h.uiState.IsFavorite(owner, repo),
 		ActiveTab:    tab,
 		WorkflowID:   wfID,
+		Query:        query,
 		NotConnected: h.client == nil || h.client.Rest == nil,
 	}
 
@@ -166,96 +171,11 @@ func (h *OnDemandHandler) handleRepo(w http.ResponseWriter, r *http.Request) {
 
 	switch tab {
 	case "workflows":
-		if !vm.NotConnected {
-			wfs, err := gather.ListWorkflows(r.Context(), h.log, h.client, owner, repo)
-			if err != nil {
-				h.log.Warn().Err(err).Msg("failed to list workflows")
-			} else {
-				vm.Workflows = wfs
-			}
-
-			runs, err := gather.ListRuns(r.Context(), h.log, h.client, owner, repo, wfID, 20)
-			if err != nil {
-				h.log.Warn().Err(err).Msg("failed to list runs")
-			} else {
-				for i := range runs {
-					runs[i].Downloaded = dlMap[fmt.Sprintf("workflow_run:%d", runs[i].ID)]
-				}
-				vm.Runs = runs
-			}
-		} else {
-			// Local fallback for workflow runs
-			records, _ := LoadManifest(h.dataDir, owner, repo)
-			for _, rec := range records {
-				if rec.Type == "workflow_run" {
-					id, _ := strconv.ParseInt(rec.ID, 10, 64)
-					vm.Runs = append(vm.Runs, gather.RunSummary{
-						ID:         id,
-						Name:       rec.Name,
-						Status:     rec.State,
-						Conclusion: rec.State,
-						Actor:      rec.Actor,
-						Downloaded: true,
-					})
-				}
-			}
-		}
-
+		h.populateWorkflowsTab(r.Context(), &vm, owner, repo, wfID, query, dlMap)
 	case "commits":
-		if !vm.NotConnected {
-			commits, err := gather.ListCommits(r.Context(), h.log, h.client, owner, repo, 20)
-			if err != nil {
-				h.log.Warn().Err(err).Msg("failed to list commits")
-			} else {
-				for i := range commits {
-					commits[i].Downloaded = dlMap[fmt.Sprintf("commit:%s", commits[i].SHA)]
-				}
-				vm.Commits = commits
-			}
-		} else {
-			// Local fallback for commits
-			records, _ := LoadManifest(h.dataDir, owner, repo)
-			for _, rec := range records {
-				if rec.Type == "commit" {
-					vm.Commits = append(vm.Commits, gather.CommitSummary{
-						SHA:        rec.ID,
-						Message:    rec.Name,
-						Author:     rec.Actor,
-						Downloaded: true,
-					})
-				}
-			}
-		}
-
+		h.populateCommitsTab(r.Context(), &vm, owner, repo, query, dlMap)
 	case "pulls":
-		if !vm.NotConnected {
-			prs, err := gather.ListPullRequests(r.Context(), h.log, h.client, owner, repo, 20)
-			if err != nil {
-				h.log.Warn().Err(err).Msg("failed to list prs")
-			} else {
-				for i := range prs {
-					prs[i].Downloaded = dlMap[fmt.Sprintf("pull_request:%d", prs[i].Number)]
-				}
-				vm.PRs = prs
-			}
-		} else {
-			// Local fallback for PRs
-			records, _ := LoadManifest(h.dataDir, owner, repo)
-			for _, rec := range records {
-				if rec.Type == "pull_request" {
-					num, _ := strconv.Atoi(rec.ID)
-					vm.PRs = append(vm.PRs, gather.PRSummary{
-						Number:     num,
-						Title:      rec.Name,
-						State:      rec.State,
-						Actor:      rec.Actor,
-						Owner:      owner,
-						Repo:       repo,
-						Downloaded: true,
-					})
-				}
-			}
-		}
+		h.populatePullsTab(r.Context(), &vm, owner, repo, query, dlMap)
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -265,7 +185,197 @@ func (h *OnDemandHandler) handleRepo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *OnDemandHandler) populateWorkflowsTab(
+	ctx context.Context,
+	vm *repoViewModel,
+	owner, repo string,
+	wfID int64,
+	query string,
+	dlMap map[string]bool,
+) {
+	if !vm.NotConnected {
+		wfs, err := gather.ListWorkflows(ctx, h.log, h.client, owner, repo)
+		if err != nil {
+			h.log.Warn().Err(err).Msg("failed to list workflows")
+		} else {
+			vm.Workflows = wfs
+		}
+
+		runs, err := gather.ListRuns(ctx, h.log, h.client, owner, repo, wfID, 20)
+		if err != nil {
+			h.log.Warn().Err(err).Msg("failed to list runs")
+		} else {
+			for i := range runs {
+				runs[i].Downloaded = dlMap[fmt.Sprintf("workflow_run:%d", runs[i].ID)]
+			}
+			vm.Runs = runs
+		}
+	} else {
+		records, _ := LoadManifest(h.dataDir, owner, repo)
+		for _, rec := range records {
+			if rec.Type == "workflow_run" {
+				id, _ := strconv.ParseInt(rec.ID, 10, 64)
+				vm.Runs = append(vm.Runs, gather.RunSummary{
+					ID:         id,
+					Name:       rec.Name,
+					Status:     rec.State,
+					Conclusion: rec.State,
+					Actor:      rec.Actor,
+					Downloaded: true,
+				})
+			}
+		}
+	}
+	vm.Runs = filterRuns(vm.Runs, query)
+}
+
+func (h *OnDemandHandler) populateCommitsTab(
+	ctx context.Context,
+	vm *repoViewModel,
+	owner, repo string,
+	query string,
+	dlMap map[string]bool,
+) {
+	if !vm.NotConnected {
+		commits, err := gather.ListCommits(ctx, h.log, h.client, owner, repo, 20)
+		if err != nil {
+			h.log.Warn().Err(err).Msg("failed to list commits")
+		} else {
+			for i := range commits {
+				commits[i].Downloaded = dlMap[fmt.Sprintf("commit:%s", commits[i].SHA)]
+			}
+			vm.Commits = commits
+		}
+	} else {
+		records, _ := LoadManifest(h.dataDir, owner, repo)
+		for _, rec := range records {
+			if rec.Type == "commit" {
+				isMQ := strings.Contains(rec.Name, "gh-readonly-queue") ||
+					strings.Contains(strings.ToLower(rec.Name), "merge queue")
+				branch := ""
+				if isMQ {
+					branch = "merge-queue"
+				}
+				vm.Commits = append(vm.Commits, gather.CommitSummary{
+					SHA:          rec.ID,
+					Message:      rec.Name,
+					Author:       rec.Actor,
+					Branch:       branch,
+					IsMergeQueue: isMQ,
+					Downloaded:   true,
+				})
+			}
+		}
+	}
+
+	defaultBranch := "main"
+	if vm.Repo != nil && vm.Repo.DefaultBranch != "" {
+		defaultBranch = vm.Repo.DefaultBranch
+	}
+	for i := range vm.Commits {
+		if vm.Commits[i].Branch == "" {
+			if vm.Commits[i].IsMergeQueue {
+				vm.Commits[i].Branch = "merge-queue"
+			} else {
+				vm.Commits[i].Branch = defaultBranch
+			}
+		}
+	}
+
+	vm.Commits = filterCommits(vm.Commits, query)
+}
+
+func (h *OnDemandHandler) populatePullsTab(
+	ctx context.Context,
+	vm *repoViewModel,
+	owner, repo string,
+	query string,
+	dlMap map[string]bool,
+) {
+	if !vm.NotConnected {
+		prs, err := gather.ListPullRequests(ctx, h.log, h.client, owner, repo, 20)
+		if err != nil {
+			h.log.Warn().Err(err).Msg("failed to list prs")
+		} else {
+			for i := range prs {
+				prs[i].Downloaded = dlMap[fmt.Sprintf("pull_request:%d", prs[i].Number)]
+			}
+			vm.PRs = prs
+		}
+	} else {
+		records, _ := LoadManifest(h.dataDir, owner, repo)
+		for _, rec := range records {
+			if rec.Type == "pull_request" {
+				num, _ := strconv.Atoi(rec.ID)
+				vm.PRs = append(vm.PRs, gather.PRSummary{
+					Number:     num,
+					Title:      rec.Name,
+					State:      rec.State,
+					Actor:      rec.Actor,
+					Owner:      owner,
+					Repo:       repo,
+					Downloaded: true,
+				})
+			}
+		}
+	}
+	vm.PRs = filterPRs(vm.PRs, query)
+}
+
+func filterRuns(runs []gather.RunSummary, query string) []gather.RunSummary {
+
+	if query == "" {
+		return runs
+	}
+	qLower := strings.ToLower(query)
+	var filtered []gather.RunSummary
+	for _, run := range runs {
+		if strings.Contains(strings.ToLower(fmt.Sprint(run.ID)), qLower) ||
+			strings.Contains(strings.ToLower(run.Name), qLower) ||
+			strings.Contains(strings.ToLower(run.HeadSHA), qLower) ||
+			strings.Contains(strings.ToLower(run.HeadBranch), qLower) ||
+			strings.Contains(strings.ToLower(run.Actor), qLower) {
+			filtered = append(filtered, run)
+		}
+	}
+	return filtered
+}
+
+func filterCommits(commits []gather.CommitSummary, query string) []gather.CommitSummary {
+	if query == "" {
+		return commits
+	}
+	qLower := strings.ToLower(query)
+	var filtered []gather.CommitSummary
+	for _, c := range commits {
+		if strings.Contains(strings.ToLower(c.SHA), qLower) ||
+			strings.Contains(strings.ToLower(c.Message), qLower) ||
+			strings.Contains(strings.ToLower(c.Author), qLower) ||
+			strings.Contains(strings.ToLower(c.Branch), qLower) {
+			filtered = append(filtered, c)
+		}
+	}
+	return filtered
+}
+
+func filterPRs(prs []gather.PRSummary, query string) []gather.PRSummary {
+	if query == "" {
+		return prs
+	}
+	qLower := strings.ToLower(query)
+	var filtered []gather.PRSummary
+	for _, pr := range prs {
+		if strings.Contains(strings.ToLower(fmt.Sprint(pr.Number)), qLower) ||
+			strings.Contains(strings.ToLower(pr.Title), qLower) ||
+			strings.Contains(strings.ToLower(pr.Actor), qLower) {
+			filtered = append(filtered, pr)
+		}
+	}
+	return filtered
+}
+
 func (h *OnDemandHandler) handleFavorites(w http.ResponseWriter, r *http.Request) {
+
 	if r.Method == http.MethodPost {
 		owner := r.FormValue("owner")
 		repo := r.FormValue("repo")

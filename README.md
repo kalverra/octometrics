@@ -56,6 +56,7 @@ I recommend using [mise](https://mise.jdx.dev/) for tool version control and as 
 ```sh
 mise install      # Install tools
 mise run hooks    # Install lefthook git hooks
+mise run dev      # Run live-reloader with Air for Go and UI development
 mise run lint     # Run linters
 mise run test     # Run tests
 ```

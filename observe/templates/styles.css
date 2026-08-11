@@ -168,6 +168,81 @@ a:hover {
     color: var(--color-accent-blue);
 }
 
+.badge-branch {
+    background: var(--color-accent-blue-bg);
+    color: var(--color-accent-blue);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.badge-merge-queue {
+    background: var(--color-accent-yellow-bg);
+    color: var(--color-accent-yellow);
+    border: 1px solid var(--color-accent-yellow);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+
+.view-search-bar {
+    margin-bottom: 1.25rem;
+}
+
+.view-search-form {
+    width: 100%;
+}
+
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.search-icon {
+    position: absolute;
+    left: 0.85rem;
+    font-size: 0.9rem;
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.view-search-input {
+    width: 100%;
+    padding: 0.65rem 2.2rem 0.65rem 2.4rem;
+    font-size: 0.9rem;
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    background: var(--color-surface);
+    border: 1px solid var(--color-surface-border);
+    border-radius: var(--radius);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.view-search-input:focus {
+    border-color: var(--color-link);
+    box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+}
+
+.search-clear-btn {
+    position: absolute;
+    right: 0.85rem;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    text-decoration: none;
+    padding: 0.2rem;
+    border-radius: 50%;
+    line-height: 1;
+}
+
+.search-clear-btn:hover {
+    color: var(--color-text);
+    text-decoration: none;
+}
+
+
+
 .warning-banner {
     margin-top: 0.75rem;
     padding: 0.5rem 0.85rem;

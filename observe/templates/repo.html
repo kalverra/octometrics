@@ -30,12 +30,27 @@
         {{end}}
 
         <nav class="tab-nav">
-            <a href="/{{.Owner}}/{{.Name}}?tab=workflows" class="tab-item {{if eq .ActiveTab "workflows"}}active{{end}}">Workflows</a>
-            <a href="/{{.Owner}}/{{.Name}}?tab=commits" class="tab-item {{if eq .ActiveTab "commits"}}active{{end}}">Commits</a>
-            <a href="/{{.Owner}}/{{.Name}}?tab=pulls" class="tab-item {{if eq .ActiveTab "pulls"}}active{{end}}">Pull Requests</a>
+            <a href="/{{.Owner}}/{{.Name}}?tab=workflows{{if .Query}}&q={{.Query}}{{end}}" class="tab-item {{if eq .ActiveTab "workflows"}}active{{end}}">Workflows</a>
+            <a href="/{{.Owner}}/{{.Name}}?tab=commits{{if .Query}}&q={{.Query}}{{end}}" class="tab-item {{if eq .ActiveTab "commits"}}active{{end}}">Commits</a>
+            <a href="/{{.Owner}}/{{.Name}}?tab=pulls{{if .Query}}&q={{.Query}}{{end}}" class="tab-item {{if eq .ActiveTab "pulls"}}active{{end}}">Pull Requests</a>
         </nav>
 
+        <div class="view-search-bar">
+            <form method="get" action="/{{.Owner}}/{{.Name}}" class="view-search-form">
+                <input type="hidden" name="tab" value="{{.ActiveTab}}">
+                {{if .WorkflowID}}<input type="hidden" name="workflow_id" value="{{.WorkflowID}}">{{end}}
+                <div class="search-input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" name="q" value="{{.Query}}" placeholder="Search {{.ActiveTab}} by number, SHA, title, or author..." class="view-search-input" id="view-search-input" autocomplete="off">
+                    {{if .Query}}
+                    <a href="/{{.Owner}}/{{.Name}}?tab={{.ActiveTab}}{{if .WorkflowID}}&workflow_id={{.WorkflowID}}{{end}}" class="search-clear-btn" title="Clear filter">✕</a>
+                    {{end}}
+                </div>
+            </form>
+        </div>
+
         <div class="tab-content">
+
             {{if eq .ActiveTab "workflows"}}
                 {{if .Workflows}}
                 <div class="workflow-filter">
@@ -88,21 +103,29 @@
                     <thead>
                         <tr>
                             <th>Commit</th>
+                            <th>Branch</th>
                             <th>Message</th>
                             <th>Author</th>
                             <th>Date</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {{range .Commits}}
+                        {{range $c := .Commits}}
                         <tr>
                             <td>
-                                <a href="/{{$.Owner}}/{{$.Name}}/commits/{{.SHA}}.html"><code>{{shortSHA .SHA}}</code></a>
-                                {{if not .Downloaded}}<span class="dl-icon" title="Click to fetch">↓</span>{{end}}
+                                <a href="/{{$.Owner}}/{{$.Name}}/commits/{{$c.SHA}}.html"><code>{{shortSHA $c.SHA}}</code></a>
+                                {{if not $c.Downloaded}}<span class="dl-icon" title="Click to fetch">↓</span>{{end}}
                             </td>
-                            <td>{{.Message}}</td>
-                            <td>{{.Author}}</td>
-                            <td>{{formatTime .CommittedAt}}</td>
+                            <td>
+                                {{if $c.IsMergeQueue}}
+                                <span class="badge badge-merge-queue" title="Merge Queue Commit">🔀 merge-queue</span>
+                                {{else if $c.Branch}}
+                                <span class="badge badge-branch"><code>{{$c.Branch}}</code></span>
+                                {{end}}
+                            </td>
+                            <td>{{$c.Message}}</td>
+                            <td>{{$c.Author}}</td>
+                            <td>{{formatTime $c.CommittedAt}}</td>
                         </tr>
                         {{end}}
                     </tbody>
@@ -110,6 +133,8 @@
                 {{else}}
                 <p class="empty-state">No commits found.</p>
                 {{end}}
+
+
             {{else if eq .ActiveTab "pulls"}}
                 <h3>Pull Requests</h3>
                 {{if .PRs}}
@@ -142,6 +167,25 @@
             {{end}}
         </div>
     </div>
+    <script>
+    (function() {
+        const input = document.getElementById('view-search-input');
+        if (!input) return;
+        input.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            const rows = document.querySelectorAll('.data-table tbody tr');
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                if (query === '' || text.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    })();
+    </script>
 </body>
+
 </html>
 {{end}}

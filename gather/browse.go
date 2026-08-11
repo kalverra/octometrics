@@ -62,12 +62,15 @@ type RunSummary struct {
 
 // CommitSummary represents a lightweight commit listing item.
 type CommitSummary struct {
-	SHA         string    `json:"sha"`
-	Message     string    `json:"message"`
-	Author      string    `json:"author"`
-	CommittedAt time.Time `json:"committed_at"`
-	HTMLURL     string    `json:"html_url"`
-	Downloaded  bool      `json:"downloaded"`
+	SHA          string    `json:"sha"`
+	Message      string    `json:"message"`
+	Author       string    `json:"author"`
+	CommittedAt  time.Time `json:"committed_at"`
+	HTMLURL      string    `json:"html_url"`
+	Branch       string    `json:"branch,omitempty"`
+	Parents      []string  `json:"parents,omitempty"`
+	IsMergeQueue bool      `json:"is_merge_queue,omitempty"`
+	Downloaded   bool      `json:"downloaded"`
 }
 
 type cacheEntry struct {
@@ -426,12 +429,31 @@ func ListCommits(
 			msg = c.GetCommit().GetMessage()
 		}
 
+		var parentSHAs []string
+		for _, p := range c.Parents {
+			if p.GetSHA() != "" {
+				parentSHAs = append(parentSHAs, p.GetSHA())
+			}
+		}
+
+		isMQ := strings.Contains(msg, "gh-readonly-queue") ||
+			strings.Contains(strings.ToLower(msg), "merge queue") ||
+			(len(parentSHAs) > 1 && strings.Contains(strings.ToLower(author), "merge queue"))
+
+		branch := ""
+		if isMQ {
+			branch = "merge-queue"
+		}
+
 		results = append(results, CommitSummary{
-			SHA:         c.GetSHA(),
-			Message:     msg,
-			Author:      author,
-			CommittedAt: committedAt,
-			HTMLURL:     c.GetHTMLURL(),
+			SHA:          c.GetSHA(),
+			Message:      msg,
+			Author:       author,
+			CommittedAt:  committedAt,
+			HTMLURL:      c.GetHTMLURL(),
+			Branch:       branch,
+			Parents:      parentSHAs,
+			IsMergeQueue: isMQ,
 		})
 	}
 

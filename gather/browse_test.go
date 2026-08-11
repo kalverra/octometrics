@@ -241,6 +241,78 @@ func TestBrowse_ListCommits(t *testing.T) {
 	assert.Equal(t, "kalverra", commits[0].Author)
 }
 
+func TestBrowse_ListCommits_ParentsAndMergeQueue(t *testing.T) {
+	t.Parallel()
+	log, _ := testhelpers.Setup(t)
+
+	httpClient := &http.Client{
+		Transport: &mockRoundTripper{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path == "/repos/o/r-parents-mq/commits" {
+					respJSON := `[
+						{
+							"sha": "mqsha123",
+							"html_url": "https://github.com/o/r-parents-mq/commit/mqsha123",
+							"commit": {
+								"message": "Merge branch 'main' into gh-readonly-queue/main/pr-42",
+								"committer": {
+									"name": "GitHub Merge Queue",
+									"date": "2026-08-01T12:00:00Z"
+								}
+							},
+							"parents": [
+								{"sha": "p1sha"},
+								{"sha": "p2sha"}
+							],
+							"author": {"login": "octocat"}
+						},
+						{
+							"sha": "normsha456",
+							"html_url": "https://github.com/o/r-parents-mq/commit/normsha456",
+							"commit": {
+								"message": "feat: add feature",
+								"committer": {
+									"name": "Adam",
+									"date": "2026-08-01T11:00:00Z"
+								}
+							},
+							"parents": [
+								{"sha": "p0sha"}
+							],
+							"author": {"login": "kalverra"}
+						}
+					]`
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(strings.NewReader(respJSON)),
+						Header:     make(http.Header),
+						Request:    req,
+					}, nil
+				}
+				return nil, fmt.Errorf("unexpected path: %s", req.URL.Path)
+			},
+		},
+	}
+
+	client, err := NewGitHubClient(log, "mock-token", httpClient.Transport)
+	require.NoError(t, err)
+
+	commits, err := ListCommits(t.Context(), log, client, "o", "r-parents-mq", 10)
+	require.NoError(t, err)
+	require.Len(t, commits, 2)
+
+	// Merge Queue commit
+	assert.Equal(t, "mqsha123", commits[0].SHA)
+	assert.Equal(t, []string{"p1sha", "p2sha"}, commits[0].Parents)
+	assert.True(t, commits[0].IsMergeQueue)
+	assert.Equal(t, "merge-queue", commits[0].Branch)
+
+	// Normal commit
+	assert.Equal(t, "normsha456", commits[1].SHA)
+	assert.Equal(t, []string{"p0sha"}, commits[1].Parents)
+	assert.False(t, commits[1].IsMergeQueue)
+}
+
 func TestBrowse_ListPullRequests(t *testing.T) {
 	t.Parallel()
 	log, _ := testhelpers.Setup(t)
