@@ -464,9 +464,86 @@ h3 {
     color: var(--color-link);
 }
 
-.commit-message {
+.commit-details {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.commit-message {
+    min-width: 0;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.commit-tag {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: var(--radius);
+    background: var(--color-badge-bg);
+    color: var(--color-text);
+    text-transform: lowercase;
+}
+
+.commit-tag.tag-feat {
+    background: rgba(35, 134, 54, 0.2);
+    color: #3fb950;
+}
+
+.commit-tag.tag-fix {
+    background: rgba(218, 54, 51, 0.2);
+    color: #f85149;
+}
+
+.commit-tag.tag-breaking {
+    background: rgba(218, 54, 51, 0.3);
+    color: #ff7b72;
+    font-weight: bold;
+}
+
+.commit-tag.tag-bracket {
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--color-link);
+    text-transform: none;
+}
+
+.commit-scope {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+}
+
+.commit-summary {
+    color: var(--color-text);
+}
+
+.commit-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.commit-meta-item {
+    font-size: 0.8rem;
+    padding: 0.15rem 0.45rem;
+    background: var(--color-badge-bg);
+    border-radius: var(--radius);
+    white-space: nowrap;
+}
+
+.commit-duration {
+    color: var(--color-text-secondary);
+}
+
+.commit-cost {
+    color: #3fb950;
+    font-weight: 500;
 }
 
 .commit-date {

@@ -66,6 +66,10 @@ func sharedFuncMap() template.FuncMap {
 		"formatCostDelta":     formatCostDelta,
 		"conclusionText":      conclusionText,
 		"shortSHA":            shortSHA,
+		"formatDuration":      formatDuration,
+		"parseCommitMsg": func(msg string) CommitMessageFormatted {
+			return parseCommitMsg(msg, 100)
+		},
 	}
 }
 

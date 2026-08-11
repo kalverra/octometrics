@@ -9,8 +9,33 @@
             {{ range . }}
             <li class="commit-item">
                 <span class="commit-sha"><a href="{{ commitRunLink .GetOwner .GetRepo .GetSHA }}.html">{{ slice .GetSHA 0 7 }}</a></span>
-                <span class="commit-message">{{ .GetCommit.GetMessage }}</span>
-                <span class="commit-date">{{ .GetCommit.GetAuthor.GetDate.Time.Format "Jan 2, 2006 15:04" }}</span>
+                <div class="commit-details">
+                    <span class="commit-message" title="{{ .GetCommit.GetMessage }}">
+                        {{ $parsed := parseCommitMsg .GetCommit.GetMessage }}
+                        {{ if $parsed.Type }}
+                        <span class="commit-tag tag-{{ $parsed.Type }}">{{ $parsed.Type }}</span>
+                        {{ end }}
+                        {{ if $parsed.Scope }}
+                        <span class="commit-scope">({{ $parsed.Scope }})</span>
+                        {{ end }}
+                        {{ if $parsed.IsBreaking }}
+                        <span class="commit-tag tag-breaking">!</span>
+                        {{ end }}
+                        {{ if $parsed.Tag }}
+                        <span class="commit-tag tag-bracket">{{ $parsed.Tag }}</span>
+                        {{ end }}
+                        <span class="commit-summary">{{ $parsed.Summary }}</span>
+                    </span>
+                </div>
+                <div class="commit-meta">
+                    {{ if .GetDuration }}
+                    <span class="commit-meta-item commit-duration" title="Actions Duration">⏱ {{ formatDuration .GetDuration }}</span>
+                    {{ end }}
+                    {{ if .GetCostGathered }}
+                    <span class="commit-meta-item commit-cost" title="Actions Cost">${{ printf "%.2f" (divideBy1000 .GetCost) }}{{ if .GetCostEstimate }} (est.){{ end }}</span>
+                    {{ end }}
+                    <span class="commit-date">{{ .GetCommit.GetAuthor.GetDate.Time.Format "Jan 2, 2006 15:04" }}</span>
+                </div>
             </li>
             {{ if .GetMergeQueueEvents }}
             <ul class="merge-queue-events">

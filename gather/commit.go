@@ -105,6 +105,17 @@ func (c *CommitData) GetConclusion() string {
 	return c.Conclusion
 }
 
+// GetDuration returns the total wall clock duration of actions that ran for the commit.
+func (c *CommitData) GetDuration() time.Duration {
+	if c == nil || c.StartActionsTime.IsZero() || c.EndActionsTime.IsZero() {
+		return 0
+	}
+	if c.EndActionsTime.Before(c.StartActionsTime) {
+		return 0
+	}
+	return c.EndActionsTime.Sub(c.StartActionsTime)
+}
+
 // GetCost returns the total cost of all actions that ran for the commit in tenths of a cent.
 func (c *CommitData) GetCost() int64 {
 	if c == nil {
