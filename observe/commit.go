@@ -102,9 +102,15 @@ func buildCommitTimelineData(
 			skippedItems      = []string{}
 			queuedItems       = []string{}
 			postTimelineItems = []PostTimelineItem{}
+			allJobs           = make([]*gather.JobData, 0)
+			def               *gather.WorkflowDef
 		)
 
 		for _, workflowRun := range runs {
+			allJobs = append(allJobs, workflowRun.GetJobs()...)
+			if def == nil && workflowRun.GetWorkflowDef() != nil {
+				def = workflowRun.GetWorkflowDef()
+			}
 			startTime := workflowRun.GetRunStartedAt().Time
 
 			if workflowRun.GetStatus() == "queued" && startTime.IsZero() {
@@ -161,12 +167,25 @@ func buildCommitTimelineData(
 			}
 			items = append(items, newItem)
 		}
+
+		var cp *CriticalPathInfo
+		if len(runs) == 1 {
+			cp = CalculateCriticalPath(runs[0].GetJobs(), runs[0].GetWorkflowDef())
+		} else if len(allJobs) > 0 {
+			cp = CalculateCriticalPath(allJobs, def)
+		}
+		stepSums, _ := AggregateSteps(allJobs)
+		slowestSteps := GetSlowestJobSteps(allJobs, 5)
+
 		groupedTimelines = append(groupedTimelines, &Timeline{
 			Event:             event,
 			Items:             items,
 			SkippedItems:      skippedItems,
 			QueuedItems:       queuedItems,
 			PostTimelineItems: postTimelineItems,
+			CriticalPath:      cp,
+			StepSummaries:     stepSums,
+			SlowestJobSteps:   slowestSteps,
 		})
 	}
 

@@ -108,6 +108,138 @@
 </details>
 {{ end }}
 
+{{ if .StepSummaries }}
+<details class="section">
+    <summary>Step aggregation across matrix</summary>
+    <div class="section-body">
+        <table class="runtime-table">
+            <thead>
+                <tr>
+                    <th>Step Name</th>
+                    <th>Count</th>
+                    <th>Total</th>
+                    <th>% Total</th>
+                    <th>Median</th>
+                    <th>Max</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .StepSummaries }}{{ if ge .PctTotal 1.0 }}
+                <tr>
+                    <td>{{ .Name }}</td>
+                    <td>{{ .Count }}</td>
+                    <td>{{ .TotalDuration }}</td>
+                    <td>{{ printf "%.1f" .PctTotal }}%</td>
+                    <td>{{ .MedianDuration }}</td>
+                    <td>{{ .MaxDuration }}</td>
+                </tr>
+                {{ end }}{{ end }}
+            </tbody>
+        </table>
+    </div>
+</details>
+{{ end }}
+
+{{ if .CriticalPath }}
+<details class="section">
+    <summary>Critical path</summary>
+    <div class="section-body">
+        <p style="margin-bottom: 0.5rem; color: var(--color-text-secondary);">Total Duration: {{ .CriticalPath.TotalDuration }} (Queue: {{ .CriticalPath.TotalQueue }}, Execution: {{ .CriticalPath.TotalExecution }})</p>
+        <table class="runtime-table">
+            <thead>
+                <tr>
+                    <th>Job Name</th>
+                    <th>Duration</th>
+                    <th>Queue Time</th>
+                    <th>Slack</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .CriticalPath.CriticalNodes }}
+                <tr>
+                    <td><code>{{ .JobName }}</code></td>
+                    <td>{{ .Duration }}</td>
+                    <td>{{ .QueueTime }}</td>
+                    <td>{{ .Slack }}</td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+
+        {{ if .CriticalPath.NearCriticalNodes }}
+        <h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Near-Critical Jobs (Slack ≤ 60s)</h4>
+        <table class="runtime-table">
+            <thead>
+                <tr>
+                    <th>Job Name</th>
+                    <th>Duration</th>
+                    <th>Queue Time</th>
+                    <th>Slack</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .CriticalPath.NearCriticalNodes }}
+                <tr>
+                    <td><code>{{ .JobName }}</code></td>
+                    <td>{{ .Duration }}</td>
+                    <td>{{ .QueueTime }}</td>
+                    <td>{{ .Slack }}</td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+        {{ end }}
+    </div>
+</details>
+{{ end }}
+
+{{ if .SlowestJobSteps }}
+<details class="section">
+    <summary>Top slowest jobs step breakdown</summary>
+    <div class="section-body">
+        {{ range .SlowestJobSteps }}
+        <h4 style="margin-top: 1rem; margin-bottom: 0.25rem;">{{ .JobName }} ({{ .Duration }})</h4>
+        {{ if .IsOverheadHeavy }}
+        <div class="warning-banner" style="margin-bottom: 0.5rem; padding: 0.5rem;">
+            ⚠️ Setup & runner overhead ({{ .RunnerOverheadTotal }} + {{ .TestSetupTotal }}) exceeds test execution ({{ .TestExecutionTotal }}).
+        </div>
+        {{ end }}
+        <div style="font-size: 0.9rem; color: var(--color-text-secondary); margin-bottom: 0.5rem;">
+            <strong>Runner Overhead:</strong> {{ .RunnerOverheadTotal }} | <strong>Test Setup:</strong> {{ .TestSetupTotal }} | <strong>Test Execution:</strong> {{ .TestExecutionTotal }}
+        </div>
+        <table class="runtime-table" style="margin-bottom: 1rem;">
+            <thead>
+                <tr>
+                    <th>Step Name</th>
+                    <th>Duration</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{ range .Steps }}
+                <tr>
+                    <td>{{ .Name }}</td>
+                    <td>{{ .Duration }}</td>
+                    <td>{{ .Category }}</td>
+                    <td>{{ .Conclusion }}</td>
+                </tr>
+                {{ end }}
+                {{ if gt .MinorStepsCount 0 }}
+                <tr>
+                    <td><em>{{ .MinorStepsCount }} minor steps (≤1s)</em></td>
+                    <td><em>{{ .MinorStepsTotal }}</em></td>
+                    <td><em>minor</em></td>
+                    <td>-</td>
+                </tr>
+                {{ end }}
+            </tbody>
+        </table>
+        {{ end }}
+    </div>
+</details>
+{{ end }}
+
 {{ $hasRequired := false }}
 {{ range .Items }}{{ if .IsRequired }}{{ $hasRequired = true }}{{ end }}{{ end }}
 {{ if $hasRequired }}

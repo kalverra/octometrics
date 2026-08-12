@@ -2,6 +2,7 @@ package observe
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -209,6 +210,79 @@ func TestObservation_RenderString_AnalyticsSections(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, html, "Critical path", "HTML should contain Critical path section")
 	assert.Contains(t, html, "Step aggregation", "HTML should contain Step aggregation section")
+}
+
+func TestObservation_RenderString_AnalyticsUnderEventSectionPreCollapsed(t *testing.T) {
+	t.Parallel()
+
+	log, _ := testhelpers.Setup(t)
+
+	timeline := &Timeline{
+		Event:         "workflow_dispatch",
+		Duration:      300 * time.Second,
+		RealStartTime: time.Date(2026, 8, 11, 20, 0, 0, 0, time.UTC),
+		RealEndTime:   time.Date(2026, 8, 11, 20, 5, 0, 0, time.UTC),
+		Items: []TimelineItem{
+			{Name: "Build", Duration: 100 * time.Second},
+		},
+		CriticalPath: &CriticalPathInfo{
+			TotalDuration: 300 * time.Second,
+			CriticalNodes: []CriticalPathNode{
+				{JobID: 1, JobName: "Build", Duration: 100 * time.Second, IsCritical: true},
+			},
+		},
+		StepSummaries: []StepSummary{
+			{Name: "Set up Go", Count: 1, TotalDuration: 10 * time.Second, PctTotal: 10.0},
+		},
+		SlowestJobSteps: []JobStepBreakdown{
+			{
+				JobID:    1,
+				JobName:  "Build",
+				Duration: 100 * time.Second,
+				Steps:    []StepDetail{{Name: "Compile", Duration: 90 * time.Second}},
+			},
+		},
+	}
+
+	obs := &Observation{
+		ID:           "999",
+		Name:         "Event Analytics Workflow",
+		DataType:     "workflow_run",
+		TimelineData: []*Timeline{timeline},
+	}
+
+	html, err := obs.RenderString(log, "html")
+	require.NoError(t, err)
+
+	// Ensure Step aggregation and Critical path are pre-collapsed (not open)
+	assert.NotContains(t, html, `<details class="section" open>`, "No analytics section should have open attribute")
+	assert.Contains(t, html, `<details class="section">
+    <summary>Step aggregation across matrix</summary>`, "Step aggregation should be pre-collapsed")
+	assert.Contains(t, html, `<details class="section">
+    <summary>Critical path</summary>`, "Critical path should be pre-collapsed")
+
+	// Ensure all analytics sections are inside event section (after workflow_dispatch summary)
+	eventSummaryIdx := strings.Index(html, "workflow_dispatch")
+	stepAggIdx := strings.Index(html, "Step aggregation across matrix")
+	critPathIdx := strings.Index(html, "Critical path")
+	slowestIdx := strings.Index(html, "Top slowest jobs step breakdown")
+
+	require.GreaterOrEqual(t, eventSummaryIdx, 0, "HTML should contain event summary")
+	require.Greater(t, stepAggIdx, eventSummaryIdx, "Step aggregation must appear under event section")
+	require.Greater(t, critPathIdx, eventSummaryIdx, "Critical path must appear under event section")
+	require.Greater(t, slowestIdx, eventSummaryIdx, "Top slowest jobs must appear under event section")
+
+	md, err := obs.RenderString(log, "md")
+	require.NoError(t, err)
+	mdEventIdx := strings.Index(md, "workflow_dispatch")
+	mdStepAggIdx := strings.Index(md, "Step Aggregation Across Matrix")
+	mdCritPathIdx := strings.Index(md, "Critical Path")
+	mdSlowestIdx := strings.Index(md, "Top Slowest Jobs Step Breakdown")
+
+	require.GreaterOrEqual(t, mdEventIdx, 0, "MD should contain event section")
+	require.Greater(t, mdStepAggIdx, mdEventIdx, "MD Step aggregation must appear under event section")
+	require.Greater(t, mdCritPathIdx, mdEventIdx, "MD Critical path must appear under event section")
+	require.Greater(t, mdSlowestIdx, mdEventIdx, "MD Top slowest jobs must appear under event section")
 }
 
 func TestObservation_RenderString_RealTimestampsInHeader(t *testing.T) {

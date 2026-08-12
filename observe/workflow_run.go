@@ -68,11 +68,15 @@ func workflowRunObservation(workflowRun *gather.WorkflowRunData) (*Observation, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate timeline: %w", err)
 	}
+	workflowRunTimelineData.CriticalPath = CalculateCriticalPath(workflowRun.GetJobs(), workflowRun.GetWorkflowDef())
+	workflowRunTimelineData.StepSummaries, _ = AggregateSteps(workflowRun.GetJobs())
+	workflowRunTimelineData.SlowestJobSteps = GetSlowestJobSteps(workflowRun.GetJobs(), 5)
+
 	observationData.TimelineData = []*Timeline{workflowRunTimelineData}
 	observationData.FlowChart = buildFlowChart(workflowRun.GetWorkflowDef(), workflowRun.GetJobs())
-	observationData.CriticalPath = CalculateCriticalPath(workflowRun.GetJobs(), workflowRun.GetWorkflowDef())
-	observationData.StepSummaries, _ = AggregateSteps(workflowRun.GetJobs())
-	observationData.SlowestJobSteps = GetSlowestJobSteps(workflowRun.GetJobs(), 5)
+	observationData.CriticalPath = workflowRunTimelineData.CriticalPath
+	observationData.StepSummaries = workflowRunTimelineData.StepSummaries
+	observationData.SlowestJobSteps = workflowRunTimelineData.SlowestJobSteps
 
 	return observationData, nil
 }

@@ -67,8 +67,9 @@
             {{ end }}{{ end }}
         </header>
 
+        {{ if not .TimelineData }}
         {{ if .StepSummaries }}
-        <details class="section" open>
+        <details class="section">
             <summary>Step aggregation across matrix</summary>
             <div class="section-body">
                 <table class="runtime-table">
@@ -100,7 +101,7 @@
         {{ end }}
 
         {{ if .CriticalPath }}
-        <details class="section" open>
+        <details class="section">
             <summary>Critical path</summary>
             <div class="section-body">
                 <p style="margin-bottom: 0.5rem; color: var(--color-text-secondary);">Total Duration: {{ .CriticalPath.TotalDuration }} (Queue: {{ .CriticalPath.TotalQueue }}, Execution: {{ .CriticalPath.TotalExecution }})</p>
@@ -197,6 +198,7 @@
                 {{ end }}
             </div>
         </details>
+        {{ end }}
         {{ end }}
 
         {{ range .TimelineData }}

@@ -24,6 +24,11 @@ type Timeline struct {
 	SkippedItems      []string
 	QueuedItems       []string
 
+	// Analytics data for workflow runs within this timeline
+	CriticalPath    *CriticalPathInfo  `json:"critical_path,omitempty"`
+	StepSummaries   []StepSummary      `json:"step_summaries,omitempty"`
+	SlowestJobSteps []JobStepBreakdown `json:"slowest_job_steps,omitempty"`
+
 	// Set by the renderer
 	StartTime     time.Time
 	EndTime       time.Time

@@ -20,6 +20,7 @@
 > **Queue Time Finding:** {{ .CriticalPath.MedianQueueFinding }}
 {{ end }}{{ end }}
 
+{{ if not .TimelineData }}
 {{ if .StepSummaries }}
 ## Step Aggregation Across Matrix
 | Step Name | Count | Total | % Total | Median | Max |
@@ -62,6 +63,7 @@ Total Duration: {{ .CriticalPath.TotalDuration }} (Queue: {{ .CriticalPath.Total
 {{ range .Steps }}| {{ .Name }} | {{ .Duration }} | {{ .Category }} |{{ if $hasNonSuccess }} {{ .Conclusion }} |{{ end }}
 {{ end }}
 {{ if gt .MinorStepsCount 0 }}| *{{ .MinorStepsCount }} minor steps (≤1s)* | *{{ .MinorStepsTotal }}* | *minor* |{{ if $hasNonSuccess }} - |{{ end }}
+{{ end }}
 {{ end }}
 {{ end }}
 {{ end }}
