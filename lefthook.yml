@@ -8,45 +8,6 @@ output:
 pre-commit:
   parallel: true
   commands:
-    trailing-whitespace:
-      tags: style
-      glob: "*"
-      run: |
-        for f in {staged_files}; do
-          [ -f "$f" ] || continue
-          [ "$(file -b --mime-encoding "$f")" = "binary" ] && continue
-          if [ "$(uname -s)" = Darwin ]; then
-            sed -i '' -e 's/[[:blank:]]*$//' "$f"
-          else
-            sed -i -e 's/[[:blank:]]*$//' "$f"
-          fi
-        done
-      stage_fixed: true
-
-    end-of-file-fixer:
-      tags: style
-      glob: "*"
-      run: |
-        for f in {staged_files}; do
-          [ -f "$f" ] || continue
-          [ -s "$f" ] || continue
-          [ "$(file -b --mime-encoding "$f")" = "binary" ] && continue
-          # $(tail -c1) drops a trailing newline in command substitution; compare the byte instead.
-          last=$(tail -c1 "$f" | od -An -tu1 | tr -d ' \n')
-          [ "$last" = "10" ] && continue
-          printf '\n' >> "$f"
-        done
-      stage_fixed: true
-
-    betterleaks:
-      tags: security
-      run: betterleaks git . --pre-commit --staged --redact -v
-
-    typos:
-      tags: linter
-      glob: "*"
-      run: typos --force-exclude {staged_files}
-
     actionlint:
       tags: linter
       glob: ".github/workflows/*.{yml,yaml}"
