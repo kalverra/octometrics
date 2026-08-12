@@ -37,17 +37,47 @@ type Timeline struct {
 
 // TimelineItem represents a single task or job in the timeline.
 type TimelineItem struct {
-	Name         string
-	ID           string
-	StartTime    time.Time
-	Duration     time.Duration
-	Conclusion   string
-	Link         string
-	IsRequired   bool
-	Runner       string
-	Cost         int64 // Cost in tenths of a cent
-	CostEstimate bool
-	CostGathered bool
+	Name          string
+	ID            string
+	JobID         int64
+	StartTime     time.Time
+	Duration      time.Duration
+	QueueDuration time.Duration
+	Conclusion    string
+	Link          string
+	HTMLURL       string
+	IsRequired    bool
+	Runner        string
+	Cost          int64 // Cost in tenths of a cent
+	CostEstimate  bool
+	CostGathered  bool
+	LogPath       string
+}
+
+// HasQueueTime returns true if any item in the timeline has queue time > 0.
+func (g *Timeline) HasQueueTime() bool {
+	if g == nil {
+		return false
+	}
+	for _, item := range g.Items {
+		if item.QueueDuration > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// AllSuccess returns true if all items in the timeline completed successfully.
+func (g *Timeline) AllSuccess() bool {
+	if g == nil || len(g.Items) == 0 {
+		return false
+	}
+	for _, item := range g.Items {
+		if item.Conclusion != "" && item.Conclusion != "success" && item.Conclusion != "done" {
+			return false
+		}
+	}
+	return true
 }
 
 // HasRunner returns true if any item in the timeline has a non-empty runner.
@@ -57,6 +87,19 @@ func (g *Timeline) HasRunner() bool {
 	}
 	for _, item := range g.Items {
 		if item.Runner != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// HasLogPath returns true if any item in the timeline has a non-empty LogPath.
+func (g *Timeline) HasLogPath() bool {
+	if g == nil {
+		return false
+	}
+	for _, item := range g.Items {
+		if item.LogPath != "" {
 			return true
 		}
 	}
@@ -153,7 +196,7 @@ func (g *Timeline) ItemsByDuration() []TimelineItem {
 func sanitizeMermaidName(s string) string {
 	s = strings.TrimSpace(s)
 	if len(s) > 80 {
-		s = "..." + s[len(s)-77:]
+		s = s[:38] + "..." + s[len(s)-38:]
 	}
 	s = strings.ReplaceAll(s, ":", "#colon;")
 	s = strings.ReplaceAll(s, ",", "#comma;")

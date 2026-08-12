@@ -817,15 +817,21 @@ func (c *Comparison) Render(log zerolog.Logger, outputType string) (string, erro
 		c.EventPairs = buildEventPairs(c.Left.TimelineData, c.Right.TimelineData, c.Owner, c.Repo, c.CompareType)
 	}
 
-	tmpl, _, compareName := templateForFormat(outputType)
 	baseDir := outputDirForFormat(outputType)
 	fileName := fmt.Sprintf("%s_vs_%s.%s", c.Left.ID, c.Right.ID, outputType)
 
 	targetFile := filepath.Join(baseDir, c.Owner, c.Repo, comparisonsOutputDir, fileName)
 
 	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, compareName, c); err != nil {
-		return "", fmt.Errorf("failed to render comparison %s: %w", outputType, err)
+	if outputType == "md" {
+		if err := mdTemplate.ExecuteTemplate(&buf, "compare_md", c); err != nil {
+			return "", fmt.Errorf("failed to render comparison %s: %w", outputType, err)
+		}
+		buf = cleanMarkdown(buf)
+	} else {
+		if err := htmlTemplate.ExecuteTemplate(&buf, "compare_html", c); err != nil {
+			return "", fmt.Errorf("failed to render comparison %s: %w", outputType, err)
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(targetFile), 0750); err != nil {
@@ -849,9 +855,15 @@ func (c *Comparison) RenderString(_ zerolog.Logger, outputType string) (string, 
 		c.EventPairs = buildEventPairs(c.Left.TimelineData, c.Right.TimelineData, c.Owner, c.Repo, c.CompareType)
 	}
 
-	tmpl, _, compareName := templateForFormat(outputType)
 	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, compareName, c); err != nil {
+	if outputType == "md" {
+		if err := mdTemplate.ExecuteTemplate(&buf, "compare_md", c); err != nil {
+			return "", fmt.Errorf("failed to render comparison %s: %w", outputType, err)
+		}
+		res := cleanMarkdown(buf)
+		return res.String(), nil
+	}
+	if err := htmlTemplate.ExecuteTemplate(&buf, "compare_html", c); err != nil {
 		return "", fmt.Errorf("failed to render comparison %s: %w", outputType, err)
 	}
 	return buf.String(), nil

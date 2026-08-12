@@ -1,9 +1,7 @@
 {{- /* Go Template file */ -}}
 
 {{ define "pull_request_md" }}
-
-<details>
-<summary><strong>Commits</strong></summary>
+### Commits
 
 {{ range . }}
 {{ $parsed := parseCommitMsg .GetCommit.GetMessage }}
@@ -11,7 +9,5 @@
 {{ if .GetMergeQueueEvents }}{{ range .GetMergeQueueEvents }}  - Added to merge queue {{ .AddedTime.Format "Jan 2 15:04" }} by {{ .AddedActor }}
 {{ if .RemovedTime }}  - Removed from merge queue {{ .RemovedTime.Format "Jan 2 15:04" }} by {{ .RemovedActor }} — {{ .RemovedReason }}
 {{ end }}{{ end }}{{ end }}{{ end }}
-
-</details>
 
 {{ end }}

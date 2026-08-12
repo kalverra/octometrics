@@ -7,6 +7,8 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/fang"
@@ -62,21 +64,33 @@ func commandNeedsGitHubToken(cmd *cobra.Command) bool {
 	return true
 }
 
-func buildObserveOptions(cfg *config.Config) []observe.Option {
-	gatherOpts := []gather.Option{
+func buildGatherOptions(cfg *config.Config) []gather.Option {
+	opts := []gather.Option{
 		gather.CustomDataFolder(cfg.DataDir),
+		gather.WithWait(cfg.Wait),
+		gather.WithWaitTimeout(cfg.WaitTimeout),
+		gather.WithPollInterval(cfg.PollInterval),
+		gather.WithProgressReporter(
+			gather.NewAutoProgressReporter(cfg.Progress, term.IsTerminal(int(os.Stderr.Fd())), os.Stderr),
+		),
 	}
 	if cfg.ForceUpdate {
-		gatherOpts = append(gatherOpts, gather.ForceUpdate())
+		opts = append(opts, gather.ForceUpdate())
 	}
 	if !cfg.ExcludeCosts {
-		gatherOpts = append(gatherOpts, gather.WithCost())
+		opts = append(opts, gather.WithCost())
 	} else {
-		gatherOpts = append(gatherOpts, gather.WithoutCost())
+		opts = append(opts, gather.WithoutCost())
 	}
+	if cfg.DownloadLogs {
+		opts = append(opts, gather.WithDownloadLogs(true))
+	}
+	return opts
+}
 
+func buildObserveOptions(cfg *config.Config) []observe.Option {
 	return []observe.Option{
-		observe.WithGatherOptions(gatherOpts...),
+		observe.WithGatherOptions(buildGatherOptions(cfg)...),
 		observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
 		observe.IncludeWorkflows(cfg.IncludeWorkflows),
 	}
@@ -170,17 +184,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			}
 
 			ctx := cmd.Context()
-			opts := []gather.Option{
-				gather.CustomDataFolder(cfg.DataDir),
-			}
-			if cfg.ForceUpdate {
-				opts = append(opts, gather.ForceUpdate())
-			}
-			if !cfg.ExcludeCosts {
-				opts = append(opts, gather.WithCost())
-			} else {
-				opts = append(opts, gather.WithoutCost())
-			}
+			opts := buildGatherOptions(cfg)
 
 			var rangeFailures int
 			if cfg.WorkflowRunID != 0 {
@@ -224,13 +228,59 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			}
 		}
 
-		if cfg.NoObserve {
-			return nil
+		vsTarget, _ := cmd.Flags().GetString("vs")
+		if vsTarget != "" {
+			vsRunID, vsSHA, parseErr := parseVsTarget(vsTarget)
+			if parseErr != nil {
+				return parseErr
+			}
+
+			var (
+				comparison *observe.Comparison
+				compErr    error
+			)
+			obsOpts := buildObserveOptions(cfg)
+			if vsRunID != 0 && cfg.WorkflowRunID != 0 {
+				comparison, compErr = observe.CompareWorkflowRuns(
+					cmd.Context(),
+					logger,
+					githubClient,
+					cfg.Owner,
+					cfg.Repo,
+					cfg.WorkflowRunID,
+					vsRunID,
+					obsOpts...)
+			} else if vsSHA != "" && cfg.CommitSHA != "" {
+				comparison, compErr = observe.CompareCommits(
+					cmd.Context(),
+					logger,
+					githubClient,
+					cfg.Owner,
+					cfg.Repo,
+					cfg.CommitSHA,
+					vsSHA,
+					obsOpts...)
+			}
+			if compErr != nil {
+				return fmt.Errorf("failed to compare against %s: %w", vsTarget, compErr)
+			}
+			if comparison != nil {
+				outStr, renderErr := comparison.RenderString(logger, format)
+				if renderErr != nil {
+					return fmt.Errorf("failed to render comparison: %w", renderErr)
+				}
+				if cfg.OutputFile != "" {
+					//nolint:gosec // user specified output file path
+					return os.WriteFile(cfg.OutputFile, []byte(outStr), 0600)
+				}
+				fmt.Print(outStr)
+				return nil
+			}
 		}
 
 		obsOpts := buildObserveOptions(cfg)
 
-		if toStdout || format == "md" {
+		if toStdout || format == "md" || format == "json" || cfg.OutputFile != "" {
 			var obs *observe.Observation
 			if cfg.WorkflowRunID != 0 {
 				obs, err = observe.WorkflowRun(
@@ -266,15 +316,33 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			}
 
 			if obs != nil {
+				if cfg.CommitSHA != "" {
+					if warnings := observe.CheckWorkflowDrift(".", cfg.CommitSHA); len(warnings) > 0 {
+						for _, w := range warnings {
+							fmt.Fprintln(os.Stderr, w)
+						}
+					}
+				}
 				outStr, err := obs.RenderString(logger, format)
 				if err != nil {
 					return fmt.Errorf("failed to render observation: %w", err)
+				}
+				if cfg.OutputFile != "" {
+					//nolint:gosec // user specified output file path
+					if writeErr := os.WriteFile(cfg.OutputFile, []byte(outStr), 0600); writeErr != nil {
+						return fmt.Errorf("failed to write output file %q: %w", cfg.OutputFile, writeErr)
+					}
+					return nil
 				}
 				fmt.Print(outStr)
 				return nil
 			}
 
 			return observe.All(cmd.Context(), logger, githubClient, []string{format}, cfg.DataDir, obsOpts...)
+		}
+
+		if cfg.NoObserve {
+			return nil
 		}
 
 		var pagePath string
@@ -323,9 +391,17 @@ func init() {
 	rootCmd.Flags().Bool("exclude-costs", false, "Skip gathering cost data for workflow runs")
 	rootCmd.Flags().StringSlice("exclude-workflows", nil, "Omit workflow display names from observations")
 	rootCmd.Flags().StringSlice("include-workflows", nil, "Include only specific workflow display names")
-	rootCmd.Flags().String("format", "html", "Output format: html or md")
+	rootCmd.Flags().String("format", "html", "Output format: html, md, or json")
+	rootCmd.Flags().StringP("output-file", "f", "", "File path to write rendered output")
+	rootCmd.Flags().Bool("json", false, "Output structured JSON to stdout")
 	rootCmd.Flags().Bool("stdout", false, "Output raw result to stdout without starting web server")
 	rootCmd.Flags().Bool("rebuild-manifest", false, "Rebuild manifest.jsonl files from local data directory")
+	rootCmd.Flags().Bool("wait", true, "Wait for in-progress workflow/commit runs to complete before collecting")
+	rootCmd.Flags().Duration("wait-timeout", 30*time.Minute, "Maximum duration to wait for in-progress runs")
+	rootCmd.Flags().Duration("poll-interval", 10*time.Second, "Polling frequency when waiting for in-progress runs")
+	rootCmd.Flags().String("progress", "auto", "Progress output style (auto, human, ai, none)")
+	rootCmd.Flags().Bool("download-logs", false, "Download raw job log files from GitHub")
+	rootCmd.Flags().String("vs", "", "Baseline workflow run ID, commit SHA, or URL to compare against")
 }
 
 // Execute runs the root command for octometrics.
@@ -338,23 +414,61 @@ func Execute() {
 func determineFormat(cmd *cobra.Command) (format string, toStdout bool, err error) {
 	fmtFlag, _ := cmd.Flags().GetString("format")
 	stdoutFlag, _ := cmd.Flags().GetBool("stdout")
+	jsonFlag, _ := cmd.Flags().GetBool("json")
+	outputFileFlag, _ := cmd.Flags().GetString("output-file")
 
-	if fmtFlag != "html" && fmtFlag != "md" && fmtFlag != "markdown" {
-		return "", false, fmt.Errorf("invalid format %q: must be 'html' or 'md'", fmtFlag)
+	if jsonFlag {
+		fmtFlag = "json"
+	}
+
+	if fmtFlag != "html" && fmtFlag != "md" && fmtFlag != "markdown" && fmtFlag != "json" {
+		return "", false, fmt.Errorf("invalid format %q: must be 'html', 'md', or 'json'", fmtFlag)
 	}
 	if fmtFlag == "markdown" {
 		fmtFlag = "md"
 	}
 
 	nonInteractive := !term.IsTerminal(int(os.Stdout.Fd()))
-	isExplicitFormat := cmd.Flags().Changed("format")
+	isExplicitFormat := cmd.Flags().Changed("format") || jsonFlag
 
-	if stdoutFlag || fmtFlag == "md" || (nonInteractive && !isExplicitFormat) {
-		if !isExplicitFormat && (stdoutFlag || nonInteractive) {
+	if stdoutFlag || outputFileFlag != "" || fmtFlag == "md" || fmtFlag == "json" ||
+		(nonInteractive && !isExplicitFormat) {
+		if !isExplicitFormat && (stdoutFlag || outputFileFlag != "" || nonInteractive) {
 			fmtFlag = "md"
 		}
 		toStdout = true
 	}
 
 	return fmtFlag, toStdout, nil
+}
+
+func parseVsTarget(target string) (runID int64, sha string, err error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return 0, "", nil
+	}
+
+	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+		res, parseErr := githuburl.Parse(target)
+		if parseErr != nil {
+			return 0, "", fmt.Errorf("invalid --vs URL %q: %w", target, parseErr)
+		}
+		if res.WorkflowRunID != 0 {
+			return res.WorkflowRunID, "", nil
+		}
+		if res.CommitSHA != "" {
+			return 0, res.CommitSHA, nil
+		}
+		return 0, "", fmt.Errorf("could not extract run ID or commit SHA from --vs URL %q", target)
+	}
+
+	if id, parseErr := strconv.ParseInt(target, 10, 64); parseErr == nil && id > 0 {
+		return id, "", nil
+	}
+
+	if len(target) >= 7 && len(target) <= 40 {
+		return 0, target, nil
+	}
+
+	return 0, "", fmt.Errorf("invalid --vs target %q: expected run ID, commit SHA, or GitHub URL", target)
 }

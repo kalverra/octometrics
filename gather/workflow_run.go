@@ -95,6 +95,8 @@ type JobData struct {
 	CostGathered bool `json:"cost_gathered,omitempty"`
 	// Analysis is monitoring analysis data for the job run
 	Analysis *monitor.Analysis `json:"analysis,omitempty"`
+	// LogPath is the path to the downloaded raw log file for this job
+	LogPath string `json:"log_path,omitempty"`
 }
 
 // GetRunner returns the runner type used for the job.
@@ -103,6 +105,14 @@ func (j *JobData) GetRunner() string {
 		return ""
 	}
 	return j.Runner
+}
+
+// GetLogPath returns the path to the downloaded raw log file for this job.
+func (j *JobData) GetLogPath() string {
+	if j == nil {
+		return ""
+	}
+	return j.LogPath
 }
 
 // GetCost returns the cost of the job run in tenths of a cent.
@@ -151,6 +161,15 @@ type WorkflowRunData struct {
 	CorrespondingPRNum       int                      `json:"corresponding_pr_number,omitempty"`
 	CorrespondingPRCloseTime time.Time                `json:"corresponding_pr_close_time,omitzero"`
 	CorrespondingCommitSHA   string                   `json:"corresponding_commit_sha,omitempty"`
+	LogsDir                  string                   `json:"logs_dir,omitempty"`
+}
+
+// GetLogsDir returns the directory containing downloaded raw log files.
+func (w *WorkflowRunData) GetLogsDir() string {
+	if w == nil {
+		return ""
+	}
+	return w.LogsDir
 }
 
 // GetOwner returns the owner of the repository for the workflow run.
@@ -274,6 +293,24 @@ func WorkflowRun(
 				}
 			}
 			if data, loadErr := loadWorkflowRunFromDisk(targetFile); loadErr == nil {
+				logsDir := filepath.Join(opts.DataDir, owner, repo, "logs", fmt.Sprintf("%d", workflowRunID))
+				if cacheFileExists(logsDir) {
+					data.LogsDir = logsDir
+				}
+				if opts.downloadLogs && client != nil {
+					if dlLogsDir, dlErr := downloadWorkflowRunLogs(
+						ctx,
+						log,
+						client,
+						owner,
+						repo,
+						workflowRunID,
+						data.Jobs,
+						opts.DataDir,
+					); dlErr == nil {
+						data.LogsDir = dlLogsDir
+					}
+				}
 				if !opts.gatherCost || data.CostGathered || client == nil {
 					workflowRunCache.Store(cacheKey, data)
 					log.Debug().
@@ -332,30 +369,88 @@ func loadWorkflowRunFromDisk(targetFile string) (*WorkflowRunData, error) {
 // FindWorkflowRunIDForJob scans the data directory for the workflow run that contains
 // the given job ID. Returns the workflow run ID and nil error if found.
 func FindWorkflowRunIDForJob(dataDir, owner, repo string, jobID int64) (int64, error) {
-	wfDir := filepath.Join(dataDir, owner, repo, WorkflowRunsDataDir)
-	entries, err := os.ReadDir(wfDir)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read workflow runs directory: %w", err)
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
+	var targetWfID int64
+	var found bool
+
+	err := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".json" {
+			return nil
 		}
-		wfID, err := strconv.ParseInt(strings.TrimSuffix(entry.Name(), ".json"), 10, 64)
-		if err != nil {
-			continue
+		dirName := filepath.Base(filepath.Dir(path))
+		if dirName != WorkflowRunsDataDir {
+			return nil
 		}
-		data, err := loadWorkflowRunFromDisk(filepath.Join(wfDir, entry.Name()))
-		if err != nil {
-			continue
+		if owner != "" && repo != "" {
+			rel, relErr := filepath.Rel(dataDir, path)
+			if relErr == nil {
+				parts := strings.Split(rel, string(filepath.Separator))
+				if len(parts) >= 2 && (parts[0] != owner || parts[1] != repo) {
+					return nil
+				}
+			}
+		}
+		wfID, parseErr := strconv.ParseInt(strings.TrimSuffix(d.Name(), ".json"), 10, 64)
+		if parseErr != nil {
+			return nil
+		}
+		data, loadErr := loadWorkflowRunFromDisk(path)
+		if loadErr != nil {
+			return nil
 		}
 		for _, job := range data.Jobs {
 			if job.GetID() == jobID {
-				return wfID, nil
+				targetWfID = wfID
+				found = true
+				return filepath.SkipAll
 			}
 		}
+		return nil
+	})
+	if err != nil || !found {
+		return 0, fmt.Errorf("job %d not found in dataDir", jobID)
 	}
-	return 0, fmt.Errorf("no workflow run found containing job ID %d", jobID)
+
+	return targetWfID, nil
+}
+
+// FindOwnerRepoForJob scans the data directory for the workflow run containing jobID and returns its owner and repo.
+func FindOwnerRepoForJob(dataDir string, jobID int64) (owner, repo string, wfID int64, err error) {
+	var foundOwner, foundRepo string
+	var targetWfID int64
+	var found bool
+
+	walkErr := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() || filepath.Ext(path) != ".json" {
+			return nil
+		}
+		if filepath.Base(filepath.Dir(path)) != WorkflowRunsDataDir {
+			return nil
+		}
+		wfIDVal, parseErr := strconv.ParseInt(strings.TrimSuffix(d.Name(), ".json"), 10, 64)
+		if parseErr != nil {
+			return nil
+		}
+		data, loadErr := loadWorkflowRunFromDisk(path)
+		if loadErr != nil {
+			return nil
+		}
+		for _, job := range data.Jobs {
+			if job.GetID() == jobID {
+				targetWfID = wfIDVal
+				foundOwner = data.GetOwner()
+				foundRepo = data.GetRepo()
+				found = true
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+
+	if walkErr != nil || !found {
+		return "", "", 0, fmt.Errorf("job %d not found in dataDir", jobID)
+	}
+
+	return foundOwner, foundRepo, targetWfID, nil
 }
 
 // saveWorkflowRunToDisk saves a workflow run to local disk.
@@ -412,6 +507,55 @@ func fetchWorkflowRunFromGitHub(
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+
+	if workflowRun.GetStatus() != "completed" && opts.Wait {
+		waitMsg := fmt.Sprintf("Waiting for workflow run %d (%s) to complete", workflowRunID, workflowRun.GetName())
+		opts.Reporter.Start(waitMsg)
+		startTime := time.Now()
+
+		pollInterval := opts.PollInterval
+		if pollInterval <= 0 {
+			pollInterval = 10 * time.Second
+		}
+		pollTicker := time.NewTicker(pollInterval)
+		defer pollTicker.Stop()
+
+		waitCtx := parentCtx
+		if opts.WaitTimeout > 0 {
+			var cancel context.CancelFunc
+			waitCtx, cancel = context.WithTimeout(parentCtx, opts.WaitTimeout)
+			defer cancel()
+		}
+
+	WaitLoop:
+		for workflowRun.GetStatus() != "completed" {
+			select {
+			case <-waitCtx.Done():
+				log.Warn().Err(waitCtx.Err()).Msg("Timed out or context cancelled waiting for workflow run")
+				break WaitLoop
+			case <-pollTicker.C:
+				elapsed := time.Since(startTime)
+				opts.Reporter.Update(waitMsg, elapsed)
+
+				pollCtx, pollCancel := ghCtx(waitCtx)
+				updatedRun, _, pollErr := client.Rest.Actions.GetWorkflowRunByID(pollCtx, owner, repo, workflowRunID)
+				pollCancel()
+				if pollErr == nil && updatedRun != nil {
+					workflowRun = updatedRun
+				}
+			}
+		}
+
+		if workflowRun.GetStatus() == "completed" {
+			opts.Reporter.Stop(
+				fmt.Sprintf("Workflow run %d completed (%s)", workflowRunID, time.Since(startTime).Round(time.Second)),
+			)
+		} else {
+			opts.Reporter.Stop(
+				fmt.Sprintf("Stopped waiting for workflow run %d (status: %s)", workflowRunID, workflowRun.GetStatus()),
+			)
+		}
 	}
 
 	data := &WorkflowRunData{
@@ -493,7 +637,96 @@ func fetchWorkflowRunFromGitHub(
 	)
 	processAnalyses(log, data, analyses)
 
+	if opts.downloadLogs {
+		logsDir, dlErr := downloadWorkflowRunLogs(
+			parentCtx,
+			log,
+			client,
+			owner,
+			repo,
+			workflowRunID,
+			data.Jobs,
+			opts.DataDir,
+		)
+		if dlErr != nil {
+			log.Warn().
+				Err(dlErr).
+				Int64("workflow_run_id", workflowRunID).
+				Msg("failed downloading raw workflow run logs")
+		} else {
+			data.LogsDir = logsDir
+		}
+	}
+
 	return data, nil
+}
+
+func downloadWorkflowRunLogs(
+	ctx context.Context,
+	_ zerolog.Logger,
+	client *GitHubClient,
+	owner, repo string,
+	workflowRunID int64,
+	jobs []*JobData,
+	dataDir string,
+) (string, error) {
+	logsDir := filepath.Join(dataDir, owner, repo, "logs", fmt.Sprintf("%d", workflowRunID))
+	if err := ensureDataDir(logsDir, "logs"); err != nil {
+		return "", err
+	}
+
+	if client != nil {
+		zipURL, resp, err := client.Rest.Actions.GetWorkflowRunLogs(ctx, owner, repo, workflowRunID, 5)
+		if err == nil && zipURL != nil && (resp.StatusCode == http.StatusFound || resp.StatusCode == http.StatusOK) {
+			req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, zipURL.String(), nil)
+			if reqErr == nil {
+				dlResp, dlErr := unauthenticatedHTTPClient.Do(req)
+				if dlErr == nil && dlResp.StatusCode == http.StatusOK {
+					zipBytes, readErr := io.ReadAll(dlResp.Body)
+					_ = dlResp.Body.Close()
+					if readErr == nil {
+						r, zipErr := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
+						if zipErr == nil {
+							for _, f := range r.File {
+								rc, openErr := f.Open()
+								if openErr != nil {
+									continue
+								}
+								content, _ := io.ReadAll(rc)
+								_ = rc.Close()
+
+								targetName := filepath.Clean(f.Name)
+								destPath := filepath.Join(logsDir, targetName)
+								_ = os.MkdirAll(filepath.Dir(destPath), 0700)
+								_ = os.WriteFile(destPath, content, 0600)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for _, job := range jobs {
+		if job == nil || job.GetID() == 0 {
+			continue
+		}
+		jobLogPath := filepath.Join(logsDir, fmt.Sprintf("%d.log", job.GetID()))
+		job.LogPath = jobLogPath
+
+		if cacheFileExists(jobLogPath) {
+			continue
+		}
+
+		if client != nil {
+			logs, err := fetchFullJobLogs(ctx, client, owner, repo, job.GetID())
+			if err == nil && logs != "" {
+				_ = os.WriteFile(jobLogPath, []byte(logs), 0600)
+			}
+		}
+	}
+
+	return logsDir, nil
 }
 
 type runsOnLogResult struct {

@@ -2,6 +2,7 @@ package gather
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -92,6 +93,73 @@ func TestGatherWorkflowRun_InProgress(t *testing.T) {
 		workflowRun.GetCreatedAt(),
 		"workflow run created at should match",
 	)
+}
+
+func TestGatherWorkflowRun_WaitInProgress(t *testing.T) {
+	t.Parallel()
+
+	var getRunCalls atomic.Int32
+	mockWorkflowRunInProgress := *mockWorkflowRun
+	mockWorkflowRunInProgress.ID = new(int64(777))
+	mockWorkflowRunInProgress.Status = new("in_progress")
+
+	mockWorkflowRunCompleted := *mockWorkflowRun
+	mockWorkflowRunCompleted.ID = new(int64(777))
+	mockWorkflowRunCompleted.Status = new("completed")
+	mockWorkflowRunCompleted.Conclusion = new("success")
+
+	mockedHTTPClient := mock.NewMockedHTTPClient(
+		mock.WithRequestMatchHandler(
+			mock.GetReposActionsRunsByOwnerByRepoByRunId,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if getRunCalls.Add(1) == 1 {
+					_ = json.NewEncoder(w).Encode(mockWorkflowRunInProgress)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(mockWorkflowRunCompleted)
+			}),
+		),
+		mock.WithRequestMatchPages(
+			mock.GetReposActionsRunsJobsByOwnerByRepoByRunId,
+			&github.Jobs{
+				TotalCount: new(1),
+				Jobs:       []*github.WorkflowJob{mockJobs[0]},
+			},
+		),
+		mock.WithRequestMatch(
+			mock.GetReposActionsRunsTimingByOwnerByRepoByRunId,
+			&github.WorkflowRunUsage{},
+		),
+		mock.WithRequestMatchPages(
+			mock.GetReposActionsRunsArtifactsByOwnerByRepoByRunId,
+			&github.ArtifactList{TotalCount: new(int64(0)), Artifacts: []*github.Artifact{}},
+		),
+	)
+
+	log, testDataDir := testhelpers.Setup(t)
+	client, err := NewGitHubClient(log, "mock-token", mockedHTTPClient.Transport)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	reporter := NewAIProgressReporter(&buf)
+
+	workflowRun, targetFile, err := WorkflowRun(
+		t.Context(),
+		log, client, testGatherOwner, testGatherRepo, 777,
+		CustomDataFolder(testDataDir),
+		WithWait(true),
+		WithPollInterval(10*time.Millisecond),
+		WithWaitTimeout(5*time.Second),
+		WithProgressReporter(reporter),
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, workflowRun)
+	require.FileExists(t, targetFile)
+	require.Equal(t, "completed", workflowRun.GetStatus())
+	require.Equal(t, int32(2), getRunCalls.Load())
+	require.Contains(t, buf.String(), "Waiting for workflow run 777")
 }
 
 func TestGatherWorkflowRun(t *testing.T) {

@@ -62,6 +62,40 @@ func buildFlowChart(def *gather.WorkflowDef, jobs []*gather.JobData) string {
 			edges = append(edges, edge{from: need, to: id})
 		}
 	}
+
+	// Process extra runtime jobs (e.g. reusable workflow child jobs like "parent / child")
+	extraNodes := make(map[string]string)
+	for _, job := range jobs {
+		if job == nil || job.WorkflowJob == nil {
+			continue
+		}
+		name := job.GetName()
+		if strings.Contains(name, " / ") {
+			parts := strings.Split(name, " / ")
+			parent := strings.TrimSpace(parts[0])
+			child := strings.TrimSpace(parts[len(parts)-1])
+			parentID := sanitizeMermaidID(parent)
+			childID := sanitizeMermaidID(child)
+
+			if _, exists := def.Jobs[childID]; !exists {
+				extraNodes[childID] = child
+				edges = append(edges, edge{from: parentID, to: childID})
+			}
+		}
+	}
+
+	extraIDs := make([]string, 0, len(extraNodes))
+	for id := range extraNodes {
+		extraIDs = append(extraIDs, id)
+	}
+	sort.Strings(extraIDs)
+
+	for _, id := range extraIDs {
+		sanitized := sanitizeMermaidID(id)
+		sanitizedName := sanitizeMermaidName(extraNodes[id])
+		fmt.Fprintf(&b, "    %s[%q]\n", sanitized, sanitizedName)
+	}
+
 	sort.Slice(edges, func(i, j int) bool {
 		if edges[i].from != edges[j].from {
 			return edges[i].from < edges[j].from

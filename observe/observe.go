@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net"
@@ -11,11 +12,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	texttemplate "text/template"
 	"time"
 
 	"charm.land/huh/v2/spinner"
@@ -52,12 +55,12 @@ func setActiveHTMLOutputDir(custom string) {
 var (
 	// htmlTemplate is the cached template for HTML rendering
 	htmlTemplate *template.Template
-	// mdTemplate is the cached template for Markdown rendering
-	mdTemplate *template.Template
+	// mdTemplate is the cached template for Markdown rendering using text/template to avoid HTML entity escaping
+	mdTemplate *texttemplate.Template
 )
 
-func sharedFuncMap() template.FuncMap {
-	return template.FuncMap{
+func sharedFuncMap() map[string]any {
+	return map[string]any{
 		"sanitizeMermaidName": sanitizeMermaidName,
 		"commitRunLink":       commitRunLink,
 		"divideBy1000":        func(v int64) float64 { return float64(v) / 1000.0 },
@@ -101,15 +104,6 @@ func conclusionText(conclusion string) string {
 		return "in progress"
 	default:
 		return "success"
-	}
-}
-
-func templateForFormat(outputType string) (tmpl *template.Template, observationName, compareName string) {
-	switch outputType {
-	case "md":
-		return mdTemplate, "observation_md", "compare_md"
-	default:
-		return htmlTemplate, "observation_html", "compare_html"
 	}
 }
 
@@ -176,7 +170,7 @@ func WriteStaticAssets(outputDir string) error {
 func init() {
 	var err error
 
-	htmlFuncs := sharedFuncMap()
+	htmlFuncs := template.FuncMap(sharedFuncMap())
 	htmlFuncs["mermaidDiagram"] = func(s string) template.HTML { return template.HTML(s) }
 	htmlFuncs["deltaClass"] = func(d time.Duration) string {
 		if d > 0 {
@@ -214,7 +208,7 @@ func init() {
 		panic(fmt.Errorf("failed to parse HTML templates: %w", err))
 	}
 
-	mdTemplate, err = template.New("observation_md").Funcs(sharedFuncMap()).
+	mdTemplate, err = texttemplate.New("observation_md").Funcs(texttemplate.FuncMap(sharedFuncMap())).
 		ParseFS(templateFS, "templates/*.md")
 	if err != nil {
 		panic(fmt.Errorf("failed to parse Markdown templates: %w", err))
@@ -302,6 +296,8 @@ type Observation struct {
 	CostEstimate bool
 	// CostGathered is true when cost data was gathered (billing API or log parsing)
 	CostGathered bool
+	// LogsDir is the directory containing downloaded raw log files
+	LogsDir string
 
 	// Branch protection: required status checks for the default branch
 	RequiredWorkflows       []string
@@ -315,9 +311,14 @@ type Observation struct {
 
 	// Data used to render a Pull Request with multiple commits
 	CommitData []*gather.CommitData
+
+	// Analytics data for workflow runs
+	CriticalPath    *CriticalPathInfo  `json:"critical_path,omitempty"`
+	StepSummaries   []StepSummary      `json:"step_summaries,omitempty"`
+	SlowestJobSteps []JobStepBreakdown `json:"slowest_job_steps,omitempty"`
 }
 
-// Render writes the observation to a file in the specified output format (html or md).
+// Render writes the observation to a file in the specified output format (html, md, or json).
 func (o *Observation) Render(
 	log zerolog.Logger,
 	outputType string,
@@ -384,7 +385,7 @@ func (o *Observation) Render(
 	return observationFile, nil
 }
 
-// RenderString renders the observation to a string in the specified format ("html" or "md").
+// RenderString renders the observation to a string in the specified format ("html", "md", or "json").
 func (o *Observation) RenderString(
 	_ zerolog.Logger,
 	outputType string,
@@ -399,10 +400,38 @@ func (o *Observation) RenderString(
 	return buf.String(), nil
 }
 
+var multipleNewlinesPattern = regexp.MustCompile(`\n{3,}`)
+
+func cleanMarkdown(b bytes.Buffer) bytes.Buffer {
+	lines := strings.Split(b.String(), "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t\r")
+	}
+	s := strings.Join(lines, "\n")
+	s = multipleNewlinesPattern.ReplaceAllString(s, "\n\n")
+	s = strings.TrimSpace(s) + "\n"
+	var out bytes.Buffer
+	out.WriteString(s)
+	return out
+}
+
 func (o *Observation) renderToFormat(outputType string) (bytes.Buffer, error) {
-	tmpl, name, _ := templateForFormat(outputType)
 	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, name, o); err != nil {
+	if outputType == "json" {
+		enc := json.NewEncoder(&buf)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(o); err != nil {
+			return buf, fmt.Errorf("failed to encode observation to JSON: %w", err)
+		}
+		return buf, nil
+	}
+	if outputType == "md" {
+		if err := mdTemplate.ExecuteTemplate(&buf, "observation_md", o); err != nil {
+			return buf, err
+		}
+		return cleanMarkdown(buf), nil
+	}
+	if err := htmlTemplate.ExecuteTemplate(&buf, "observation_html", o); err != nil {
 		return buf, err
 	}
 	return buf, nil

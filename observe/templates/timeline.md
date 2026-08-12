@@ -2,6 +2,7 @@
 
 {{ define "timeline_md" }}
 {{ if .Items }}
+{{ if le (len .Items) 15 }}
 ```mermaid
 gantt
     dateFormat {{ .DateFormat }}
@@ -10,44 +11,36 @@ gantt
     {{ range .Items }}
     {{ sanitizeMermaidName .Name }} :{{ if .Conclusion }}{{ .Conclusion }},{{ end }} {{ .ID }}, {{ .StartTime.Format $dateFormat }}, {{ .Duration.Seconds }}s{{ end }}
 ```
+{{ end }}
 
 {{ $hasRunner := .HasRunner }}
 {{ $hasCost := .HasCost }}
-<details>
-<summary>Runs ({{ len .Items }} items)</summary>
+{{ $hasLogPath := .HasLogPath }}
+{{ $hasQueue := .HasQueueTime }}
+{{ $allSuccess := .AllSuccess }}
+### Runs ({{ len .Items }} items)
 
-| Name{{ if $hasRunner }} | Runner{{ end }}{{ if $hasCost }} | Cost{{ end }} | Duration | Status |
-|------{{ if $hasRunner }}|--------{{ end }}{{ if $hasCost }}|------{{ end }}|----------|--------|
-{{ range .ItemsByDuration }}| {{ .Name }} {{ if $hasRunner }}| {{ .Runner }} {{ end }}{{ if $hasCost }}| {{ if .CostGathered }}${{ printf "%.2f" (divideBy1000 .Cost) }}{{ if .CostEstimate }} (est.){{ end }}{{ else }}—{{ end }} {{ end }}| {{ .Duration }} | {{ conclusionText .Conclusion }} |
+| Name | Job ID{{ if $hasRunner }} | Runner{{ end }}{{ if $hasQueue }} | Queue Time{{ end }}{{ if $hasCost }} | Cost{{ end }} | Duration |{{ if not $allSuccess }} Status |{{ end }}{{ if $hasLogPath }} Log Path |{{ end }}
+|------|--------{{ if $hasRunner }}|--------{{ end }}{{ if $hasQueue }}|------------{{ end }}{{ if $hasCost }}|------{{ end }}|----------|{{ if not $allSuccess }}--------|{{ end }}{{ if $hasLogPath }}----------|{{ end }}
+{{ range .ItemsByDuration }}| {{ .Name }} | `{{ .JobID }}` {{ if $hasRunner }}| {{ .Runner }} {{ end }}{{ if $hasQueue }}| {{ .QueueDuration }} {{ end }}{{ if $hasCost }}| {{ if .CostGathered }}${{ printf "%.2f" (divideBy1000 .Cost) }}{{ if .CostEstimate }} (est.){{ end }}{{ else }}—{{ end }} {{ end }}| {{ .Duration }} |{{ if not $allSuccess }} {{ conclusionText .Conclusion }} |{{ end }}{{ if $hasLogPath }} {{ if .LogPath }}{{ .LogPath }}{{ else }}—{{ end }} |{{ end }}
 {{ end }}
-
-</details>
 {{ end }}
 {{ if .QueuedItems }}
-<details>
-<summary>Queued</summary>
+### Queued
 
 {{ range .QueuedItems }}- {{ . }}
 {{ end }}
-
-</details>
 {{ end }}
 {{ if .SkippedItems }}
-<details>
-<summary>Skipped</summary>
+### Skipped
 
 {{ range .SkippedItems }}- {{ . }}
 {{ end }}
-
-</details>
 {{ end }}
 {{ if .PostTimelineItems }}
-<details>
-<summary>Post-Timeline</summary>
+### Post-Timeline
 
 {{ range .PostTimelineItems }}- {{ .Name }} ({{ .Time.Format "2006-01-02T15:04:05" }})
 {{ end }}
-
-</details>
 {{ end }}
 {{ end }}

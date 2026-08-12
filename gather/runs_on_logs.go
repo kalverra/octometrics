@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -41,7 +43,86 @@ func (s *RunsOnCostSummary) CostInTenthsOfCent() int64 {
 // costSummaryMarker is the marker that runs-on uses in job logs.
 const costSummaryMarker = "Execution Cost Summary"
 
-var logTimestampPattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s`)
+var (
+	ansiEscapePattern    = regexp.MustCompile("\x1b\\[[0-9;]*[a-zA-Z]")
+	longTimestampPattern = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d{6})\d*Z`)
+	logTimestampPattern  = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z\s`)
+)
+
+// CleanLog strips ANSI control characters and truncates 7+ digit fractional-second timestamps.
+func CleanLog(raw string) string {
+	raw = ansiEscapePattern.ReplaceAllString(raw, "")
+	lines := strings.Split(raw, "\n")
+	for i, line := range lines {
+		lines[i] = longTimestampPattern.ReplaceAllString(line, "${1}.${2}Z")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// GetCleanJobLogs fetches and cleans logs for a job ID from local disk cache or GitHub.
+func GetCleanJobLogs(
+	ctx context.Context,
+	_ zerolog.Logger,
+	client *GitHubClient,
+	owner, repo string,
+	jobID int64,
+	dataDir string,
+) (string, error) {
+	if owner == "" || repo == "" {
+		if autoOwner, autoRepo, _, autoErr := FindOwnerRepoForJob(
+			dataDir,
+			jobID,
+		); autoErr == nil && autoOwner != "" &&
+			autoRepo != "" {
+			owner = autoOwner
+			repo = autoRepo
+		}
+	}
+
+	wfID, err := FindWorkflowRunIDForJob(dataDir, owner, repo, jobID)
+	if err == nil {
+		jobLogPath := filepath.Join(dataDir, owner, repo, "logs", fmt.Sprintf("%d", wfID), fmt.Sprintf("%d.log", jobID))
+		if cacheFileExists(jobLogPath) {
+			//nolint:gosec // job log path is safely constructed inside dataDir
+			data, readErr := os.ReadFile(jobLogPath)
+			if readErr == nil {
+				return CleanLog(string(data)), nil
+			}
+		}
+	}
+
+	var foundLogContent string
+	var logFound bool
+	targetLogName := fmt.Sprintf("%d.log", jobID)
+	_ = filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if d.Name() == targetLogName {
+			//nolint:gosec // path is inside dataDir
+			data, readErr := os.ReadFile(path)
+			if readErr == nil {
+				foundLogContent = string(data)
+				logFound = true
+				return filepath.SkipAll
+			}
+		}
+		return nil
+	})
+	if logFound {
+		return CleanLog(foundLogContent), nil
+	}
+
+	if client == nil {
+		return "", fmt.Errorf("no cached log file found for job %d and GitHub client is nil", jobID)
+	}
+
+	raw, fetchErr := fetchFullJobLogs(ctx, client, owner, repo, jobID)
+	if fetchErr != nil {
+		return "", fetchErr
+	}
+	return CleanLog(raw), nil
+}
 
 // stripLogTimestamp removes the GitHub Actions log timestamp prefix from a line.
 func stripLogTimestamp(line string) string {
@@ -202,6 +283,60 @@ func fetchJobLogs(parentCtx context.Context, client *GitHubClient, owner, repo s
 	return logs, nil
 }
 
+// fetchFullJobLogs downloads complete logs for a single workflow job without range truncation.
+func fetchFullJobLogs(
+	parentCtx context.Context,
+	client *GitHubClient,
+	owner, repo string,
+	jobID int64,
+) (string, error) {
+	ctx, cancel := ghCtx(parentCtx)
+	defer cancel()
+
+	logURL, resp, err := client.Rest.Actions.GetWorkflowJobLogs(ctx, owner, repo, jobID, 5)
+	if err != nil {
+		return "", fmt.Errorf("failed to get job logs URL for job %d: %w", jobID, err)
+	}
+	if resp.StatusCode != http.StatusFound && resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(
+			"expected status code %d or %d for job logs redirect, got %d",
+			http.StatusFound,
+			http.StatusOK,
+			resp.StatusCode,
+		)
+	}
+
+	if logURL == nil || logURL.String() == "" {
+		return "", fmt.Errorf("job logs URL for job %d is empty", jobID)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, logURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create log request for job %d: %w", jobID, err)
+	}
+
+	downloadResp, err := unauthenticatedHTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to download job logs for job %d: %w", jobID, err)
+	}
+	defer func() { _ = downloadResp.Body.Close() }()
+
+	if downloadResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf(
+			"unexpected status code %d downloading job logs for job %d",
+			downloadResp.StatusCode,
+			jobID,
+		)
+	}
+
+	bodyBytes, err := readAllLimited(downloadResp.Body, maxMonitorJSONLSize)
+	if err != nil {
+		return "", fmt.Errorf("failed to read job logs body for job %d: %w", jobID, err)
+	}
+
+	return string(bodyBytes), nil
+}
+
 // fetchRunsOnCostFromLogs fetches job logs and parses the runs-on cost summary.
 // Checks disk cache at data/<owner>/<repo>/runs_on_costs/<jobID>.json first.
 func fetchRunsOnCostFromLogs(
@@ -237,4 +372,77 @@ func fetchRunsOnCostFromLogs(
 	_ = writeJSONFile(cacheFile, summary)
 
 	return summary.CostInTenthsOfCent(), summary, nil
+}
+
+// LogGap represents a delay between consecutive log lines.
+type LogGap struct {
+	Duration        time.Duration `json:"duration"`
+	LineBefore      string        `json:"line_before"`
+	LineAfter       string        `json:"line_after"`
+	IsBufferedFlush bool          `json:"is_buffered_flush,omitempty"`
+}
+
+var isoTimestampPattern = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)`)
+
+// ParseLogGaps parses timestamps in log lines and returns the top N gaps.
+func ParseLogGaps(rawLog string, topN int) []LogGap {
+	if topN <= 0 {
+		topN = 5
+	}
+	lines := strings.Split(rawLog, "\n")
+	type entry struct {
+		t    time.Time
+		line string
+	}
+	var entries []entry
+	for _, l := range lines {
+		trimmed := strings.TrimRight(l, "\r")
+		m := isoTimestampPattern.FindStringSubmatch(trimmed)
+		if len(m) > 1 {
+			tStr := m[1]
+			t, err := time.Parse(time.RFC3339Nano, tStr)
+			if err != nil {
+				t, err = time.Parse("2006-01-02T15:04:05.999999999Z", tStr)
+			}
+			if err == nil {
+				entries = append(entries, entry{t: t, line: trimmed})
+			}
+		}
+	}
+
+	var gaps []LogGap
+	for i := 1; i < len(entries); i++ {
+		dur := entries[i].t.Sub(entries[i-1].t)
+		if dur > 0 {
+			sameCount := 0
+			for j := i; j < len(entries); j++ {
+				if entries[j].t.Sub(entries[i].t).Abs() <= 50*time.Millisecond {
+					sameCount++
+				} else {
+					break
+				}
+			}
+			gaps = append(gaps, LogGap{
+				Duration:        dur,
+				LineBefore:      entries[i-1].line,
+				LineAfter:       entries[i].line,
+				IsBufferedFlush: sameCount >= 3,
+			})
+		}
+	}
+
+	slices.SortFunc(gaps, func(a, b LogGap) int {
+		if a.Duration > b.Duration {
+			return -1
+		}
+		if a.Duration < b.Duration {
+			return 1
+		}
+		return 0
+	})
+
+	if len(gaps) > topN {
+		gaps = gaps[:topN]
+	}
+	return gaps
 }

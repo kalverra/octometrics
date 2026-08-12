@@ -12,8 +12,7 @@
 {{ if or .Summary.LeftCost .Summary.RightCost }}| **Cost** | ${{ printf "%.2f" (divideBy1000 .Summary.LeftCost) }} | ${{ printf "%.2f" (divideBy1000 .Summary.RightCost) }} |
 {{ end }}
 {{ range .EventPairs }}
-<details open>
-<summary><strong>{{ .Event }}</strong> — {{ .LeftDuration }} → {{ .RightDuration }} ({{ formatDelta .DurationDelta }})</summary>
+## {{ .Event }} — {{ .LeftDuration }} → {{ .RightDuration }} ({{ formatDelta .DurationDelta }})
 
 | Metric | Before | After | Delta | % Delta |
 |---|---|---|---|---|
@@ -27,7 +26,7 @@
 {{ template "compare_gantt_md" .CombinedGantt }}
 {{ else }}
 {{ if .Left }}
-### Before — {{ .Left.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Left.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Left.Duration }})
+### Before — {{ .Left.RealStartTime.Format "2006-01-02T15:04:05" }} to {{ .Left.RealEndTime.Format "2006-01-02T15:04:05" }} ({{ .Left.Duration }})
 
 {{ template "timeline_md" .Left }}
 {{ else }}
@@ -37,7 +36,7 @@ _No runs for this event._
 {{ end }}
 
 {{ if .Right }}
-### After — {{ .Right.StartTime.Format "2006-01-02T15:04:05" }} to {{ .Right.EndTime.Format "2006-01-02T15:04:05" }} ({{ .Right.Duration }})
+### After — {{ .Right.RealStartTime.Format "2006-01-02T15:04:05" }} to {{ .Right.RealEndTime.Format "2006-01-02T15:04:05" }} ({{ .Right.Duration }})
 
 {{ template "timeline_md" .Right }}
 {{ else }}
@@ -48,44 +47,34 @@ _No runs for this event._
 {{ end }}
 
 {{ if .Items }}
-<details open>
-<summary>Comparison ({{ len .Items }} matched)</summary>
+### Comparison ({{ len .Items }} matched)
 
 | Name | Before Duration | After Duration | Delta | Before Status | After Status |
 |------|---------------|----------------|-------|-------------|--------------|
 {{ range .Items }}| {{ .Name }} | {{ .LeftDuration }} | {{ .RightDuration }} | {{ formatDelta .DurationDelta }} | {{ conclusionText .LeftConclusion }} | {{ conclusionText .RightConclusion }} |
 {{ end }}
-
-</details>
 {{ end }}
 
 {{ if .OnlyLeft }}
-<details>
-<summary>Only in Before ({{ len .OnlyLeft }})</summary>
+### Only in Before ({{ len .OnlyLeft }})
 
 | Name | Duration | Status |
 |------|----------|--------|
 {{ range .OnlyLeft }}| {{ .Name }} | {{ .Duration }} | {{ conclusionText .Conclusion }} |
 {{ end }}
-
-</details>
 {{ end }}
 
 {{ if .OnlyRight }}
-<details>
-<summary>Only in After ({{ len .OnlyRight }})</summary>
+### Only in After ({{ len .OnlyRight }})
 
 | Name | Duration | Status |
 |------|----------|--------|
 {{ range .OnlyRight }}| {{ .Name }} | {{ .Duration }} | {{ conclusionText .Conclusion }} |
 {{ end }}
-
-</details>
 {{ end }}
 
 {{ if $.MonitoringPairs }}{{ range $.MonitoringPairs }}
-<details>
-<summary>{{ .Title }}</summary>
+### {{ .Title }}
 
 {{ if .LeftDiagram }}
 **Before:**
@@ -107,10 +96,7 @@ _No runs for this event._
 **After:** _No data_
 {{ end }}
 
-</details>
 {{ end }}{{ end }}
-
-</details>
 {{ end }}
 
 {{ if not .EventPairs }}

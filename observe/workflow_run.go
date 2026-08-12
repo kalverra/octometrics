@@ -60,6 +60,7 @@ func workflowRunObservation(workflowRun *gather.WorkflowRunData) (*Observation, 
 			Cost:         workflowRun.GetCost(),
 			CostEstimate: workflowRun.GetCostEstimate(),
 			CostGathered: workflowRun.GetCostGathered(),
+			LogsDir:      workflowRun.GetLogsDir(),
 		}
 	)
 
@@ -69,6 +70,9 @@ func workflowRunObservation(workflowRun *gather.WorkflowRunData) (*Observation, 
 	}
 	observationData.TimelineData = []*Timeline{workflowRunTimelineData}
 	observationData.FlowChart = buildFlowChart(workflowRun.GetWorkflowDef(), workflowRun.GetJobs())
+	observationData.CriticalPath = CalculateCriticalPath(workflowRun.GetJobs(), workflowRun.GetWorkflowDef())
+	observationData.StepSummaries, _ = AggregateSteps(workflowRun.GetJobs())
+	observationData.SlowestJobSteps = GetSlowestJobSteps(workflowRun.GetJobs(), 5)
 
 	return observationData, nil
 }
@@ -122,17 +126,26 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*Timelin
 			conclusion = "in_progress"
 		}
 
+		var queueDuration time.Duration
+		if !job.GetCreatedAt().IsZero() && job.GetCreatedAt().Before(startedAt) {
+			queueDuration = startedAt.Sub(job.GetCreatedAt().Time)
+		}
+
 		newTask := TimelineItem{
-			Name:         job.GetName(),
-			ID:           fmt.Sprint(job.GetID()),
-			StartTime:    startedAt,
-			Conclusion:   conclusionToGanttStatus(conclusion),
-			Duration:     duration,
-			Link:         jobRunLink(owner, repo, job.GetID()) + ".html",
-			Runner:       job.GetRunner(),
-			Cost:         job.GetCost(),
-			CostEstimate: job.GetCostEstimate(),
-			CostGathered: job.GetCostGathered(),
+			Name:          job.GetName(),
+			ID:            fmt.Sprint(job.GetID()),
+			JobID:         job.GetID(),
+			StartTime:     startedAt,
+			Conclusion:    conclusionToGanttStatus(conclusion),
+			Duration:      duration,
+			QueueDuration: queueDuration,
+			Link:          jobRunLink(owner, repo, job.GetID()) + ".html",
+			HTMLURL:       job.GetHTMLURL(),
+			Runner:        job.GetRunner(),
+			Cost:          job.GetCost(),
+			CostEstimate:  job.GetCostEstimate(),
+			CostGathered:  job.GetCostGathered(),
+			LogPath:       job.GetLogPath(),
 		}
 		if inProgress {
 			newTask.Name = fmt.Sprintf("%s (in progress)", job.GetName())

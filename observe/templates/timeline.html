@@ -24,23 +24,30 @@
 {{ if .Items }}
 {{ $hasRunner := .HasRunner }}
 {{ $hasCost := .HasCost }}
+{{ $hasLogPath := .HasLogPath }}
+{{ $hasQueue := .HasQueueTime }}
 <details class="runtime-details">
     <summary>Runs ({{ len .Items }} items)</summary>
     <table class="runtime-table">
         <thead>
             <tr>
                 <th class="rt-name" data-sort="name" data-sort-type="string">Name</th>
+                <th class="rt-id" data-sort="id" data-sort-type="string">Job ID</th>
                 {{ if $hasRunner }}<th class="rt-runner" data-sort="runner" data-sort-type="string">Runner</th>{{ end }}
+                {{ if $hasQueue }}<th class="rt-queue" data-sort="queue" data-sort-type="number">Queue Time</th>{{ end }}
                 <th class="rt-duration" data-sort="duration" data-sort-type="number">Duration</th>
                 {{ if $hasCost }}<th class="rt-cost" data-sort="cost" data-sort-type="number">Cost</th>{{ end }}
                 <th class="rt-status" data-sort="status" data-sort-type="string">Status</th>
+                {{ if $hasLogPath }}<th class="rt-log-path" data-sort="logpath" data-sort-type="string">Log Path</th>{{ end }}
             </tr>
         </thead>
         <tbody>
             {{ range .ItemsByDuration }}
             <tr>
                 <td class="rt-name" data-sort-key="name" data-sort="{{ .Name }}">{{ if .Link }}<a href="{{ .Link }}">{{ .Name }}</a>{{ else }}{{ .Name }}{{ end }}</td>
+                <td class="rt-id" data-sort-key="id" data-sort="{{ .JobID }}">{{ if .HTMLURL }}<a target="_blank" href="{{ .HTMLURL }}">{{ .JobID }}</a>{{ else }}<code>{{ .JobID }}</code>{{ end }}</td>
                 {{ if $hasRunner }}<td class="rt-runner" data-sort-key="runner" data-sort="{{ .Runner }}">{{ .Runner }}</td>{{ end }}
+                {{ if $hasQueue }}<td class="rt-queue" data-sort-key="queue" data-sort="{{ .QueueDuration.Seconds }}">{{ .QueueDuration }}</td>{{ end }}
                 <td class="rt-duration" data-sort-key="duration" data-sort="{{ .Duration.Seconds }}">{{ .Duration }}</td>
                 {{ if $hasCost }}
                 <td class="rt-cost" data-sort-key="cost" data-sort="{{ .Cost }}">
@@ -54,6 +61,9 @@
                     {{ else }}<span class="rt-badge rt-success">success</span>
                     {{ end }}
                 </td>
+                {{ if $hasLogPath }}
+                <td class="rt-log-path" data-sort-key="logpath" data-sort="{{ .LogPath }}">{{ if .LogPath }}{{ .LogPath }}{{ else }}—{{ end }}</td>
+                {{ end }}
             </tr>
             {{ end }}
         </tbody>

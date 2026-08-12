@@ -65,9 +65,9 @@ func TestSanitizeMermaidName(t *testing.T) {
 	assert.Equal(t, "hello", sanitizeMermaidName("hello"))
 	assert.Equal(t, "has#colon;colons", sanitizeMermaidName("has:colons"))
 	longName := "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz"
-	expected := "..." + longName[len(longName)-77:]
+	expected := longName[:38] + "..." + longName[len(longName)-38:]
 	assert.Equal(t, expected, sanitizeMermaidName(longName))
-	assert.Len(t, sanitizeMermaidName(longName), 80)
+	assert.Len(t, sanitizeMermaidName(longName), 79)
 }
 
 func TestTimelineHasRunner(t *testing.T) {

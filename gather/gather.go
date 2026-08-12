@@ -61,11 +61,18 @@ type options struct {
 	SkipMemoryCache bool
 	DataDir         string
 
+	// Wait controls whether octometrics waits for in-progress workflow/commit runs to finish
+	Wait         bool
+	WaitTimeout  time.Duration
+	PollInterval time.Duration
+	Reporter     ProgressReporter
+
 	// Optional data params to pass things down the stack so that e.g. a workflow can easily know what PR it belongs to
 	pullRequestData  *PullRequestData
 	commitData       *CommitData
 	repositoryCommit *github.RepositoryCommit
 	gatherCost       bool
+	downloadLogs     bool
 }
 
 func defaultDataDir() string {
@@ -78,9 +85,20 @@ func defaultDataDir() string {
 
 func defaultOptions() *options {
 	return &options{
-		ForceUpdate: false,
-		DataDir:     defaultDataDir(),
-		gatherCost:  true,
+		ForceUpdate:  false,
+		DataDir:      defaultDataDir(),
+		gatherCost:   true,
+		Wait:         false,
+		WaitTimeout:  30 * time.Minute,
+		PollInterval: 10 * time.Second,
+		Reporter:     &NoopProgressReporter{},
+	}
+}
+
+// WithDownloadLogs sets whether to download raw job log files.
+func WithDownloadLogs(download bool) Option {
+	return func(o *options) {
+		o.downloadLogs = download
 	}
 }
 
@@ -106,6 +124,36 @@ func SkipMemoryCache() Option {
 func CustomDataFolder(folder string) Option {
 	return func(o *options) {
 		o.DataDir = folder
+	}
+}
+
+// WithWait configures whether to wait for in-progress runs to complete.
+func WithWait(wait bool) Option {
+	return func(o *options) {
+		o.Wait = wait
+	}
+}
+
+// WithWaitTimeout sets the maximum duration to wait for in-progress runs to complete.
+func WithWaitTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.WaitTimeout = d
+	}
+}
+
+// WithPollInterval sets the polling frequency when waiting for in-progress runs.
+func WithPollInterval(d time.Duration) Option {
+	return func(o *options) {
+		o.PollInterval = d
+	}
+}
+
+// WithProgressReporter sets the ProgressReporter used during wait operations.
+func WithProgressReporter(reporter ProgressReporter) Option {
+	return func(o *options) {
+		if reporter != nil {
+			o.Reporter = reporter
+		}
 	}
 }
 

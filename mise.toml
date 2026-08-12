@@ -11,10 +11,10 @@ run = "goreleaser release --clean --snapshot"
 run = "golangci-lint run ./... --fix"
 
 [tasks.test]
-run = "go tool gotestsum -- -cover ./..."
+run = "go tool gotestsum -- -timeout 30s -cover ./..."
 
 [tasks.test-race]
-run = "go tool gotestsum -- -race ./..."
+run = "go tool gotestsum -- -timeout 2m -race ./..."
 
 [tasks.bench]
 run = "go test -bench=. -benchmem -run='^$' ./... -cpu=2,4,8"

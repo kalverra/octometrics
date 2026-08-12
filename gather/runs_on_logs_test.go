@@ -12,6 +12,37 @@ import (
 	"github.com/kalverra/octometrics/internal/testhelpers"
 )
 
+func TestCleanLog(t *testing.T) {
+	t.Parallel()
+
+	raw := "\x1b[32m2026-08-03T19:57:55.2040149Z\x1b[0m \x1b[1mStarting step...\x1b[0m"
+	cleaned := CleanLog(raw)
+	assert.NotContains(t, cleaned, "\x1b")
+	assert.Contains(t, cleaned, "2026-08-03T19:57:55.204014Z Starting step...")
+}
+
+func TestGetCleanJobLogs_FromDisk(t *testing.T) {
+	t.Parallel()
+
+	dataDir := t.TempDir()
+	logDir := filepath.Join(dataDir, "owner", "repo", "logs", "100")
+	require.NoError(t, os.MkdirAll(logDir, 0700))
+
+	logFile := filepath.Join(logDir, "500.log")
+	require.NoError(t, os.WriteFile(logFile, []byte("\x1b[31m2026-08-03T19:57:55.1234567Z Error!\x1b[0m"), 0600))
+
+	wfDir := filepath.Join(dataDir, "owner", "repo", WorkflowRunsDataDir)
+	require.NoError(t, os.MkdirAll(wfDir, 0700))
+	wfData := `{"id":100,"jobs":[{"id":500,"name":"Test Job"}]}`
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "100.json"), []byte(wfData), 0600))
+
+	log, _ := testhelpers.Setup(t)
+	cleaned, err := GetCleanJobLogs(t.Context(), log, nil, "", "", 500, dataDir)
+	require.NoError(t, err)
+	assert.NotContains(t, cleaned, "\x1b")
+	assert.Contains(t, cleaned, "2026-08-03T19:57:55.123456Z Error!")
+}
+
 func TestParseRunsOnCostSummary(t *testing.T) {
 	t.Parallel()
 
@@ -197,4 +228,42 @@ func TestFetchRunsOnCostFromLogs_DiskCache(t *testing.T) {
 	require.NotNil(t, loadedSummary)
 	assert.Equal(t, int64(50), cost)
 	assert.Equal(t, "c7i.2xlarge", loadedSummary.InstanceType)
+}
+
+func TestParseLogGaps(t *testing.T) {
+	t.Parallel()
+
+	rawLog := `2026-08-11T20:00:00.000Z Starting job...
+2026-08-11T20:00:02.000Z Setup complete
+2026-08-11T20:00:46.000Z Waiting for DON boot finished (44s gap)
+2026-08-11T20:00:48.000Z Test run started
+2026-08-11T20:01:13.000Z Untar cache finished (25s gap)
+`
+	gaps := ParseLogGaps(rawLog, 5)
+	require.GreaterOrEqual(t, len(gaps), 2)
+	assert.InDelta(t, 44.0, gaps[0].Duration.Seconds(), 0.001)
+	assert.Contains(t, gaps[0].LineBefore, "Setup complete")
+	assert.Contains(t, gaps[0].LineAfter, "Waiting for DON boot")
+
+	assert.InDelta(t, 25.0, gaps[1].Duration.Seconds(), 0.001)
+	assert.Contains(t, gaps[1].LineBefore, "Test run started")
+	assert.Contains(t, gaps[1].LineAfter, "Untar cache finished")
+}
+
+func TestParseLogGaps_BufferedFlushHeuristic(t *testing.T) {
+	t.Parallel()
+
+	rawLog := `2026-08-11T20:00:00.000Z Using precompiled binary
+2026-08-11T20:03:34.000Z === RUN TestA
+2026-08-11T20:03:34.000Z --- PASS: TestA (0.01s)
+2026-08-11T20:03:34.000Z === RUN TestB
+2026-08-11T20:03:34.000Z --- PASS: TestB (0.02s)
+`
+	gaps := ParseLogGaps(rawLog, 5)
+	require.NotEmpty(t, gaps)
+	assert.True(
+		t,
+		gaps[0].IsBufferedFlush,
+		"Gap ending with multiple lines sharing same timestamp should be flagged as buffered flush",
+	)
 }

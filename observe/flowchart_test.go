@@ -3,6 +3,7 @@ package observe
 import (
 	"testing"
 
+	"github.com/google/go-github/v89/github"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -141,4 +142,50 @@ func TestBuildFlowChart(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestBuildFlowChart_ChildAndMatrixJobs(t *testing.T) {
+	t.Parallel()
+
+	def := &gather.WorkflowDef{
+		Jobs: map[string]gather.JobDef{
+			"build-chainlink": {Name: "build-chainlink"},
+			"run-core-cre-e2e-tests": {
+				Name:  "run-core-cre-e2e-tests",
+				Needs: gather.Needs{"build-chainlink"},
+				Uses:  "./.github/workflows/e2e.yml",
+			},
+		},
+	}
+
+	jobs := []*gather.JobData{
+		{
+			WorkflowJob: &github.WorkflowJob{
+				ID:         new(int64(1)),
+				Name:       new("build-chainlink"),
+				Status:     new("completed"),
+				Conclusion: new("success"),
+			},
+		},
+		{
+			WorkflowJob: &github.WorkflowJob{
+				ID:         new(int64(2)),
+				Name:       new("run-core-cre-e2e-tests / define-test-matrix"),
+				Status:     new("completed"),
+				Conclusion: new("success"),
+			},
+		},
+		{
+			WorkflowJob: &github.WorkflowJob{
+				ID:         new(int64(3)),
+				Name:       new("run-core-cre-e2e-tests / Bucket_B (1, 2)"),
+				Status:     new("completed"),
+				Conclusion: new("success"),
+			},
+		},
+	}
+
+	chart := buildFlowChart(def, jobs)
+	assert.Contains(t, chart, "define_test_matrix")
+	assert.Contains(t, chart, "build_chainlink -->")
 }

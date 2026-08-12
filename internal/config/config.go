@@ -17,23 +17,29 @@ import (
 
 // Config is the configuration for the application.
 type Config struct {
-	LogLevel          string    `mapstructure:"log_level"`
-	GitHubToken       string    `mapstructure:"github_token"`
-	Owner             string    `mapstructure:"owner"`
-	Repo              string    `mapstructure:"repo"`
-	CommitSHA         string    `mapstructure:"commit_sha"`
-	WorkflowRunID     int64     `mapstructure:"workflow_run_id"`
-	PullRequestNumber int       `mapstructure:"pull_request_number"`
-	ForceUpdate       bool      `mapstructure:"force_update"`
-	NoObserve         bool      `mapstructure:"no_observe"`
-	Event             string    `mapstructure:"event"`
-	From              time.Time `mapstructure:"from"`
-	To                time.Time `mapstructure:"to"`
-	ExcludeCosts      bool      `mapstructure:"exclude_costs"`
-	DataDir           string    `mapstructure:"data_dir"`
-	ExcludeWorkflows  []string  `mapstructure:"exclude_workflows"`
-	IncludeWorkflows  []string  `mapstructure:"include_workflows"`
-	CPUProfile        string    `mapstructure:"cpu_profile"`
+	LogLevel          string        `mapstructure:"log_level"`
+	GitHubToken       string        `mapstructure:"github_token"`
+	Owner             string        `mapstructure:"owner"`
+	Repo              string        `mapstructure:"repo"`
+	CommitSHA         string        `mapstructure:"commit_sha"`
+	WorkflowRunID     int64         `mapstructure:"workflow_run_id"`
+	PullRequestNumber int           `mapstructure:"pull_request_number"`
+	ForceUpdate       bool          `mapstructure:"force_update"`
+	NoObserve         bool          `mapstructure:"no_observe"`
+	Event             string        `mapstructure:"event"`
+	From              time.Time     `mapstructure:"from"`
+	To                time.Time     `mapstructure:"to"`
+	ExcludeCosts      bool          `mapstructure:"exclude_costs"`
+	DataDir           string        `mapstructure:"data_dir"`
+	ExcludeWorkflows  []string      `mapstructure:"exclude_workflows"`
+	IncludeWorkflows  []string      `mapstructure:"include_workflows"`
+	CPUProfile        string        `mapstructure:"cpu_profile"`
+	Wait              bool          `mapstructure:"wait"`
+	WaitTimeout       time.Duration `mapstructure:"wait_timeout"`
+	PollInterval      time.Duration `mapstructure:"poll_interval"`
+	Progress          string        `mapstructure:"progress"`
+	DownloadLogs      bool          `mapstructure:"download_logs"`
+	OutputFile        string        `mapstructure:"output_file"`
 }
 
 // DefaultLogLevel is the default log level.
@@ -82,6 +88,10 @@ func Load(opts ...LoadOption) (*Config, error) {
 
 	v.SetDefault("log_level", DefaultLogLevel)
 	v.SetDefault("data_dir", DefaultDataDir())
+	v.SetDefault("wait", true)
+	v.SetDefault("wait_timeout", 30*time.Minute)
+	v.SetDefault("poll_interval", 10*time.Second)
+	v.SetDefault("progress", "auto")
 
 	// Bind all configuration fields to environment variables
 	typ := reflect.TypeFor[Config]()
