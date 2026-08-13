@@ -34,6 +34,17 @@ func TestParse(t *testing.T) {
 				Owner:         "smartcontractkit",
 				Repo:          "chainlink",
 				WorkflowRunID: 31503697636,
+				JobID:         123,
+			},
+		},
+		{
+			name:  "workflow job URL",
+			input: "https://github.com/kalverra/octometrics/actions/runs/31503697636/job/93924509957",
+			want: &githuburl.Result{
+				Owner:         "kalverra",
+				Repo:          "octometrics",
+				WorkflowRunID: 31503697636,
+				JobID:         93924509957,
 			},
 		},
 		{

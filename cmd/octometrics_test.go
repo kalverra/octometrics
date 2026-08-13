@@ -44,6 +44,8 @@ func TestLogCmdFlags(t *testing.T) {
 
 	assert.NotNil(t, logCmd.Flags().Lookup("owner"), "logCmd should have flag --owner")
 	assert.NotNil(t, logCmd.Flags().Lookup("repo"), "logCmd should have flag --repo")
+	assert.NotNil(t, logCmd.Flags().Lookup("job-id"), "logCmd should have flag --job-id")
+	assert.NotNil(t, logCmd.Flags().Lookup("url"), "logCmd should have flag --url")
 	assert.NotNil(t, logCmd.Flags().Lookup("gaps"), "logCmd should have flag --gaps")
 }
 

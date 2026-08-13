@@ -121,6 +121,37 @@ func GetCleanJobLogs(
 	if fetchErr != nil {
 		return "", fetchErr
 	}
+
+	if owner != "" && repo != "" && dataDir != "" {
+		if wfID == 0 {
+			if jobObj, _, getErr := client.Rest.Actions.GetWorkflowJobByID(
+				ctx,
+				owner,
+				repo,
+				jobID,
+			); getErr == nil &&
+				jobObj != nil {
+				wfID = jobObj.GetRunID()
+			}
+		}
+		var cachePath string
+		if wfID != 0 {
+			cachePath = filepath.Join(
+				dataDir,
+				owner,
+				repo,
+				"logs",
+				fmt.Sprintf("%d", wfID),
+				fmt.Sprintf("%d.log", jobID),
+			)
+		} else {
+			cachePath = filepath.Join(dataDir, owner, repo, "logs", fmt.Sprintf("%d.log", jobID))
+		}
+		if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0700); mkErr == nil {
+			_ = os.WriteFile(cachePath, []byte(raw), 0600)
+		}
+	}
+
 	return CleanLog(raw), nil
 }
 
@@ -295,7 +326,17 @@ func fetchFullJobLogs(
 
 	logURL, resp, err := client.Rest.Actions.GetWorkflowJobLogs(ctx, owner, repo, jobID, 5)
 	if err != nil {
-		return "", fmt.Errorf("failed to get job logs URL for job %d: %w", jobID, err)
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return "", fmt.Errorf(
+				"failed to get job logs URL for job %d (%s/%s): 404 Not Found.\n"+
+					"Possible reasons:\n"+
+					"  - Job log has expired according to GitHub retention limits (default 90 days, or org/repo limits)\n"+
+					"  - Job ID %d does not exist in repository %s/%s\n"+
+					"  - Incorrect owner/repo or insufficient token permissions",
+				jobID, owner, repo, jobID, owner, repo,
+			)
+		}
+		return "", fmt.Errorf("failed to get job logs URL for job %d (%s/%s): %w", jobID, owner, repo, err)
 	}
 	if resp.StatusCode != http.StatusFound && resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf(

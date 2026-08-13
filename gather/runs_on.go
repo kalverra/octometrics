@@ -1,8 +1,10 @@
 package gather
 
 import (
+	"fmt"
 	"math"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -199,9 +201,90 @@ func calculateRunsOnCost(labels []string, duration time.Duration) (int64, bool) 
 
 // runsOnRunnerName returns a human-readable name for the runs-on runner.
 func runsOnRunnerName(labels []string) string {
+	for _, label := range labels {
+		if runsOnRealPattern.MatchString(label) {
+			details := parseRealRunsOnDetails(label)
+			var lifecycle string
+			switch details.Spot {
+			case "true":
+				lifecycle = "spot"
+			case "false":
+				lifecycle = "on-demand"
+			}
+			if lifecycle != "" {
+				if details.Family != "" {
+					return fmt.Sprintf("runs-on:%s (%s)", details.Family, lifecycle)
+				}
+				key := parseRealRunsOnLabel(label)
+				return fmt.Sprintf("runs-on:%s (%s)", key, lifecycle)
+			}
+			if details.Family != "" {
+				return "runs-on:" + details.Family
+			}
+		}
+	}
 	key, ok := parseRunsOnLabel(labels)
 	if !ok {
 		return ""
 	}
 	return "runs-on:" + key
+}
+
+type runsOnLabelDetails struct {
+	CPU    string
+	RAM    string
+	Family string
+	Spot   string
+	Image  string
+}
+
+func parseRealRunsOnDetails(label string) runsOnLabelDetails {
+	details := runsOnLabelDetails{}
+	parts := strings.SplitSeq(label, "/")
+	for part := range parts {
+		if k, v, ok := strings.Cut(part, "="); ok {
+			switch k {
+			case "cpu":
+				details.CPU = v
+			case "ram":
+				details.RAM = v
+			case "family":
+				details.Family = v
+			case "spot":
+				details.Spot = v
+			case "image":
+				details.Image = v
+			}
+		}
+	}
+	return details
+}
+
+// formatRunsOnRunner formats the runner string combining parsed cost summary and requested label specs.
+func formatRunsOnRunner(summary *RunsOnCostSummary, labels []string) string {
+	if summary == nil || summary.InstanceType == "" {
+		return runsOnRunnerName(labels)
+	}
+
+	res := "runs-on:" + summary.InstanceType
+	if summary.InstanceLifecycle != "" {
+		res += fmt.Sprintf(" (%s)", summary.InstanceLifecycle)
+	}
+
+	var reqFamily string
+	for _, label := range labels {
+		if runsOnRealPattern.MatchString(label) {
+			details := parseRealRunsOnDetails(label)
+			if details.Family != "" {
+				reqFamily = details.Family
+				break
+			}
+		}
+	}
+
+	if reqFamily != "" && !strings.HasPrefix(summary.InstanceType, reqFamily) {
+		res += fmt.Sprintf(" [req: %s]", reqFamily)
+	}
+
+	return res
 }

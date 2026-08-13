@@ -192,3 +192,56 @@ func TestRunsOnCostIntegration(t *testing.T) {
 	require.True(t, estimate)
 	assert.Equal(t, int64(100), cost)
 }
+
+func TestRunsOnRunnerName_SpotAndFamily(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		labels   []string
+		wantName string
+	}{
+		{
+			name: "spot=true with family",
+			labels: []string{
+				"runs-on=123/cpu=8/ram=32/family=m7i+m8i/spot=true/image=ubuntu24-full-x64",
+			},
+			wantName: "runs-on:m7i+m8i (spot)",
+		},
+		{
+			name: "spot=false with family",
+			labels: []string{
+				"runs-on=123/cpu=8/ram=32/family=m6i/spot=false/image=ubuntu24-full-x64",
+			},
+			wantName: "runs-on:m6i (on-demand)",
+		},
+		{
+			name:     "docs format",
+			labels:   []string{"2cpu-linux-x64"},
+			wantName: "runs-on:2cpu-linux-x64",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			name := runsOnRunnerName(tt.labels)
+			assert.Equal(t, tt.wantName, name)
+		})
+	}
+}
+
+func TestFormatRunsOnRunner(t *testing.T) {
+	t.Parallel()
+
+	summary := &RunsOnCostSummary{
+		InstanceType:      "m8i-flex.4xlarge",
+		InstanceLifecycle: "spot",
+	}
+	labels := []string{
+		"runs-on=123/cpu=16/ram=64/family=m7i+m8i/spot=true",
+	}
+
+	formatted := formatRunsOnRunner(summary, labels)
+	assert.Equal(t, "runs-on:m8i-flex.4xlarge (spot) [req: m7i+m8i]", formatted)
+}

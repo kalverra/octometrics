@@ -869,7 +869,7 @@ func calculateJobCostAndRunner(
 					cost = res.cost
 					costEstimate = false
 					if res.summary != nil && res.summary.InstanceType != "" {
-						runner = "runs-on:" + res.summary.InstanceType
+						runner = formatRunsOnRunner(res.summary, job.Labels)
 					} else if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
 						runner = runsOnName
 					}

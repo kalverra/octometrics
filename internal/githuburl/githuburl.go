@@ -13,11 +13,12 @@ type Result struct {
 	Owner             string
 	Repo              string
 	WorkflowRunID     int64
+	JobID             int64
 	CommitSHA         string
 	PullRequestNumber int
 }
 
-// Parse parses a GitHub web URL for workflow run, commit, or PR into a Result struct.
+// Parse parses a GitHub web URL for workflow run, job, commit, or PR into a Result struct.
 func Parse(rawURL string) (*Result, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
@@ -49,11 +50,19 @@ func Parse(rawURL string) (*Result, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid workflow run ID %q: %w", parts[4], err)
 		}
-		return &Result{
+		res := &Result{
 			Owner:         owner,
 			Repo:          repo,
 			WorkflowRunID: runID,
-		}, nil
+		}
+		if len(parts) >= 7 && parts[5] == "job" {
+			jobID, err := strconv.ParseInt(parts[6], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid job ID %q: %w", parts[6], err)
+			}
+			res.JobID = jobID
+		}
+		return res, nil
 
 	case "commit":
 		return &Result{
