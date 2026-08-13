@@ -146,39 +146,6 @@ func TestCalculateCriticalPath_ExcludesSkippedJobs(t *testing.T) {
 	}
 }
 
-func TestCategorizeStep(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		expected string
-	}{
-		{"Set up job", "runner-overhead"},
-		{"Checkout", "runner-overhead"},
-		{"Set up Go", "runner-overhead"},
-		{"ECR login", "runner-overhead"},
-		{"Post Set up Go", "runner-overhead"},
-		{"Complete job", "runner-overhead"},
-
-		{"Start local CRE", "test-setup"},
-		{"Setup Aptos CLI", "test-setup"},
-		{"observability stack", "test-setup"},
-		{"Install dependencies", "test-setup"},
-
-		{"Run CRE Smoke system tests (mixed-env)", "test-execution"},
-		{"go test ./...", "test-execution"},
-		{"gotestsum", "test-execution"},
-		{"Test_CRE_V2_Suite_Bucket_B", "test-execution"},
-	}
-
-	for _, tt := range tests {
-		cat := CategorizeStep(tt.name)
-		if cat != tt.expected {
-			t.Errorf("CategorizeStep(%q) = %q; expected %q", tt.name, cat, tt.expected)
-		}
-	}
-}
-
 func TestAggregateSteps(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
@@ -304,15 +271,6 @@ func TestGetSlowestJobSteps(t *testing.T) {
 	}
 
 	bd := breakdowns[0]
-	if bd.RunnerOverheadTotal != 21*time.Second {
-		t.Errorf("expected runner overhead 21s, got %v", bd.RunnerOverheadTotal)
-	}
-	if bd.TestSetupTotal != 80*time.Second {
-		t.Errorf("expected test setup 80s, got %v", bd.TestSetupTotal)
-	}
-	if bd.TestExecutionTotal != 190*time.Second {
-		t.Errorf("expected test execution 190s, got %v", bd.TestExecutionTotal)
-	}
 	if bd.MinorStepsCount != 1 {
 		t.Errorf("expected 1 minor step <=1s collapsed, got %d", bd.MinorStepsCount)
 	}

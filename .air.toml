@@ -9,18 +9,18 @@ tmp_dir = "tmp"
   bin = "./tmp/main"
   cmd = "go build -o ./tmp/main ."
   delay = 1000
-  entrypoint = ["./tmp/main"]
-  exclude_dir = ["assets", "tmp", "vendor", "testdata", "dist", "data", "observe_output"]
-  exclude_file = []
+  entrypoint = ["./tmp/main", "--no-open", "--port", "8081", "--format", "html"]
+  exclude_dir = ["assets", "tmp", "vendor", "testdata", "dist", "data", "observe_output", ".git", ".claude", ".gemini", ".brain", "test_results"]
+  exclude_file = ["octometrics.log.jsonl", "build-errors.log"]
   exclude_regex = ["_test.go"]
   exclude_unchanged = false
   follow_symlink = false
   full_bin = ""
   ignore_dangerous_root_dir = false
   include_dir = []
-  include_ext = ["go", "tpl", "tmpl", "html", "css", "js", "md"]
+  include_ext = ["go", "tpl", "tmpl", "html", "css", "js"]
   include_file = []
-  kill_delay = "500ms"
+  kill_delay = "200ms"
   log = "build-errors.log"
   poll = false
   poll_interval = 0
@@ -30,6 +30,11 @@ tmp_dir = "tmp"
   rerun_delay = 500
   send_interrupt = true
   stop_on_error = true
+
+[proxy]
+  enabled = true
+  proxy_port = 8080
+  app_port = 8081
 
 [color]
   app = ""
@@ -50,3 +55,4 @@ tmp_dir = "tmp"
 [screen]
   clear_on_rebuild = false
   keep_scroll = true
+

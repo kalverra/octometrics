@@ -51,7 +51,7 @@ Run `monitor` directly in your GitHub action and it will post performance data a
 
 ## Contributing
 
-I recommend using [mise](https://mise.jdx.dev/) for tool version control and as a makefile replacement. Use [lefthook](https://lefthook.dev/) for pre-commit and pre-push hooks. (Or just use plain go commands).
+I recommend using [mise](https://mise.jdx.dev/) for tool version control and as a makefile replacement. Use [lefthook](https://lefthook.dev/) for pre-commit and pre-push hooks. Use [air](https://github.com/air-verse/air) for quick UI iteraion. (Or just use plain go commands).
 
 ```sh
 mise install      # Install tools
@@ -59,6 +59,7 @@ mise run hooks    # Install lefthook git hooks
 mise run dev      # Run live-reloader with Air for Go and UI development
 mise run lint     # Run linters
 mise run test     # Run tests
+air -- https://github.com/owner/repo/pull/123 # Quick UI reloading on changes
 ```
 
 ---

@@ -51,22 +51,26 @@ type StepDetail struct {
 	Duration   time.Duration `json:"duration"`
 	Status     string        `json:"status"`
 	Conclusion string        `json:"conclusion"`
-	Category   string        `json:"category"` // "runner-overhead", "test-setup", "test-execution"
 }
 
 // JobStepBreakdown holds step-level timing breakdown for a specific job.
 type JobStepBreakdown struct {
-	JobID               int64         `json:"job_id"`
-	JobName             string        `json:"job_name"`
-	Duration            time.Duration `json:"duration"`
-	Steps               []StepDetail  `json:"steps"`
-	RunnerOverheadTotal time.Duration `json:"runner_overhead_total"`
-	TestSetupTotal      time.Duration `json:"test_setup_total"`
-	TestExecutionTotal  time.Duration `json:"test_execution_total"`
-	MinorStepsCount     int           `json:"minor_steps_count"`
-	MinorStepsTotal     time.Duration `json:"minor_steps_total"`
-	IsOverheadHeavy     bool          `json:"is_overhead_heavy"`
-	HasNonSuccessSteps  bool          `json:"has_non_success_steps"`
+	JobID           int64         `json:"job_id"`
+	JobName         string        `json:"job_name"`
+	Duration        time.Duration `json:"duration"`
+	Steps           []StepDetail  `json:"steps"`
+	MinorStepsCount int           `json:"minor_steps_count"`
+	MinorStepsTotal time.Duration `json:"minor_steps_total"`
+}
+
+// HasNonSuccessSteps reports whether any step has a non-success conclusion.
+func (j JobStepBreakdown) HasNonSuccessSteps() bool {
+	for _, s := range j.Steps {
+		if s.Conclusion != "" && s.Conclusion != "success" {
+			return true
+		}
+	}
+	return false
 }
 
 // CalculateCriticalPath computes the critical path and slack for all jobs in a workflow run.
@@ -534,13 +538,9 @@ func GetSlowestJobSteps(jobs []*gather.JobData, topN int) []JobStepBreakdown {
 	for _, j := range sortedJobs {
 		jobDur := j.GetCompletedAt().Sub(j.GetStartedAt().Time)
 		var (
-			steps              []StepDetail
-			runnerOverhead     time.Duration
-			testSetup          time.Duration
-			testExec           time.Duration
-			minorCount         int
-			minorTotal         time.Duration
-			hasNonSuccessSteps bool
+			steps      []StepDetail
+			minorCount int
+			minorTotal time.Duration
 		)
 
 		for _, step := range j.Steps {
@@ -550,20 +550,6 @@ func GetSlowestJobSteps(jobs []*gather.JobData, topN int) []JobStepBreakdown {
 			var stepDur time.Duration
 			if !step.GetStartedAt().IsZero() && !step.GetCompletedAt().IsZero() {
 				stepDur = step.GetCompletedAt().Sub(step.GetStartedAt().Time)
-			}
-
-			cat := CategorizeStep(step.GetName())
-			switch cat {
-			case "runner-overhead":
-				runnerOverhead += stepDur
-			case "test-setup":
-				testSetup += stepDur
-			case "test-execution":
-				testExec += stepDur
-			}
-
-			if step.GetConclusion() != "" && step.GetConclusion() != "success" {
-				hasNonSuccessSteps = true
 			}
 
 			if stepDur <= time.Second {
@@ -577,70 +563,22 @@ func GetSlowestJobSteps(jobs []*gather.JobData, topN int) []JobStepBreakdown {
 				Duration:   stepDur,
 				Status:     step.GetStatus(),
 				Conclusion: step.GetConclusion(),
-				Category:   cat,
 			})
 		}
 
-		isOverheadHeavy := (runnerOverhead + testSetup) > testExec
+		sort.Slice(steps, func(i, j int) bool {
+			return steps[i].Duration > steps[j].Duration
+		})
 
 		result = append(result, JobStepBreakdown{
-			JobID:               j.GetID(),
-			JobName:             j.GetName(),
-			Duration:            jobDur,
-			Steps:               steps,
-			RunnerOverheadTotal: runnerOverhead,
-			TestSetupTotal:      testSetup,
-			TestExecutionTotal:  testExec,
-			MinorStepsCount:     minorCount,
-			MinorStepsTotal:     minorTotal,
-			IsOverheadHeavy:     isOverheadHeavy,
-			HasNonSuccessSteps:  hasNonSuccessSteps,
+			JobID:           j.GetID(),
+			JobName:         j.GetName(),
+			Duration:        jobDur,
+			Steps:           steps,
+			MinorStepsCount: minorCount,
+			MinorStepsTotal: minorTotal,
 		})
 	}
 
 	return result
-}
-
-// CategorizeStep maps a step name to "runner-overhead", "test-setup", or "test-execution".
-func CategorizeStep(name string) string {
-	lower := strings.ToLower(name)
-
-	// Runner overhead patterns
-	if strings.Contains(lower, "set up job") ||
-		strings.Contains(lower, "checkout") ||
-		strings.Contains(lower, "set up go") ||
-		strings.Contains(lower, "ecr login") ||
-		strings.Contains(lower, "gati") ||
-		strings.HasPrefix(lower, "post ") ||
-		strings.HasPrefix(lower, "complete ") ||
-		strings.HasPrefix(lower, "restore ") ||
-		strings.HasPrefix(lower, "cache ") {
-		return "runner-overhead"
-	}
-
-	// Test setup patterns
-	if strings.Contains(lower, "start local cre") ||
-		strings.Contains(lower, "setup aptos cli") ||
-		strings.Contains(lower, "setup stellar") ||
-		strings.Contains(lower, "observability stack") ||
-		strings.Contains(lower, "install dependencies") ||
-		strings.Contains(lower, "docker") ||
-		strings.HasPrefix(lower, "build ") {
-		return "test-setup"
-	}
-
-	// Test execution patterns
-	if strings.Contains(lower, "gotestsum") ||
-		strings.Contains(lower, "go test") ||
-		strings.Contains(lower, "npm test") ||
-		strings.Contains(lower, "pytest") ||
-		strings.Contains(lower, "cargo test") ||
-		strings.Contains(lower, "run cre smoke") ||
-		strings.Contains(lower, "run ") ||
-		strings.HasPrefix(lower, "test_") ||
-		strings.HasPrefix(lower, "test") {
-		return "test-execution"
-	}
-
-	return "runner-overhead"
 }

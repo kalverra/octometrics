@@ -5,7 +5,7 @@
 
 | | Before | After |
 |---|---|---|
-| **Name** | [{{ .Left.Name }}]({{ .Left.GitHubLink }}) | [{{ .Right.Name }}]({{ .Right.GitHubLink }}) |
+| **Name** | {{ .Left.Name }} | {{ .Right.Name }} |
 | **ID** | {{ if eq .Left.DataType "commit" }}{{ shortSHA .Left.ID }}{{ else }}#{{ .Left.ID }}{{ end }} | {{ if eq .Right.DataType "commit" }}{{ shortSHA .Right.ID }}{{ else }}#{{ .Right.ID }}{{ end }} |
 | **State** | {{ .Left.State }} | {{ .Right.State }} |
 | **Run at** | {{ if not .Summary.LeftStartedAt.IsZero }}{{ .Summary.LeftStartedAt.Format "Jan 2, 2006 15:04" }}{{ else }}-{{ end }} | {{ if not .Summary.RightStartedAt.IsZero }}{{ .Summary.RightStartedAt.Format "Jan 2, 2006 15:04" }}{{ else }}-{{ end }} |

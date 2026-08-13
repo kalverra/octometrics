@@ -55,18 +55,13 @@ Total Duration: {{ .CriticalPath.TotalDuration }} (Queue: {{ .CriticalPath.Total
 ### Top Slowest Jobs Step Breakdown
 {{ range .SlowestJobSteps }}
 #### {{ .JobName }} ({{ .Duration }})
-{{ if .IsOverheadHeavy }}> ⚠️ **Overhead Warning:** Setup & runner overhead ({{ .RunnerOverheadTotal }} + {{ .TestSetupTotal }}) exceeds test execution ({{ .TestExecutionTotal }}).
-{{ end }}
-- **Runner Overhead:** {{ .RunnerOverheadTotal }}
-- **Test Setup:** {{ .TestSetupTotal }}
-- **Test Execution:** {{ .TestExecutionTotal }}
 
 {{ $hasNonSuccess := .HasNonSuccessSteps }}
-| Step Name | Duration | Category |{{ if $hasNonSuccess }} Status |{{ end }}
-|---|---|---|{{ if $hasNonSuccess }}---|{{ end }}
-{{ range .Steps }}| {{ .Name }} | {{ .Duration }} | {{ .Category }} |{{ if $hasNonSuccess }} {{ .Conclusion }} |{{ end }}
+| Step Name | Duration |{{ if $hasNonSuccess }} Status |{{ end }}
+|---|---|{{ if $hasNonSuccess }}---|{{ end }}
+{{ range .Steps }}| {{ .Name }} | {{ .Duration }} |{{ if $hasNonSuccess }} {{ .Conclusion }} |{{ end }}
 {{ end }}
-{{ if gt .MinorStepsCount 0 }}| *{{ .MinorStepsCount }} minor steps (≤1s)* | *{{ .MinorStepsTotal }}* | *minor* |{{ if $hasNonSuccess }} - |{{ end }}
+{{ if gt .MinorStepsCount 0 }}| *{{ .MinorStepsCount }} minor steps (≤1s)* | *{{ .MinorStepsTotal }}* |{{ if $hasNonSuccess }} - |{{ end }}
 {{ end }}
 {{ end }}
 {{ end }}

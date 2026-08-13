@@ -13,6 +13,7 @@
     <script type="module" src="/mermaid-init.js"></script>
     {{ end }}
     <script type="module" src="/export-png.js"></script>
+    <script src="/tables.js" defer></script>
 </head>
 
 <body>
@@ -68,134 +69,137 @@
         </header>
 
         {{ if not .TimelineData }}
+        {{ if or .StepSummaries .CriticalPath .SlowestJobSteps }}
+        <details class="section details-group">
+            <summary>Details</summary>
+            <div class="details-group-body">
+            {{ $owner := .Owner }}
+            {{ $repo := .Repo }}
+
         {{ if .StepSummaries }}
-        <details class="section">
-            <summary>Step aggregation across matrix</summary>
-            <div class="section-body">
+            <details class="details-panel">
+                <summary>Step aggregation across matrix</summary>
+                <div class="details-panel-body">
                 <table class="runtime-table">
                     <thead>
                         <tr>
-                            <th>Step Name</th>
-                            <th>Count</th>
-                            <th>Total</th>
-                            <th>% Total</th>
-                            <th>Median</th>
-                            <th>Max</th>
+                            <th data-sort="name" data-sort-type="string">Step Name</th>
+                            <th data-sort="count" data-sort-type="number">Count</th>
+                            <th data-sort="total" data-sort-type="number">Total</th>
+                            <th data-sort="pct" data-sort-type="number">% Total</th>
+                            <th data-sort="median" data-sort-type="number">Median</th>
+                            <th data-sort="max" data-sort-type="number">Max</th>
                         </tr>
                     </thead>
                     <tbody>
                         {{ range .StepSummaries }}{{ if ge .PctTotal 1.0 }}
                         <tr>
-                            <td>{{ .Name }}</td>
-                            <td>{{ .Count }}</td>
-                            <td>{{ .TotalDuration }}</td>
-                            <td>{{ printf "%.1f" .PctTotal }}%</td>
-                            <td>{{ .MedianDuration }}</td>
-                            <td>{{ .MaxDuration }}</td>
+                            <td data-sort-key="name" data-sort="{{ .Name }}">{{ .Name }}</td>
+                            <td data-sort-key="count" data-sort="{{ .Count }}">{{ .Count }}</td>
+                            <td data-sort-key="total" data-sort="{{ .TotalDuration.Seconds }}">{{ .TotalDuration }}</td>
+                            <td data-sort-key="pct" data-sort="{{ .PctTotal }}">{{ printf "%.1f" .PctTotal }}%</td>
+                            <td data-sort-key="median" data-sort="{{ .MedianDuration.Seconds }}">{{ .MedianDuration }}</td>
+                            <td data-sort-key="max" data-sort="{{ .MaxDuration.Seconds }}">{{ .MaxDuration }}</td>
                         </tr>
                         {{ end }}{{ end }}
                     </tbody>
                 </table>
-            </div>
-        </details>
+                </div>
+            </details>
         {{ end }}
 
         {{ if .CriticalPath }}
-        <details class="section">
-            <summary>Critical path</summary>
-            <div class="section-body">
-                <p style="margin-bottom: 0.5rem; color: var(--color-text-secondary);">Total Duration: {{ .CriticalPath.TotalDuration }} (Queue: {{ .CriticalPath.TotalQueue }}, Execution: {{ .CriticalPath.TotalExecution }})</p>
+            <details class="details-panel">
+                <summary>Critical path</summary>
+                <div class="details-panel-body">
+                <p class="details-panel-meta">Total Duration: {{ .CriticalPath.TotalDuration }} (Queue: {{ .CriticalPath.TotalQueue }}, Execution: {{ .CriticalPath.TotalExecution }})</p>
                 <table class="runtime-table">
                     <thead>
                         <tr>
-                            <th>Job Name</th>
-                            <th>Duration</th>
-                            <th>Queue Time</th>
-                            <th>Slack</th>
+                            <th data-sort="jobname" data-sort-type="string">Job Name</th>
+                            <th data-sort="duration" data-sort-type="number">Duration</th>
+                            <th data-sort="queue" data-sort-type="number">Queue Time</th>
+                            <th data-sort="slack" data-sort-type="number">Slack</th>
                         </tr>
                     </thead>
                     <tbody>
                         {{ range .CriticalPath.CriticalNodes }}
                         <tr>
-                            <td><code>{{ .JobName }}</code></td>
-                            <td>{{ .Duration }}</td>
-                            <td>{{ .QueueTime }}</td>
-                            <td>{{ .Slack }}</td>
+                            <td data-sort-key="jobname" data-sort="{{ .JobName }}"><code>{{ if and $owner $repo .JobID }}<a href="{{ jobRunLink $owner $repo .JobID }}.html">{{ .JobName }}</a>{{ else }}{{ .JobName }}{{ end }}</code></td>
+                            <td data-sort-key="duration" data-sort="{{ .Duration.Seconds }}">{{ .Duration }}</td>
+                            <td data-sort-key="queue" data-sort="{{ .QueueTime.Seconds }}">{{ .QueueTime }}</td>
+                            <td data-sort-key="slack" data-sort="{{ .Slack.Seconds }}">{{ .Slack }}</td>
                         </tr>
                         {{ end }}
                     </tbody>
                 </table>
 
                 {{ if .CriticalPath.NearCriticalNodes }}
-                <h4 style="margin-top: 1rem; margin-bottom: 0.5rem;">Near-Critical Jobs (Slack ≤ 60s)</h4>
+                <h4 class="details-panel-subtitle">Near-Critical Jobs (Slack ≤ 60s)</h4>
                 <table class="runtime-table">
                     <thead>
                         <tr>
-                            <th>Job Name</th>
-                            <th>Duration</th>
-                            <th>Queue Time</th>
-                            <th>Slack</th>
+                            <th data-sort="jobname" data-sort-type="string">Job Name</th>
+                            <th data-sort="duration" data-sort-type="number">Duration</th>
+                            <th data-sort="queue" data-sort-type="number">Queue Time</th>
+                            <th data-sort="slack" data-sort-type="number">Slack</th>
                         </tr>
                     </thead>
                     <tbody>
                         {{ range .CriticalPath.NearCriticalNodes }}
                         <tr>
-                            <td><code>{{ .JobName }}</code></td>
-                            <td>{{ .Duration }}</td>
-                            <td>{{ .QueueTime }}</td>
-                            <td>{{ .Slack }}</td>
+                            <td data-sort-key="jobname" data-sort="{{ .JobName }}"><code>{{ if and $owner $repo .JobID }}<a href="{{ jobRunLink $owner $repo .JobID }}.html">{{ .JobName }}</a>{{ else }}{{ .JobName }}{{ end }}</code></td>
+                            <td data-sort-key="duration" data-sort="{{ .Duration.Seconds }}">{{ .Duration }}</td>
+                            <td data-sort-key="queue" data-sort="{{ .QueueTime.Seconds }}">{{ .QueueTime }}</td>
+                            <td data-sort-key="slack" data-sort="{{ .Slack.Seconds }}">{{ .Slack }}</td>
                         </tr>
                         {{ end }}
                     </tbody>
                 </table>
                 {{ end }}
-            </div>
-        </details>
+                </div>
+            </details>
         {{ end }}
 
         {{ if .SlowestJobSteps }}
-        <details class="section">
-            <summary>Top slowest jobs step breakdown</summary>
-            <div class="section-body">
+            <details class="details-panel">
+                <summary>Top slowest jobs step breakdown</summary>
+                <div class="details-panel-body">
                 {{ range .SlowestJobSteps }}
-                <h4 style="margin-top: 1rem; margin-bottom: 0.25rem;">{{ .JobName }} ({{ .Duration }})</h4>
-                {{ if .IsOverheadHeavy }}
-                <div class="warning-banner" style="margin-bottom: 0.5rem; padding: 0.5rem;">
-                    ⚠️ Setup & runner overhead ({{ .RunnerOverheadTotal }} + {{ .TestSetupTotal }}) exceeds test execution ({{ .TestExecutionTotal }}).
-                </div>
-                {{ end }}
-                <div style="font-size: 0.9rem; color: var(--color-text-secondary); margin-bottom: 0.5rem;">
-                    <strong>Runner Overhead:</strong> {{ .RunnerOverheadTotal }} | <strong>Test Setup:</strong> {{ .TestSetupTotal }} | <strong>Test Execution:</strong> {{ .TestExecutionTotal }}
-                </div>
-                <table class="runtime-table" style="margin-bottom: 1rem;">
+                {{ $jobID := .JobID }}
+                <h4 class="details-panel-subtitle">{{ if and $owner $repo $jobID }}<a href="{{ jobRunLink $owner $repo $jobID }}.html">{{ .JobName }}</a>{{ else }}{{ .JobName }}{{ end }} <span class="details-panel-subtitle-meta">({{ .Duration }})</span></h4>
+                <table class="runtime-table details-panel-table">
                     <thead>
                         <tr>
-                            <th>Step Name</th>
-                            <th>Duration</th>
-                            <th>Category</th>
-                            <th>Status</th>
+                            <th data-sort="name" data-sort-type="string">Step Name</th>
+                            <th data-sort="duration" data-sort-type="number">Duration</th>
+                            <th data-sort="status" data-sort-type="string">Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         {{ range .Steps }}
                         <tr>
-                            <td>{{ .Name }}</td>
-                            <td>{{ .Duration }}</td>
-                            <td>{{ .Category }}</td>
-                            <td>{{ .Conclusion }}</td>
-                        </tr>
-                        {{ end }}
-                        {{ if gt .MinorStepsCount 0 }}
-                        <tr>
-                            <td><em>{{ .MinorStepsCount }} minor steps (≤1s)</em></td>
-                            <td><em>{{ .MinorStepsTotal }}</em></td>
-                            <td><em>minor</em></td>
-                            <td>-</td>
+                            <td data-sort-key="name" data-sort="{{ .Name }}">{{ if and $owner $repo $jobID }}<a href="{{ jobRunLink $owner $repo $jobID }}.html">{{ .Name }}</a>{{ else }}{{ .Name }}{{ end }}</td>
+                            <td data-sort-key="duration" data-sort="{{ .Duration.Seconds }}">{{ .Duration }}</td>
+                            <td data-sort-key="status" data-sort="{{ .Conclusion }}">{{ .Conclusion }}</td>
                         </tr>
                         {{ end }}
                     </tbody>
+                    {{ if gt .MinorStepsCount 0 }}
+                    <tfoot>
+                        <tr>
+                            <td><em>{{ .MinorStepsCount }} minor steps (≤1s)</em></td>
+                            <td><em>{{ .MinorStepsTotal }}</em></td>
+                            <td>—</td>
+                        </tr>
+                    </tfoot>
+                    {{ end }}
                 </table>
                 {{ end }}
+                </div>
+            </details>
+        {{ end }}
+
             </div>
         </details>
         {{ end }}

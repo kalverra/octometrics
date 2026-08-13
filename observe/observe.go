@@ -5,12 +5,15 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -18,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	texttemplate "text/template"
 	"time"
 
@@ -63,6 +67,7 @@ func sharedFuncMap() map[string]any {
 	return map[string]any{
 		"sanitizeMermaidName": sanitizeMermaidName,
 		"commitRunLink":       commitRunLink,
+		"jobRunLink":          jobRunLink,
 		"divideBy1000":        func(v int64) float64 { return float64(v) / 1000.0 },
 		"joinStrings":         strings.Join,
 		"formatDelta":         formatDelta,
@@ -224,12 +229,29 @@ type options struct {
 	gatherOptions    []gather.Option
 	excludeWorkflows []string
 	includeWorkflows []string
+	noOpen           bool
+	port             int
 }
 
 func defaultOptions() *options {
 	return &options{
 		gatherOptions: []gather.Option{},
 		outputDir:     OutputDir,
+		port:          8080,
+	}
+}
+
+// WithNoOpen sets whether to skip opening the browser automatically on server startup.
+func WithNoOpen(noOpen bool) Option {
+	return func(o *options) {
+		o.noOpen = noOpen
+	}
+}
+
+// WithPort sets the listening HTTP port for the observation server.
+func WithPort(port int) Option {
+	return func(o *options) {
+		o.port = port
 	}
 }
 
@@ -416,6 +438,16 @@ func cleanMarkdown(b bytes.Buffer) bytes.Buffer {
 }
 
 func (o *Observation) renderToFormat(outputType string) (bytes.Buffer, error) {
+	for _, t := range o.TimelineData {
+		if t != nil {
+			if t.Owner == "" {
+				t.Owner = o.Owner
+			}
+			if t.Repo == "" {
+				t.Repo = o.Repo
+			}
+		}
+	}
 	var buf bytes.Buffer
 	if outputType == "json" {
 		enc := json.NewEncoder(&buf)
@@ -475,16 +507,28 @@ func Interactive(
 		}
 	}
 
+	port := observeOpts.port
+	if port <= 0 {
+		port = 8080
+	}
+	serverURL := fmt.Sprintf("http://localhost:%d", port)
 	log.Info().
-		Str("url", "http://localhost:8080"+initialPath).
+		Str("url", serverURL+initialPath).
 		Str("built_observations_dur", time.Since(startTime).String()).
 		Str("html_dir", activeHTMLOutputDir).
 		Str("md_dir", markdownOutputDir).
 		Msg("Observing data...")
-	fmt.Println("Observe data at http://localhost:8080")
-	fmt.Printf("Markdown files written to %s/\n", markdownOutputDir)
+	printObserveURLs(os.Stdout, serverURL, initialPath, markdownOutputDir)
 
-	return ServeHTMLWithHandler(log, initialPath, handler)
+	return ServeHTMLWithHandler(log, initialPath, handler, opts...)
+}
+
+func printObserveURLs(w io.Writer, serverURL, initialPath, markdownOutputDir string) {
+	_, _ = fmt.Fprintf(w, "Observe data at %s\n", serverURL)
+	if initialPath != "" && initialPath != "/" {
+		_, _ = fmt.Fprintf(w, "Target page at %s\n", serverURL+initialPath)
+	}
+	_, _ = fmt.Fprintf(w, "Markdown files written to %s/\n", markdownOutputDir)
 }
 
 // ServeHTML starts a local HTTP server for the HTML output directory using OnDemandHandler
@@ -495,26 +539,67 @@ func ServeHTML(log zerolog.Logger, initialPath string) error {
 }
 
 // ServeHTMLWithHandler starts a local HTTP server with the given handler.
-func ServeHTMLWithHandler(log zerolog.Logger, initialPath string, handler http.Handler) error {
+func ServeHTMLWithHandler(log zerolog.Logger, initialPath string, handler http.Handler, opts ...Option) error {
+	observeOpts := defaultOptions()
+	for _, opt := range opts {
+		opt(observeOpts)
+	}
+	port := observeOpts.port
+	if port <= 0 {
+		port = 8080
+	}
 	var (
-		baseURL    = "http://localhost:8080"
+		baseURL    = fmt.Sprintf("http://localhost:%d", port)
 		browserURL = baseURL + initialPath
 	)
 
-	//nolint:gosec // I don't care
-	l, err := net.Listen("tcp", ":8080")
-	if err != nil {
-		return fmt.Errorf("failed to listen on :8080: %w", err)
+	var l net.Listener
+	var err error
+	for i := range 15 {
+		//nolint:gosec // user configurable port
+		l, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err == nil {
+			break
+		}
+		if i < 14 &&
+			(strings.Contains(err.Error(), "address already in use") || strings.Contains(err.Error(), "bind")) {
+			time.Sleep(200 * time.Millisecond)
+			continue
+		}
+		return fmt.Errorf("failed to listen on :%d: %w", port, err)
 	}
 
-	// Wait a moment for server to start before opening browser
+	if !observeOpts.noOpen {
+		// Wait a moment for server to start before opening browser
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			_ = openBrowser(log, browserURL)
+		}()
+	}
+
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	idleConnsClosed := make(chan struct{})
 	go func() {
-		time.Sleep(100 * time.Millisecond)
-		_ = openBrowser(log, browserURL)
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
+		<-sigint
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+		close(idleConnsClosed)
 	}()
 
-	//nolint:gosec // I don't care
-	return http.Serve(l, handler)
+	err = srv.Serve(l)
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("http serve error: %w", err)
+	}
+	<-idleConnsClosed
+	return nil
 }
 
 func openBrowser(log zerolog.Logger, url string) error {

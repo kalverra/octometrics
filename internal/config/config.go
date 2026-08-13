@@ -40,6 +40,8 @@ type Config struct {
 	Progress          string        `mapstructure:"progress"`
 	DownloadLogs      bool          `mapstructure:"download_logs"`
 	OutputFile        string        `mapstructure:"output_file"`
+	NoOpen            bool          `mapstructure:"no_open"`
+	Port              int           `mapstructure:"port"`
 }
 
 // DefaultLogLevel is the default log level.
@@ -92,6 +94,7 @@ func Load(opts ...LoadOption) (*Config, error) {
 	v.SetDefault("wait_timeout", 30*time.Minute)
 	v.SetDefault("poll_interval", 10*time.Second)
 	v.SetDefault("progress", "auto")
+	v.SetDefault("port", 8080)
 
 	// Bind all configuration fields to environment variables
 	typ := reflect.TypeFor[Config]()

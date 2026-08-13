@@ -89,11 +89,16 @@ func buildGatherOptions(cfg *config.Config) []gather.Option {
 }
 
 func buildObserveOptions(cfg *config.Config) []observe.Option {
-	return []observe.Option{
+	opts := []observe.Option{
 		observe.WithGatherOptions(buildGatherOptions(cfg)...),
 		observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
 		observe.IncludeWorkflows(cfg.IncludeWorkflows),
+		observe.WithNoOpen(cfg.NoOpen),
 	}
+	if cfg.Port > 0 {
+		opts = append(opts, observe.WithPort(cfg.Port))
+	}
+	return opts
 }
 
 var rootCmd = &cobra.Command{
@@ -402,6 +407,8 @@ func init() {
 	rootCmd.Flags().String("progress", "auto", "Progress output style (auto, human, ai, none)")
 	rootCmd.Flags().Bool("download-logs", false, "Download raw job log files from GitHub")
 	rootCmd.Flags().String("vs", "", "Baseline workflow run ID, commit SHA, or URL to compare against")
+	rootCmd.Flags().Bool("no-open", false, "Do not open browser window on startup")
+	rootCmd.Flags().Int("port", 8080, "Port for local web server")
 }
 
 // Execute runs the root command for octometrics.

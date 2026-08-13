@@ -16,6 +16,9 @@ type PostTimelineItem struct {
 
 // Timeline contains the data for rendering a Gantt chart.
 type Timeline struct {
+	Owner string `json:"owner,omitempty"`
+	Repo  string `json:"repo,omitempty"`
+
 	// Triggering event
 	Event string
 	// Items that happen after the specified timeline

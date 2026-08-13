@@ -30,7 +30,7 @@ func TestObservation_RenderString(t *testing.T) {
 
 	md, err := obs.RenderString(log, "md")
 	require.NoError(t, err)
-	assert.Contains(t, md, "# [Test Workflow]")
+	assert.Contains(t, md, "# Test Workflow")
 	assert.Contains(t, md, "success")
 }
 
@@ -192,8 +192,8 @@ func TestObservation_RenderString_AnalyticsSections(t *testing.T) {
 				JobName:  "Test Matrix",
 				Duration: 180 * time.Second,
 				Steps: []StepDetail{
-					{Name: "Set up Go", Duration: 15 * time.Second, Category: "env-setup"},
-					{Name: "Run tests", Duration: 165 * time.Second, Category: "test-execution"},
+					{Name: "Set up Go", Duration: 15 * time.Second},
+					{Name: "Run tests", Duration: 165 * time.Second},
 				},
 			},
 		},
@@ -254,12 +254,10 @@ func TestObservation_RenderString_AnalyticsUnderEventSectionPreCollapsed(t *test
 	html, err := obs.RenderString(log, "html")
 	require.NoError(t, err)
 
-	// Ensure Step aggregation and Critical path are pre-collapsed (not open)
-	assert.NotContains(t, html, `<details class="section" open>`, "No analytics section should have open attribute")
-	assert.Contains(t, html, `<details class="section">
-    <summary>Step aggregation across matrix</summary>`, "Step aggregation should be pre-collapsed")
-	assert.Contains(t, html, `<details class="section">
-    <summary>Critical path</summary>`, "Critical path should be pre-collapsed")
+	// Ensure Step aggregation and Critical path are pre-collapsed (not open at the panel level)
+	assert.NotContains(t, html, `<details class="details-panel" open>`, "No analytics panel should have open attribute")
+	assert.Contains(t, html, "Step aggregation across matrix", "Step aggregation should be present")
+	assert.Contains(t, html, "Critical path", "Critical path should be present")
 
 	// Ensure all analytics sections are inside event section (after workflow_dispatch summary)
 	eventSummaryIdx := strings.Index(html, "workflow_dispatch")
@@ -315,4 +313,102 @@ func TestObservation_RenderString_RealTimestampsInHeader(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, md, "2026-08-11T20:48:00")
 	assert.NotContains(t, md, "2026-08-11T00:00:00")
+}
+
+func TestEventSection_HTMLAutoCollapsedDetailsAndJobLinks(t *testing.T) {
+	t.Parallel()
+
+	log, _ := testhelpers.Setup(t)
+
+	timeline := &Timeline{
+		Event:         "push",
+		Duration:      300 * time.Second,
+		RealStartTime: time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC),
+		RealEndTime:   time.Date(2026, 8, 12, 10, 5, 0, 0, time.UTC),
+		Items: []TimelineItem{
+			{Name: "Build", JobID: 101, Duration: 100 * time.Second, Link: "/owner/repo/job_runs/101.html"},
+		},
+		CriticalPath: &CriticalPathInfo{
+			TotalDuration: 300 * time.Second,
+			CriticalNodes: []CriticalPathNode{
+				{JobID: 101, JobName: "Build", Duration: 100 * time.Second, IsCritical: true},
+			},
+		},
+		SlowestJobSteps: []JobStepBreakdown{
+			{
+				JobID:    101,
+				JobName:  "Build",
+				Duration: 100 * time.Second,
+				Steps:    []StepDetail{{Name: "Compile", Duration: 90 * time.Second}},
+			},
+		},
+	}
+
+	obs := &Observation{
+		ID:           "888",
+		Name:         "Event UI Test Workflow",
+		Owner:        "owner",
+		Repo:         "repo",
+		DataType:     "workflow_run",
+		TimelineData: []*Timeline{timeline},
+	}
+
+	html, err := obs.RenderString(log, "html")
+	require.NoError(t, err)
+
+	// 1. Details section auto-collapsed (no open attribute on details-group)
+	assert.NotContains(
+		t,
+		html,
+		`<details class="section details-group" open>`,
+		"Details group should be auto-collapsed without open attribute",
+	)
+	assert.Contains(
+		t,
+		html,
+		`<details class="section details-group">`,
+		"Details group should exist without open attribute",
+	)
+
+	// 2. Clickable job links in Critical Path and Top Slowest Jobs
+	assert.Contains(
+		t,
+		html,
+		`<a href="/owner/repo/job_runs/101.html">Build</a>`,
+		"Job name in Critical Path / Slowest Jobs should link to octometrics page",
+	)
+}
+
+func TestEventSection_MarkdownPureNoHTMLNoLinks(t *testing.T) {
+	t.Parallel()
+
+	log, _ := testhelpers.Setup(t)
+
+	timeline := &Timeline{
+		Event:         "push",
+		Duration:      300 * time.Second,
+		RealStartTime: time.Date(2026, 8, 12, 10, 0, 0, 0, time.UTC),
+		RealEndTime:   time.Date(2026, 8, 12, 10, 5, 0, 0, time.UTC),
+		Items: []TimelineItem{
+			{Name: "Build", JobID: 101, Duration: 100 * time.Second},
+		},
+	}
+
+	obs := &Observation{
+		ID:           "888",
+		Name:         "Event UI Test Workflow",
+		GitHubLink:   "https://github.com/owner/repo/actions/runs/888",
+		Owner:        "owner",
+		Repo:         "repo",
+		DataType:     "workflow_run",
+		TimelineData: []*Timeline{timeline},
+	}
+
+	md, err := obs.RenderString(log, "md")
+	require.NoError(t, err)
+
+	// Pure markdown: no HTML tags (like <details>, <a>, etc.) and no clickable links ([text](url))
+	assert.NotContains(t, md, "<details>", "Markdown output should have no HTML tags")
+	assert.NotContains(t, md, "<a ", "Markdown output should have no HTML <a> tags")
+	assert.NotContains(t, md, "[Event UI Test Workflow](", "Markdown output should have no clickable markdown links")
 }

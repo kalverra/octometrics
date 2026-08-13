@@ -79,6 +79,24 @@ func TestLoad_Flags_DownloadLogs(t *testing.T) {
 	assert.True(t, cfg.DownloadLogs)
 }
 
+func TestLoad_Flags_NoOpenAndPort(t *testing.T) {
+	t.Parallel()
+
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.Bool("no-open", false, "do not open browser")
+	flags.Int("port", 8080, "server port")
+
+	err := flags.Set("no-open", "true")
+	require.NoError(t, err)
+	err = flags.Set("port", "8081")
+	require.NoError(t, err)
+
+	cfg, err := Load(WithFlags(flags))
+	require.NoError(t, err, "failed to load config")
+	assert.True(t, cfg.NoOpen)
+	assert.Equal(t, 8081, cfg.Port)
+}
+
 func TestValidateGather_PartialDateRange(t *testing.T) {
 	t.Parallel()
 

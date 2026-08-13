@@ -133,20 +133,30 @@ func (h *OnDemandHandler) handleEntity(w http.ResponseWriter, r *http.Request) {
 	entityName := fmt.Sprintf("%s/%s %s %s", owner, repo, category, id)
 
 	if outStat, err := os.Stat(targetOutFile); err == nil {
-		if srcStat, sErr := os.Stat(sourceJSONFile); sErr == nil {
-			if outStat.ModTime().After(srcStat.ModTime()) {
+		stale := false
+		if execPath, execErr := os.Executable(); execErr == nil {
+			if execStat, eErr := os.Stat(execPath); eErr == nil {
+				if execStat.ModTime().After(outStat.ModTime()) {
+					stale = true
+				}
+			}
+		}
+		if !stale {
+			if srcStat, sErr := os.Stat(sourceJSONFile); sErr == nil {
+				if outStat.ModTime().After(srcStat.ModTime()) {
+					h.jobsMu.Lock()
+					delete(h.jobs, jobKey)
+					h.jobsMu.Unlock()
+					http.ServeFile(w, r, targetOutFile)
+					return
+				}
+			} else if category == "job_runs" || category == "comparisons" {
 				h.jobsMu.Lock()
 				delete(h.jobs, jobKey)
 				h.jobsMu.Unlock()
 				http.ServeFile(w, r, targetOutFile)
 				return
 			}
-		} else if category == "job_runs" || category == "comparisons" {
-			h.jobsMu.Lock()
-			delete(h.jobs, jobKey)
-			h.jobsMu.Unlock()
-			http.ServeFile(w, r, targetOutFile)
-			return
 		}
 	}
 

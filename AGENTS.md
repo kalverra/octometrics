@@ -43,3 +43,15 @@ Identify specific code blocks that could benefit from **scrupulous human review*
 - **Error handling**: Wrap errors with `fmt.Errorf("context: %w", err)`. Deferred `Close()` calls must check the error (see `errcheck` linter).
 - **GitHub API**: Use `github.com/google/go-github/v89`. Rate limiting is handled by `go-github-ratelimit`. See `gather/gather.go` for the client setup pattern.
 - **No unnecessary comments**: Do not add comments that merely narrate what the code does. Comments should explain non-obvious intent or constraints.
+
+## Local UI Development and Inspection
+
+- **Live Reload**: Run `mise run dev` (or `air`) to start server on `http://localhost:8080` with proxy live reloading.
+  - To target specific view: `air -build.args_bin "--no-open,--port,8081,--format,html,https://github.com/owner/repo/pull/123"`
+  - Target page URL: `http://localhost:8080/owner/repo/pull_requests/123.html`
+- **Open Browser / VS Code**:
+  - Chrome: `open -a "Google Chrome" "http://localhost:8080/owner/repo/pull_requests/123.html"`
+  - VS Code Simple Browser: `open "vscode://vscode.simple-browser/open?url=http%3A%2F%2Flocalhost%3A8080%2Fowner%2Frepo%2Fpull_requests%2F123.html"`
+- **UI Inspection & Verification**:
+  - Fetch HTML/DOM: `read_url_content` for `http://localhost:8080/owner/repo/pull_requests/123.html`
+  - Visual layout screenshot: Either use native browser viewing tool, or playwright: `npx -y playwright screenshot http://localhost:8080 UI_PREVIEW.png` then view `UI_PREVIEW.png` via `view_file`.
