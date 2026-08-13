@@ -244,10 +244,82 @@ func (w *WorkflowRunData) GetWorkflowDef() *WorkflowDef {
 	return w.WorkflowDef
 }
 
+// IsInProgress returns true if the workflow run has not completed.
+func (w *WorkflowRunData) IsInProgress() bool {
+	if w == nil || w.WorkflowRun == nil {
+		return false
+	}
+	return w.GetStatus() != "completed"
+}
+
 var (
 	workflowRunCache sync.Map
 	workflowRunGroup singleflight.Group
 )
+
+func tryLoadWorkflowRunFromCache(
+	ctx context.Context,
+	log zerolog.Logger,
+	client *GitHubClient,
+	owner, repo string,
+	workflowRunID int64,
+	opts *options,
+	cacheKey, targetFile string,
+) (*WorkflowRunData, bool) {
+	if opts.ForceUpdate || !cacheFileExists(targetFile) {
+		return nil, false
+	}
+	if !opts.SkipMemoryCache {
+		if cached, ok := workflowRunCache.Load(cacheKey); ok {
+			wfData := cached.(*WorkflowRunData)
+			if client == nil || !wfData.IsInProgress() {
+				return wfData, true
+			}
+		}
+	}
+	data, loadErr := loadWorkflowRunFromDisk(targetFile)
+	if loadErr != nil {
+		if !errors.Is(loadErr, os.ErrNotExist) {
+			log.Warn().
+				Err(loadErr).
+				Str("target_file", targetFile).
+				Msg("Corrupted local cache file encountered; re-fetching from GitHub")
+			_ = os.Remove(targetFile)
+		}
+		return nil, false
+	}
+
+	if client != nil && data.IsInProgress() {
+		log.Debug().
+			Int64("workflow_run_id", workflowRunID).
+			Msg("Cached workflow run was in progress; refreshing from GitHub API")
+		return nil, false
+	}
+
+	logsDir := filepath.Join(opts.DataDir, owner, repo, "logs", fmt.Sprintf("%d", workflowRunID))
+	if cacheFileExists(logsDir) {
+		data.LogsDir = logsDir
+	}
+	if opts.downloadLogs && client != nil {
+		if dlLogsDir, dlErr := downloadWorkflowRunLogs(
+			ctx,
+			log,
+			client,
+			owner,
+			repo,
+			workflowRunID,
+			data.Jobs,
+			opts.DataDir,
+		); dlErr == nil {
+			data.LogsDir = dlLogsDir
+		}
+	}
+	if !opts.gatherCost || data.CostGathered || client == nil {
+		workflowRunCache.Store(cacheKey, data)
+		return data, true
+	}
+	return nil, false
+}
 
 // WorkflowRun gathers and processes a workflow run from GitHub or local disk.
 func WorkflowRun(
@@ -275,51 +347,37 @@ func WorkflowRun(
 
 	cacheKey := fmt.Sprintf("%s:cost=%t", targetFile, opts.gatherCost)
 
-	if !opts.ForceUpdate && !opts.SkipMemoryCache && cacheFileExists(targetFile) {
-		if cached, ok := workflowRunCache.Load(cacheKey); ok {
-			log.Debug().
-				Str("duration", time.Since(startTime).String()).
-				Str("source", "memory cache").
-				Msg("Gathered workflow run data")
-			return cached.(*WorkflowRunData), targetFile, nil
-		}
+	if cached, ok := tryLoadWorkflowRunFromCache(
+		ctx,
+		log,
+		client,
+		owner,
+		repo,
+		workflowRunID,
+		opts,
+		cacheKey,
+		targetFile,
+	); ok {
+		log.Debug().
+			Str("duration", time.Since(startTime).String()).
+			Str("source", "cache").
+			Msg("Gathered workflow run data")
+		return cached, targetFile, nil
 	}
 
 	val, err, _ := workflowRunGroup.Do(cacheKey, func() (any, error) {
-		if !opts.ForceUpdate {
-			if !opts.SkipMemoryCache && cacheFileExists(targetFile) {
-				if cached, ok := workflowRunCache.Load(cacheKey); ok {
-					return cached.(*WorkflowRunData), nil
-				}
-			}
-			if data, loadErr := loadWorkflowRunFromDisk(targetFile); loadErr == nil {
-				logsDir := filepath.Join(opts.DataDir, owner, repo, "logs", fmt.Sprintf("%d", workflowRunID))
-				if cacheFileExists(logsDir) {
-					data.LogsDir = logsDir
-				}
-				if opts.downloadLogs && client != nil {
-					if dlLogsDir, dlErr := downloadWorkflowRunLogs(
-						ctx,
-						log,
-						client,
-						owner,
-						repo,
-						workflowRunID,
-						data.Jobs,
-						opts.DataDir,
-					); dlErr == nil {
-						data.LogsDir = dlLogsDir
-					}
-				}
-				if !opts.gatherCost || data.CostGathered || client == nil {
-					workflowRunCache.Store(cacheKey, data)
-					log.Debug().
-						Str("duration", time.Since(startTime).String()).
-						Str("source", "local file").
-						Msg("Gathered workflow run data")
-					return data, nil
-				}
-			}
+		if cached, ok := tryLoadWorkflowRunFromCache(
+			ctx,
+			log,
+			client,
+			owner,
+			repo,
+			workflowRunID,
+			opts,
+			cacheKey,
+			targetFile,
+		); ok {
+			return cached, nil
 		}
 
 		if client == nil {
@@ -507,6 +565,21 @@ func fetchWorkflowRunFromGitHub(
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+
+	targetFile := filepath.Join(targetDir, fmt.Sprintf("%d.json", workflowRunID))
+	if existingData, loadErr := loadWorkflowRunFromDisk(targetFile); loadErr == nil && existingData != nil {
+		if !existingData.IsInProgress() && workflowRun.GetStatus() == "completed" {
+			remoteUpdated := workflowRun.GetUpdatedAt().Time
+			localUpdated := existingData.GetUpdatedAt().Time
+			if !remoteUpdated.IsZero() && !localUpdated.IsZero() && !remoteUpdated.After(localUpdated) {
+				log.Debug().
+					Int64("workflow_run_id", workflowRunID).
+					Msg("Workflow run timestamp unchanged on GitHub; reusing cached jobs and cost data")
+				existingData.WorkflowRun = workflowRun
+				return existingData, nil
+			}
+		}
 	}
 
 	if workflowRun.GetStatus() != "completed" && opts.Wait {

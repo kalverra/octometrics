@@ -6,10 +6,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/google/go-github/v89/github"
@@ -157,6 +159,75 @@ type MergeQueueEvent struct {
 	AddedID       string
 }
 
+// IsInProgress returns true if the commit has incomplete actions or in-progress workflow runs.
+func (c *CommitData) IsInProgress() bool {
+	if c == nil {
+		return false
+	}
+	if c.Conclusion == "in_progress" || c.Conclusion == "" {
+		return true
+	}
+	for _, wf := range c.WorkflowRuns {
+		if wf != nil && wf.IsInProgress() {
+			return true
+		}
+	}
+	return false
+}
+
+var (
+	commitCache sync.Map
+	commitGroup inFlightGroup
+)
+
+func tryLoadCommitFromCache(
+	parentCtx context.Context,
+	log zerolog.Logger,
+	client *GitHubClient,
+	owner, repo string,
+	sha string,
+	opts []Option,
+	options *options,
+	cacheKey, targetFile string,
+) (*CommitData, bool) {
+	if options.ForceUpdate || !cacheFileExists(targetFile) {
+		return nil, false
+	}
+	if !options.SkipMemoryCache {
+		if cached, ok := commitCache.Load(cacheKey); ok {
+			cData := cached.(*CommitData)
+			if client == nil || !cData.IsInProgress() {
+				return cData, true
+			}
+		}
+	}
+	cData, loadErr := readJSONFile[*CommitData](targetFile)
+	if loadErr != nil {
+		log.Warn().
+			Err(loadErr).
+			Str("target_file", targetFile).
+			Msg("Corrupted local cache file encountered; re-fetching from GitHub")
+		_ = os.Remove(targetFile)
+		return nil, false
+	}
+
+	cData.WorkflowRuns = nil
+	for _, runID := range cData.WorkflowRunIDs {
+		wf, _, loadWfErr := WorkflowRun(parentCtx, log, client, owner, repo, runID, opts...)
+		if loadWfErr == nil && wf != nil {
+			cData.WorkflowRuns = append(cData.WorkflowRuns, wf)
+		}
+	}
+	if client == nil || !cData.IsInProgress() {
+		commitCache.Store(cacheKey, cData)
+		return cData, true
+	}
+	log.Debug().
+		Str("commit_sha", sha).
+		Msg("Cached commit was in progress; refreshing from GitHub API")
+	return nil, false
+}
+
 // Commit gathers commit data for a given commit SHA and enhances matches it with workflows that ran on that commit.
 func Commit(
 	parentCtx context.Context,
@@ -172,8 +243,6 @@ func Commit(
 	}
 
 	var (
-		forceUpdate = options.ForceUpdate
-
 		commitData = &CommitData{
 			Owner: owner,
 			Repo:  repo,
@@ -196,113 +265,143 @@ func Commit(
 		return nil, err
 	}
 
-	fileExists := cacheFileExists(targetFile)
-
 	startTime := time.Now()
+	cacheKey := fmt.Sprintf("%s:pr=%d", targetFile, commitData.CorrespondingPRNum)
 
-	if !forceUpdate && fileExists {
-		log = log.With().
-			Str("source", "local file").
-			Logger()
-		commitData, err := readJSONFile[*CommitData](targetFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open commit file: %w", err)
+	if cached, ok := tryLoadCommitFromCache(
+		parentCtx,
+		log,
+		client,
+		owner,
+		repo,
+		sha,
+		opts,
+		options,
+		cacheKey,
+		targetFile,
+	); ok {
+		log.Debug().
+			Str("duration", time.Since(startTime).String()).
+			Str("source", "cache").
+			Msg("Gathered commit data")
+		return cached, nil
+	}
+
+	val, err := commitGroup.Do(cacheKey, func() (any, error) {
+		if cached, ok := tryLoadCommitFromCache(
+			parentCtx,
+			log,
+			client,
+			owner,
+			repo,
+			sha,
+			opts,
+			options,
+			cacheKey,
+			targetFile,
+		); ok {
+			return cached, nil
 		}
-		for _, runID := range commitData.WorkflowRunIDs {
-			wf, _, loadErr := WorkflowRun(parentCtx, log, client, owner, repo, runID, opts...)
-			if loadErr == nil && wf != nil {
-				commitData.WorkflowRuns = append(commitData.WorkflowRuns, wf)
+
+		log = log.With().
+			Str("source", "GitHub API").
+			Logger()
+
+		var commit *github.RepositoryCommit
+		if options.repositoryCommit != nil {
+			commit = options.repositoryCommit
+		} else {
+			if client == nil {
+				return nil, fmt.Errorf("github client is nil")
+			}
+			ctx, cancel := ghCtx(parentCtx)
+			var resp *github.Response
+			var fetchErr error
+			commit, resp, fetchErr = client.Rest.Repositories.GetCommit(ctx, owner, repo, sha, nil)
+			cancel()
+			if fetchErr != nil {
+				return nil, fetchErr
+			}
+			if resp.StatusCode != http.StatusOK {
+				return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
 			}
 		}
+
+		commitData.RepositoryCommit = commit
+		checkRuns, checkErr := checkRunsForCommit(parentCtx, client, owner, repo, sha)
+		if checkErr != nil {
+			return nil, checkErr
+		}
+
+		if len(checkRuns) == 0 && len(commit.Parents) > 1 {
+			log.Info().
+				Str("commit_sha", sha).
+				Msg("No check runs found on merge commit. Checking parents.")
+			// Check the second parent first (typical for PR/merge group merge commits)
+			for _, v := range slices.Backward(commit.Parents) {
+				parentSHA := v.GetSHA()
+				if parentSHA == "" {
+					continue
+				}
+				log.Info().
+					Str("parent_sha", parentSHA).
+					Msg("Checking parent commit for check runs")
+				parentCheckRuns, pErr := checkRunsForCommit(parentCtx, client, owner, repo, parentSHA)
+				if pErr != nil {
+					log.Warn().
+						Str("parent_sha", parentSHA).
+						Err(pErr).
+						Msg("Failed to check runs for parent commit")
+					continue
+				}
+				if len(parentCheckRuns) > 0 {
+					log.Info().
+						Str("parent_sha", parentSHA).
+						Int("count", len(parentCheckRuns)).
+						Msg("Found check runs on parent commit")
+					checkRuns = parentCheckRuns
+					break
+				}
+			}
+		}
+		commitData.CheckRuns = checkRuns
+		if wfErr := setWorkflowRunsForCommit(
+			parentCtx,
+			log,
+			client,
+			owner,
+			repo,
+			commitData.CheckRuns,
+			commitData,
+			opts,
+		); wfErr != nil {
+			return nil, fmt.Errorf("failed to gather workflow runs for commit '%s': %w", sha, wfErr)
+		}
+
+		if writeErr := writeJSONFile(targetFile, commitData); writeErr != nil {
+			return nil, fmt.Errorf("failed to write commit data to file '%s': %w", sha, writeErr)
+		}
+
+		_ = AppendManifestRecord(options.DataDir, owner, repo, ManifestRecord{
+			Type:      "commit",
+			ID:        sha,
+			Name:      "Commit " + sha,
+			State:     commitData.Conclusion,
+			Actor:     commitData.GetCommit().GetAuthor().GetName(),
+			CreatedAt: commitData.GetCommit().GetAuthor().GetDate().Time,
+		})
+
+		commitCache.Store(cacheKey, commitData)
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).
 			Msg("Gathered commit data")
 		return commitData, nil
-	}
-
-	log = log.With().
-		Str("source", "GitHub API").
-		Logger()
-
-	var commit *github.RepositoryCommit
-	if options.repositoryCommit != nil {
-		commit = options.repositoryCommit
-	} else {
-		if client == nil {
-			return nil, fmt.Errorf("github client is nil")
-		}
-		ctx, cancel := ghCtx(parentCtx)
-		var resp *github.Response
-		commit, resp, err = client.Rest.Repositories.GetCommit(ctx, owner, repo, sha, nil)
-		cancel()
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
-		}
-	}
-
-	commitData.RepositoryCommit = commit
-	checkRuns, err := checkRunsForCommit(parentCtx, client, owner, repo, sha)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if len(checkRuns) == 0 && len(commit.Parents) > 1 {
-		log.Info().
-			Str("commit_sha", sha).
-			Msg("No check runs found on merge commit. Checking parents.")
-		// Check the second parent first (typical for PR/merge group merge commits)
-		for _, v := range slices.Backward(commit.Parents) {
-			parentSHA := v.GetSHA()
-			if parentSHA == "" {
-				continue
-			}
-			log.Info().
-				Str("parent_sha", parentSHA).
-				Msg("Checking parent commit for check runs")
-			parentCheckRuns, err := checkRunsForCommit(parentCtx, client, owner, repo, parentSHA)
-			if err != nil {
-				log.Warn().
-					Str("parent_sha", parentSHA).
-					Err(err).
-					Msg("Failed to check runs for parent commit")
-				continue
-			}
-			if len(parentCheckRuns) > 0 {
-				log.Info().
-					Str("parent_sha", parentSHA).
-					Int("count", len(parentCheckRuns)).
-					Msg("Found check runs on parent commit")
-				checkRuns = parentCheckRuns
-				break
-			}
-		}
-	}
-	commitData.CheckRuns = checkRuns
-	err = setWorkflowRunsForCommit(parentCtx, log, client, owner, repo, commitData.CheckRuns, commitData, opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to gather workflow runs for commit '%s': %w", sha, err)
-	}
-
-	if err := writeJSONFile(targetFile, commitData); err != nil {
-		return nil, fmt.Errorf("failed to write commit data to file '%s': %w", sha, err)
-	}
-
-	_ = AppendManifestRecord(options.DataDir, owner, repo, ManifestRecord{
-		Type:      "commit",
-		ID:        sha,
-		Name:      "Commit " + sha,
-		State:     commitData.Conclusion,
-		Actor:     commitData.GetCommit().GetAuthor().GetName(),
-		CreatedAt: commitData.GetCommit().GetAuthor().GetDate().Time,
-	})
-
-	log.Debug().
-		Str("duration", time.Since(startTime).String()).
-		Msg("Gathered commit data")
-	return commitData, nil
+	return val.(*CommitData), nil
 }
 
 func checkRunsForCommit(

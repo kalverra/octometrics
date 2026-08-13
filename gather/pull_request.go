@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/google/go-github/v89/github"
@@ -28,6 +30,60 @@ func (p *PullRequestData) GetCommitData() []*CommitData {
 	return p.CommitData
 }
 
+// IsInProgress returns true if the pull request is open or has in-progress commits/workflows.
+func (p *PullRequestData) IsInProgress() bool {
+	if p == nil || p.PullRequest == nil {
+		return false
+	}
+	if p.GetState() == "open" {
+		return true
+	}
+	for _, c := range p.CommitData {
+		if c != nil && c.IsInProgress() {
+			return true
+		}
+	}
+	return false
+}
+
+var (
+	pullRequestCache sync.Map
+	pullRequestGroup inFlightGroup
+)
+
+func tryLoadPullRequestFromCache(
+	log zerolog.Logger,
+	client *GitHubClient,
+	options *options,
+	cacheKey, targetFile string,
+) (*PullRequestData, bool) {
+	if options.ForceUpdate || !cacheFileExists(targetFile) {
+		return nil, false
+	}
+	if !options.SkipMemoryCache {
+		if cached, ok := pullRequestCache.Load(cacheKey); ok {
+			prData := cached.(*PullRequestData)
+			if client == nil || !prData.IsInProgress() {
+				return prData, true
+			}
+		}
+	}
+	prData, loadErr := readJSONFile[*PullRequestData](targetFile)
+	if loadErr != nil {
+		log.Warn().
+			Err(loadErr).
+			Str("target_file", targetFile).
+			Msg("Corrupted local cache file encountered; re-fetching from GitHub")
+		_ = os.Remove(targetFile)
+		return nil, false
+	}
+	if client == nil || !prData.IsInProgress() {
+		pullRequestCache.Store(cacheKey, prData)
+		return prData, true
+	}
+	return nil, false
+}
+
 // PullRequest gathers the pull request data for a given pull request number.
 func PullRequest(
 	parentCtx context.Context,
@@ -43,8 +99,6 @@ func PullRequest(
 	}
 
 	var (
-		forceUpdate = options.ForceUpdate
-
 		pullRequestData = &PullRequestData{}
 		targetDir       = filepath.Join(options.DataDir, owner, repo, PullRequestsDataDir)
 		targetFile      = filepath.Join(targetDir, fmt.Sprintf("%d.json", pullRequestNumber))
@@ -60,89 +114,105 @@ func PullRequest(
 	}
 
 	startTime := time.Now()
+	cacheKey := targetFile
 
-	if !forceUpdate && cacheFileExists(targetFile) {
-		log = log.With().
-			Str("source", "local file").
-			Logger()
-		pullRequestData, err := readJSONFile[*PullRequestData](targetFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to open pull request file: %w", err)
+	if cached, ok := tryLoadPullRequestFromCache(log, client, options, cacheKey, targetFile); ok {
+		log.Debug().
+			Str("duration", time.Since(startTime).String()).
+			Str("source", "cache").
+			Msg("Gathered pull request data")
+		return cached, nil
+	}
+
+	val, err := pullRequestGroup.Do(cacheKey, func() (any, error) {
+		if cached, ok := tryLoadPullRequestFromCache(log, client, options, cacheKey, targetFile); ok {
+			return cached, nil
 		}
+
+		log = log.With().
+			Str("source", "GitHub API").
+			Logger()
+
+		if client == nil {
+			return nil, fmt.Errorf("github client is nil")
+		}
+
+		ctx, cancel := ghCtx(parentCtx)
+		pr, resp, getErr := client.Rest.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
+		cancel()
+		if getErr != nil {
+			return nil, getErr
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
+		}
+		if pr == nil {
+			return nil, fmt.Errorf("pull request '%d' not found on GitHub", pullRequestNumber)
+		}
+
+		mergeQueueEvents, mqErr := prMergeQueueEvents(parentCtx, client, owner, repo, pullRequestNumber)
+		if mqErr != nil {
+			return nil, fmt.Errorf(
+				"failed to gather merge queue events for pull request %d: %w",
+				pullRequestNumber,
+				mqErr,
+			)
+		}
+
+		pullRequestData.PullRequest = pr
+		prCommitsList, commitsErr := prCommits(parentCtx, client, owner, repo, pullRequestNumber, mergeQueueEvents)
+		if commitsErr != nil {
+			return nil, fmt.Errorf("failed to gather commits for pull request %d: %w", pullRequestNumber, commitsErr)
+		}
+
+		optsWithPR := append(slices.Clone(opts), withPullRequestData(pullRequestData))
+		var commitDataErr error
+		pullRequestData.CommitData, commitDataErr = prCommitData(
+			parentCtx,
+			log,
+			client,
+			owner,
+			repo,
+			prCommitsList,
+			mergeQueueEvents,
+			optsWithPR...,
+		)
+		if commitDataErr != nil {
+			return nil, fmt.Errorf(
+				"failed to gather commit data for pull request %d: %w",
+				pullRequestNumber,
+				commitDataErr,
+			)
+		}
+
+		if writeErr := writeJSONFile(targetFile, pullRequestData); writeErr != nil {
+			return nil, fmt.Errorf(
+				"failed to write pull request data to file for pull request %d: %w",
+				pullRequestNumber,
+				writeErr,
+			)
+		}
+
+		_ = AppendManifestRecord(options.DataDir, owner, repo, ManifestRecord{
+			Type:      "pull_request",
+			ID:        fmt.Sprint(pullRequestNumber),
+			Name:      pullRequestData.GetTitle(),
+			State:     pullRequestData.GetState(),
+			Actor:     pullRequestData.GetUser().GetLogin(),
+			CreatedAt: pullRequestData.GetCreatedAt().Time,
+		})
+
+		pullRequestCache.Store(cacheKey, pullRequestData)
 		log.Debug().
 			Str("duration", time.Since(startTime).String()).
 			Msg("Gathered pull request data")
-		return pullRequestData, err
-	}
-
-	log = log.With().
-		Str("source", "GitHub API").
-		Logger()
-
-	if client == nil {
-		return nil, fmt.Errorf("github client is nil")
-	}
-
-	ctx, cancel := ghCtx(parentCtx)
-	pr, resp, err := client.Rest.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
-	cancel()
+		return pullRequestData, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code %d", resp.StatusCode)
-	}
-	if pr == nil {
-		return nil, fmt.Errorf("pull request '%d' not found on GitHub", pullRequestNumber)
-	}
 
-	mergeQueueEvents, err := prMergeQueueEvents(parentCtx, client, owner, repo, pullRequestNumber)
-	if err != nil {
-		return nil, fmt.Errorf("failed to gather merge queue events for pull request %d: %w", pullRequestNumber, err)
-	}
-
-	pullRequestData.PullRequest = pr
-	// Get the commits associated with the pull request
-	prCommits, err := prCommits(parentCtx, client, owner, repo, pullRequestNumber, mergeQueueEvents)
-	if err != nil {
-		return nil, fmt.Errorf("failed to gather commits for pull request %d: %w", pullRequestNumber, err)
-	}
-
-	opts = append(opts, withPullRequestData(pullRequestData))
-	pullRequestData.CommitData, err = prCommitData(
-		parentCtx,
-		log,
-		client,
-		owner,
-		repo,
-		prCommits,
-		mergeQueueEvents,
-		opts...,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to gather commit data for pull request %d: %w", pullRequestNumber, err)
-	}
-
-	if err := writeJSONFile(targetFile, pullRequestData); err != nil {
-		return nil, fmt.Errorf(
-			"failed to write pull request data to file for pull request %d: %w",
-			pullRequestNumber,
-			err,
-		)
-	}
-
-	_ = AppendManifestRecord(options.DataDir, owner, repo, ManifestRecord{
-		Type:      "pull_request",
-		ID:        fmt.Sprint(pullRequestNumber),
-		Name:      pullRequestData.GetTitle(),
-		State:     pullRequestData.GetState(),
-		Actor:     pullRequestData.GetUser().GetLogin(),
-		CreatedAt: pullRequestData.GetCreatedAt().Time,
-	})
-	log.Debug().
-		Str("duration", time.Since(startTime).String()).
-		Msg("Gathered pull request data")
-	return pullRequestData, nil
+	return val.(*PullRequestData), nil
 }
 
 func prCommits(
