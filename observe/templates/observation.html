@@ -52,7 +52,7 @@
                 {{ end }}
                 {{ if .LogsDir }}
                 <span class="badge">
-                    <span class="badge-label">Logs</span> {{ .LogsDir }}
+                    <span class="badge-label">Logs</span> <a href="{{ fileURL .LogsDir }}" target="_blank">logs</a>
                 </span>
                 {{ end }}
             </div>

@@ -76,7 +76,7 @@ a:hover {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1600px;
     margin: 0 auto;
     padding: 2rem 1.5rem;
 }
@@ -651,6 +651,7 @@ h3 {
 
 .details-panel-body {
     padding: 0 0 0.75rem;
+    overflow-x: auto;
 }
 
 .details-panel-meta {
@@ -679,6 +680,7 @@ h3 {
 
 .runtime-table {
     width: 100%;
+    min-width: max-content;
     border-collapse: collapse;
     font-size: 0.85rem;
 }
@@ -703,6 +705,20 @@ h3 {
     border-bottom: 1px solid var(--color-surface-border);
 }
 
+.runtime-table .rt-name {
+    min-width: 280px;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.runtime-table .rt-log-path {
+    min-width: 200px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    overflow-wrap: break-all;
+    word-break: break-all;
+}
+
 .runtime-table tbody tr:last-child td {
     border-bottom: none;
 }
@@ -722,6 +738,43 @@ h3 {
     color: var(--color-text-secondary);
     font-size: 0.8rem;
     white-space: nowrap;
+}
+
+.runner-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    white-space: nowrap;
+}
+
+.runner-badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-family: var(--font-mono);
+    border-radius: var(--radius);
+    background: var(--color-badge-bg);
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+}
+
+.runner-badge-prefix {
+    background: var(--color-surface-border);
+    color: var(--color-text-secondary);
+    font-weight: 600;
+}
+
+.runner-badge-instance {
+    background: var(--color-accent-blue-bg);
+    color: var(--color-accent-blue);
+    font-weight: 600;
+}
+
+.runner-badge-spot {
+    background: var(--color-accent-yellow-bg);
+    color: var(--color-accent-yellow);
+    font-weight: 600;
 }
 
 .runtime-table .rt-status {

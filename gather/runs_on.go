@@ -271,20 +271,5 @@ func formatRunsOnRunner(summary *RunsOnCostSummary, labels []string) string {
 		res += fmt.Sprintf(" (%s)", summary.InstanceLifecycle)
 	}
 
-	var reqFamily string
-	for _, label := range labels {
-		if runsOnRealPattern.MatchString(label) {
-			details := parseRealRunsOnDetails(label)
-			if details.Family != "" {
-				reqFamily = details.Family
-				break
-			}
-		}
-	}
-
-	if reqFamily != "" && !strings.HasPrefix(summary.InstanceType, reqFamily) {
-		res += fmt.Sprintf(" [req: %s]", reqFamily)
-	}
-
 	return res
 }

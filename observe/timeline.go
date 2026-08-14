@@ -206,6 +206,7 @@ func sanitizeMermaidName(s string) string {
 	if len(s) > 80 {
 		s = s[:38] + "..." + s[len(s)-38:]
 	}
+	s = strings.ReplaceAll(s, "\"", "#quot;")
 	s = strings.ReplaceAll(s, ":", "#colon;")
 	s = strings.ReplaceAll(s, ",", "#comma;")
 	return s

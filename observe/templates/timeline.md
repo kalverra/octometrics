@@ -22,7 +22,7 @@ gantt
 
 | Name | Job ID{{ if $hasRunner }} | Runner{{ end }}{{ if $hasQueue }} | Queue Time{{ end }}{{ if $hasCost }} | Cost{{ end }} | Duration |{{ if not $allSuccess }} Status |{{ end }}{{ if $hasLogPath }} Log Path |{{ end }}
 |------|--------{{ if $hasRunner }}|--------{{ end }}{{ if $hasQueue }}|------------{{ end }}{{ if $hasCost }}|------{{ end }}|----------|{{ if not $allSuccess }}--------|{{ end }}{{ if $hasLogPath }}----------|{{ end }}
-{{ range .ItemsByDuration }}| {{ .Name }} | `{{ .JobID }}` {{ if $hasRunner }}| {{ .Runner }} {{ end }}{{ if $hasQueue }}| {{ .QueueDuration }} {{ end }}{{ if $hasCost }}| {{ if .CostGathered }}${{ printf "%.2f" (divideBy1000 .Cost) }}{{ if .CostEstimate }} (est.){{ end }}{{ else }}—{{ end }} {{ end }}| {{ .Duration }} |{{ if not $allSuccess }} {{ conclusionText .Conclusion }} |{{ end }}{{ if $hasLogPath }} {{ if .LogPath }}{{ .LogPath }}{{ else }}—{{ end }} |{{ end }}
+{{ range .ItemsByDuration }}| {{ .Name }} | `{{ .JobID }}` {{ if $hasRunner }}| {{ cleanRunner .Runner }} {{ end }}{{ if $hasQueue }}| {{ .QueueDuration }} {{ end }}{{ if $hasCost }}| {{ if .CostGathered }}${{ printf "%.2f" (divideBy1000 .Cost) }}{{ if .CostEstimate }} (est.){{ end }}{{ else }}—{{ end }} {{ end }}| {{ .Duration }} |{{ if not $allSuccess }} {{ conclusionText .Conclusion }} |{{ end }}{{ if $hasLogPath }} {{ if .LogPath }}[logs]({{ fileURL .LogPath }}){{ else }}—{{ end }} |{{ end }}
 {{ end }}
 {{ end }}
 {{ if .StepSummaries }}

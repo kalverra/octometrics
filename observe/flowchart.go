@@ -48,18 +48,34 @@ func buildFlowChart(def *gather.WorkflowDef, jobs []*gather.JobData) string {
 		}
 		sanitized := sanitizeMermaidID(id)
 		sanizedName := sanitizeMermaidName(displayName)
-		fmt.Fprintf(&b, "    %s[%q]\n", sanitized, sanizedName)
+		fmt.Fprintf(&b, "    %s[\"%s\"]\n", sanitized, sanizedName)
 	}
 
-	// Emit edges (sorted by source then target for determinism)
+	// Helper for recording edges, resolving job names to canonical IDs
 	type edge struct {
 		from, to string
 	}
 	var edges []edge
+	seenEdges := make(map[edge]bool)
+
+	addEdge := func(from, to string) {
+		if targetID, found := def.GetJobIDByName(from); found {
+			from = targetID
+		}
+		if targetID, found := def.GetJobIDByName(to); found {
+			to = targetID
+		}
+		e := edge{from: sanitizeMermaidID(from), to: sanitizeMermaidID(to)}
+		if e.from != "" && e.to != "" && !seenEdges[e] {
+			seenEdges[e] = true
+			edges = append(edges, e)
+		}
+	}
+
 	for _, id := range jobIDs {
 		job := def.Jobs[id]
 		for _, need := range job.Needs {
-			edges = append(edges, edge{from: need, to: id})
+			addEdge(need, id)
 		}
 	}
 
@@ -74,12 +90,18 @@ func buildFlowChart(def *gather.WorkflowDef, jobs []*gather.JobData) string {
 			parts := strings.Split(name, " / ")
 			parent := strings.TrimSpace(parts[0])
 			child := strings.TrimSpace(parts[len(parts)-1])
-			parentID := sanitizeMermaidID(parent)
-			childID := sanitizeMermaidID(child)
 
-			if _, exists := def.Jobs[childID]; !exists {
-				extraNodes[childID] = child
-				edges = append(edges, edge{from: parentID, to: childID})
+			parentID := parent
+			if targetID, found := def.GetJobIDByName(parent); found {
+				parentID = targetID
+			}
+
+			childSanitized := sanitizeMermaidID(child)
+			if _, exists := def.Jobs[child]; !exists {
+				if _, existsID := def.Jobs[childSanitized]; !existsID {
+					extraNodes[childSanitized] = child
+					addEdge(parentID, child)
+				}
 			}
 		}
 	}
@@ -93,7 +115,7 @@ func buildFlowChart(def *gather.WorkflowDef, jobs []*gather.JobData) string {
 	for _, id := range extraIDs {
 		sanitized := sanitizeMermaidID(id)
 		sanitizedName := sanitizeMermaidName(extraNodes[id])
-		fmt.Fprintf(&b, "    %s[%q]\n", sanitized, sanitizedName)
+		fmt.Fprintf(&b, "    %s[\"%s\"]\n", sanitized, sanitizedName)
 	}
 
 	sort.Slice(edges, func(i, j int) bool {
@@ -104,7 +126,7 @@ func buildFlowChart(def *gather.WorkflowDef, jobs []*gather.JobData) string {
 	})
 
 	for _, e := range edges {
-		fmt.Fprintf(&b, "    %s --> %s\n", sanitizeMermaidID(e.from), sanitizeMermaidID(e.to))
+		fmt.Fprintf(&b, "    %s --> %s\n", e.from, e.to)
 	}
 
 	// Trim trailing newline for clean comparison
@@ -115,8 +137,17 @@ func buildFlowChart(def *gather.WorkflowDef, jobs []*gather.JobData) string {
 // sanitizeMermaidID sanitizes a string for use as a Mermaid node ID.
 func sanitizeMermaidID(s string) string {
 	s = strings.TrimSpace(s)
-	s = strings.ReplaceAll(s, " ", "_")
-	s = strings.ReplaceAll(s, "-", "_")
-	s = strings.ReplaceAll(s, ".", "_")
-	return s
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	res := b.String()
+	if res == "" {
+		return "node"
+	}
+	return res
 }

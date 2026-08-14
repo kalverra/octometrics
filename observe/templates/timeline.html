@@ -55,7 +55,7 @@
                 <tr>
                     <td class="rt-name" data-sort-key="name" data-sort="{{ .Name }}">{{ if .Link }}<a href="{{ .Link }}">{{ .Name }}</a>{{ else }}{{ .Name }}{{ end }}</td>
                     <td class="rt-id" data-sort-key="id" data-sort="{{ .JobID }}">{{ if .HTMLURL }}<a target="_blank" href="{{ .HTMLURL }}">{{ .JobID }}</a>{{ else }}<code>{{ .JobID }}</code>{{ end }}</td>
-                    {{ if $hasRunner }}<td class="rt-runner" data-sort-key="runner" data-sort="{{ .Runner }}">{{ .Runner }}</td>{{ end }}
+                    {{ if $hasRunner }}<td class="rt-runner" data-sort-key="runner" data-sort="{{ cleanRunner .Runner }}">{{ runnerBadges .Runner }}</td>{{ end }}
                     {{ if $hasQueue }}<td class="rt-queue" data-sort-key="queue" data-sort="{{ .QueueDuration.Seconds }}">{{ .QueueDuration }}</td>{{ end }}
                     <td class="rt-duration" data-sort-key="duration" data-sort="{{ .Duration.Seconds }}">{{ .Duration }}</td>
                     {{ if $hasCost }}
@@ -71,7 +71,7 @@
                         {{ end }}
                     </td>
                     {{ if $hasLogPath }}
-                    <td class="rt-log-path" data-sort-key="logpath" data-sort="{{ .LogPath }}">{{ if .LogPath }}{{ .LogPath }}{{ else }}—{{ end }}</td>
+                    <td class="rt-log-path" data-sort-key="logpath" data-sort="{{ .LogPath }}">{{ if .LogPath }}<a href="{{ fileURL .LogPath }}" target="_blank">logs</a>{{ else }}—{{ end }}</td>
                     {{ end }}
                 </tr>
                 {{ end }}

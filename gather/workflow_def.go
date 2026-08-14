@@ -110,7 +110,35 @@ func (d *WorkflowDef) GetJobIDByName(name string) (string, bool) {
 		return name, true
 	}
 
+	// Case-insensitive job.Name or job ID match
+	for id, job := range d.Jobs {
+		if strings.EqualFold(job.Name, name) || strings.EqualFold(id, name) {
+			return id, true
+		}
+	}
+
+	// Match by sanitized ID comparison
+	sanitizedInput := sanitizeID(name)
+	for id, job := range d.Jobs {
+		if sanitizeID(id) == sanitizedInput || sanitizeID(job.Name) == sanitizedInput {
+			return id, true
+		}
+	}
+
 	return "", false
+}
+
+func sanitizeID(s string) string {
+	s = strings.TrimSpace(s)
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
 }
 
 // workflowDefData fetches and parses the workflow YAML file at the run's HeadSHA.

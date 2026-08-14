@@ -48,6 +48,8 @@ func NewOnDemandHandler(
 		st, _ = uistate.Load("")
 	}
 
+	_ = WriteStaticAssets(outputDir)
+
 	h := &OnDemandHandler{
 		log:       log,
 		client:    client,
@@ -71,6 +73,7 @@ func NewOnDemandHandler(
 	mux.HandleFunc("GET /mermaid-init.js", h.handleStatic)
 	mux.HandleFunc("GET /export-png.js", h.handleStatic)
 	mux.HandleFunc("GET /search.js", h.handleStatic)
+	mux.HandleFunc("GET /tables.js", h.handleStatic)
 	mux.HandleFunc("GET /{owner}/{repo}", h.handleRepo)
 	mux.HandleFunc("GET /{owner}/{repo}/index.html", func(w http.ResponseWriter, r *http.Request) {
 		owner := r.PathValue("owner")

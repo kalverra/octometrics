@@ -10,7 +10,7 @@
 {{ if not .CostGathered }}| **Cost** | not gathered |
 {{ else }}| **Cost{{ if .CostEstimate }} (est.){{ end }}** | ${{ printf "%.2f" (divideBy1000 .Cost) }} |
 {{ end }}{{ if .RequiredWorkflows }}| **Required** | {{ joinStrings .RequiredWorkflows ", " }} |
-{{ end }}{{ if .LogsDir }}| **Logs** | {{ .LogsDir }} |
+{{ end }}{{ if .LogsDir }}| **Logs** | [logs]({{ fileURL .LogsDir }}) |
 {{ end }}
 {{ if .BranchProtectionWarning }}
 > **Warning:** Required workflows could not be loaded (insufficient permissions).

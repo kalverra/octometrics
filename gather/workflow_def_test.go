@@ -167,8 +167,9 @@ func TestWorkflowDefGetJobID(t *testing.T) {
 
 	def := &WorkflowDef{
 		Jobs: map[string]JobDef{
-			"build": {Name: "Build Application"},
-			"test":  {Name: "test"},
+			"build":                             {Name: "Build Application"},
+			"test":                              {Name: "test"},
+			"run-core-cre-e2e-regression-tests": {Name: "Run Core CRE E2E Regression Tests"},
 		},
 	}
 
@@ -181,6 +182,11 @@ func TestWorkflowDefGetJobID(t *testing.T) {
 	id, ok = def.GetJobIDByName("test")
 	assert.True(t, ok)
 	assert.Equal(t, "test", id)
+
+	// Find by case-insensitive / sanitized name
+	id, ok = def.GetJobIDByName("Run_Core_CRE_E2E_Regression_Tests")
+	assert.True(t, ok)
+	assert.Equal(t, "run-core-cre-e2e-regression-tests", id)
 
 	// Not found
 	_, ok = def.GetJobIDByName("unknown")

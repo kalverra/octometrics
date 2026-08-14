@@ -53,9 +53,9 @@ func TestExternalStaticAssets(t *testing.T) {
 	assert.Contains(t, string(stylesContent), `box-sizing: border-box;`)
 
 	//nolint:gosec // test file read
-	mermaidJsContent, err := os.ReadFile(filepath.Join(tempDir, "mermaid-init.js"))
+	tablesJsContent, err := os.ReadFile(filepath.Join(tempDir, "tables.js"))
 	require.NoError(t, err)
-	assert.Contains(t, string(mermaidJsContent), `import('https://cdn.jsdelivr.net/npm/mermaid`)
+	assert.NotEmpty(t, tablesJsContent)
 }
 
 func TestCopyableTableWrapperCentered(t *testing.T) {

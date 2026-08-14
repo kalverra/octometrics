@@ -412,3 +412,15 @@ func TestEventSection_MarkdownPureNoHTMLNoLinks(t *testing.T) {
 	assert.NotContains(t, md, "<a ", "Markdown output should have no HTML <a> tags")
 	assert.NotContains(t, md, "[Event UI Test Workflow](", "Markdown output should have no clickable markdown links")
 }
+
+func TestFormatRunnerBadges(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "runs-on:m8i-flex.4xlarge (spot)", cleanRunner("runs-on:m8i-flex.4xlarge (spot) [req: m7i+m8i]"))
+
+	html := string(formatRunnerBadges("runs-on:m8i-flex.4xlarge (spot) [req: m7i+m8i]"))
+	assert.Contains(t, html, `class="runner-badge runner-badge-prefix">runs-on</span>`)
+	assert.Contains(t, html, `class="runner-badge runner-badge-instance">m8i-flex.4xlarge</span>`)
+	assert.Contains(t, html, `class="runner-badge runner-badge-spot">spot</span>`)
+	assert.NotContains(t, html, "[req:")
+}

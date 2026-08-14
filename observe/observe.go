@@ -78,6 +78,16 @@ func sharedFuncMap() map[string]any {
 		"parseCommitMsg": func(msg string) CommitMessageFormatted {
 			return parseCommitMsg(msg, 100)
 		},
+		"fileURL": func(p string) string {
+			if p == "" {
+				return ""
+			}
+			if strings.HasPrefix(p, "file://") || strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
+				return p
+			}
+			return "file://" + p
+		},
+		"cleanRunner": cleanRunner,
 	}
 }
 
@@ -110,6 +120,58 @@ func conclusionText(conclusion string) string {
 	default:
 		return "success"
 	}
+}
+
+var reqSuffixRegex = regexp.MustCompile(`\s*\[req:[^\]]*\]`)
+
+func cleanRunner(s string) string {
+	s = reqSuffixRegex.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
+}
+
+func formatRunnerBadges(s string) template.HTML {
+	cleaned := cleanRunner(s)
+	if cleaned == "" {
+		return ""
+	}
+
+	var badges []string
+	if after, ok := strings.CutPrefix(cleaned, "runs-on:"); ok {
+		rest := after
+		badges = append(badges, `<span class="runner-badge runner-badge-prefix">runs-on</span>`)
+
+		lifecycle := ""
+		if idx := strings.Index(rest, "("); idx != -1 {
+			endIdx := strings.Index(rest, ")")
+			if endIdx > idx {
+				lifecycle = strings.TrimSpace(rest[idx+1 : endIdx])
+			}
+			rest = strings.TrimSpace(rest[:idx])
+		}
+
+		if rest != "" {
+			badges = append(
+				badges,
+				fmt.Sprintf(
+					`<span class="runner-badge runner-badge-instance">%s</span>`,
+					template.HTMLEscapeString(rest),
+				),
+			)
+		}
+		if lifecycle != "" {
+			badges = append(
+				badges,
+				fmt.Sprintf(
+					`<span class="runner-badge runner-badge-spot">%s</span>`,
+					template.HTMLEscapeString(lifecycle),
+				),
+			)
+		}
+	} else {
+		badges = append(badges, fmt.Sprintf(`<span class="runner-badge">%s</span>`, template.HTMLEscapeString(cleaned)))
+	}
+
+	return template.HTML(fmt.Sprintf(`<span class="runner-badges">%s</span>`, strings.Join(badges, "")))
 }
 
 func outputDirForFormat(outputType string) string {
@@ -155,6 +217,14 @@ func WriteStaticAssets(outputDir string) error {
 	}
 	if err := os.WriteFile(filepath.Join(outputDir, "search.js"), searchJS, 0600); err != nil {
 		return fmt.Errorf("failed to write search.js: %w", err)
+	}
+
+	tablesJS, err := templateFS.ReadFile("templates/tables.js")
+	if err != nil {
+		return fmt.Errorf("failed to read tables.js: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(outputDir, "tables.js"), tablesJS, 0600); err != nil {
+		return fmt.Errorf("failed to write tables.js: %w", err)
 	}
 
 	// Clean up legacy index.html files in outputDir
@@ -206,6 +276,16 @@ func init() {
 		cssClass := strings.ReplaceAll(text, " ", "-")
 		return template.HTML(fmt.Sprintf(`<span class="rt-badge rt-%s">%s</span>`, cssClass, text))
 	}
+	htmlFuncs["fileURL"] = func(p string) template.URL {
+		if p == "" {
+			return ""
+		}
+		if strings.HasPrefix(p, "file://") || strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
+			return template.URL(p)
+		}
+		return template.URL("file://" + p)
+	}
+	htmlFuncs["runnerBadges"] = formatRunnerBadges
 
 	htmlTemplate, err = template.New("observation_html").Funcs(htmlFuncs).
 		ParseFS(templateFS, "templates/*.html")

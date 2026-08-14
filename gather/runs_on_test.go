@@ -243,5 +243,5 @@ func TestFormatRunsOnRunner(t *testing.T) {
 	}
 
 	formatted := formatRunsOnRunner(summary, labels)
-	assert.Equal(t, "runs-on:m8i-flex.4xlarge (spot) [req: m7i+m8i]", formatted)
+	assert.Equal(t, "runs-on:m8i-flex.4xlarge (spot)", formatted)
 }
