@@ -38,13 +38,7 @@ pre-commit:
         - "go.sum"
         - "*.go"
         - "**/*.go"
-      run: |
-        while IFS= read -r mod; do
-          [ -n "$mod" ] || continue
-          (cd "$(dirname "$mod")" && go mod tidy)
-        done <<EOF
-        $(git ls-files 'go.mod' '**/go.mod')
-        EOF
+      run: go mod tidy
       stage_fixed: true
 
 pre-push:
