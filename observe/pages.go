@@ -323,7 +323,6 @@ func (h *OnDemandHandler) populatePullsTab(
 }
 
 func filterRuns(runs []gather.RunSummary, query string) []gather.RunSummary {
-
 	if query == "" {
 		return runs
 	}
@@ -375,7 +374,6 @@ func filterPRs(prs []gather.PRSummary, query string) []gather.PRSummary {
 }
 
 func (h *OnDemandHandler) handleFavorites(w http.ResponseWriter, r *http.Request) {
-
 	if r.Method == http.MethodPost {
 		owner := r.FormValue("owner")
 		repo := r.FormValue("repo")

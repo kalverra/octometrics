@@ -32,6 +32,11 @@ type Timeline struct {
 	StepSummaries   []StepSummary      `json:"step_summaries,omitempty"`
 	SlowestJobSteps []JobStepBreakdown `json:"slowest_job_steps,omitempty"`
 
+	// Cost data for this timeline/event
+	Cost         int64 `json:"cost,omitempty"`
+	CostEstimate bool  `json:"cost_estimate,omitempty"`
+	CostGathered bool  `json:"cost_gathered,omitempty"`
+
 	// Set by the renderer
 	StartTime     time.Time
 	EndTime       time.Time
@@ -179,6 +184,19 @@ func (g *Timeline) normalize() error {
 	}
 	g.Duration = g.EndTime.Sub(g.StartTime)
 	g.DateFormat, g.AxisFormat, g.GoDateFormat = GanttFormatsForDuration(g.Duration)
+
+	if !g.CostGathered {
+		for _, item := range g.Items {
+			if item.CostGathered {
+				g.CostGathered = true
+			}
+			if item.CostEstimate {
+				g.CostEstimate = true
+			}
+			g.Cost += item.Cost
+		}
+	}
+
 	return nil
 }
 

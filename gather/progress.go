@@ -1,7 +1,6 @@
 package gather
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -9,9 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"charm.land/huh/v2/spinner"
 	"charm.land/lipgloss/v2"
+	"golang.org/x/term"
 )
+
+var defaultSpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 // ProgressReporter handles wait status reporting for human vs AI consumers.
 type ProgressReporter interface {
@@ -62,7 +63,9 @@ func (a *AIProgressReporter) Update(_ string, _ time.Duration) {
 func (a *AIProgressReporter) Stop(msg string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	_, _ = fmt.Fprintln(a.writer, msg)
+	if msg != "" {
+		_, _ = fmt.Fprintln(a.writer, msg)
+	}
 }
 
 // HumanProgressReporter renders animated terminal spinner with elapsed time display.
@@ -70,11 +73,13 @@ type HumanProgressReporter struct {
 	writer io.Writer
 	mu     sync.Mutex
 
-	spin      *spinner.Spinner
-	cancel    context.CancelFunc
-	done      chan struct{}
-	lastTitle string
-	timeStyle lipgloss.Style
+	isTTY        bool
+	cancel       func()
+	done         chan struct{}
+	currentMsg   string
+	startTime    time.Time
+	spinnerStyle lipgloss.Style
+	timeStyle    lipgloss.Style
 }
 
 // NewHumanProgressReporter creates a HumanProgressReporter writing to w (defaults to os.Stderr).
@@ -82,32 +87,87 @@ func NewHumanProgressReporter(w io.Writer) *HumanProgressReporter {
 	if w == nil {
 		w = os.Stderr
 	}
+	var isTTY bool
+	if f, ok := w.(*os.File); ok {
+		isTTY = term.IsTerminal(int(f.Fd()))
+	}
 	return &HumanProgressReporter{
-		writer:    w,
-		timeStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
+		writer:       w,
+		isTTY:        isTTY,
+		spinnerStyle: lipgloss.NewStyle().Foreground(lipgloss.Color("#F780E2")),
+		timeStyle:    lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
 	}
 }
 
-// Start launches the terminal spinner animation.
+func (h *HumanProgressReporter) formatLine(frame, msg string, elapsed time.Duration) string {
+	d := elapsed.Round(time.Second)
+	timeStr := h.timeStyle.Render(fmt.Sprintf("(%s)", d.String()))
+	frameStr := h.spinnerStyle.Render(frame)
+	return fmt.Sprintf("%s %s %s", frameStr, msg, timeStr)
+}
+
+func (h *HumanProgressReporter) formatTitle(msg string, elapsed time.Duration) string {
+	d := elapsed.Round(time.Second)
+	timeStr := h.timeStyle.Render(fmt.Sprintf("(%s)", d.String()))
+	return fmt.Sprintf("%s %s", msg, timeStr)
+}
+
+// Start launches or updates the terminal spinner animation with count up timer.
 func (h *HumanProgressReporter) Start(msg string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.lastTitle = msg
-	ctx, cancel := context.WithCancel(context.Background())
-	h.cancel = cancel
-	h.done = make(chan struct{})
+	h.currentMsg = msg
+	if h.startTime.IsZero() {
+		h.startTime = time.Now()
+	}
 
-	h.spin = spinner.New().
-		Title(msg).
-		WithOutput(h.writer).
-		Action(func() {
-			<-ctx.Done()
-		})
+	if h.cancel != nil {
+		return
+	}
+
+	stopCh := make(chan struct{})
+	h.done = make(chan struct{})
+	h.cancel = func() {
+		close(stopCh)
+	}
+
+	if !h.isTTY {
+		go func() {
+			<-stopCh
+			close(h.done)
+		}()
+		return
+	}
 
 	go func() {
-		_ = h.spin.Run()
-		close(h.done)
+		defer close(h.done)
+
+		// Hide cursor
+		_, _ = fmt.Fprint(h.writer, "\033[?25l")
+
+		ticker := time.NewTicker(80 * time.Millisecond)
+		defer ticker.Stop()
+
+		frameIdx := 0
+		for {
+			h.mu.Lock()
+			msg := h.currentMsg
+			elapsed := time.Since(h.startTime)
+			frame := defaultSpinnerFrames[frameIdx%len(defaultSpinnerFrames)]
+			line := h.formatLine(frame, msg, elapsed)
+			h.mu.Unlock()
+
+			_, _ = fmt.Fprintf(h.writer, "\r\033[2K%s", line)
+			frameIdx++
+
+			select {
+			case <-stopCh:
+				_, _ = fmt.Fprint(h.writer, "\r\033[2K\033[?25h")
+				return
+			case <-ticker.C:
+			}
+		}
 	}()
 }
 
@@ -116,13 +176,11 @@ func (h *HumanProgressReporter) Update(msg string, elapsed time.Duration) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	mins := int(elapsed.Minutes())
-	secs := int(elapsed.Seconds()) % 60
-	timeStr := h.timeStyle.Render(fmt.Sprintf("[%02d:%02d]", mins, secs))
-
-	h.lastTitle = fmt.Sprintf("%s %s", msg, timeStr)
-	if h.spin != nil {
-		h.spin.Title(h.lastTitle)
+	if msg != "" {
+		h.currentMsg = msg
+	}
+	if elapsed > 0 {
+		h.startTime = time.Now().Add(-elapsed)
 	}
 }
 
@@ -134,10 +192,18 @@ func (h *HumanProgressReporter) Stop(msg string) {
 		<-h.done
 		h.cancel = nil
 	}
+	h.startTime = time.Time{}
 	writer := h.writer
+	isTTY := h.isTTY
 	h.mu.Unlock()
 
-	_, _ = fmt.Fprintln(writer, msg)
+	if isTTY {
+		_, _ = fmt.Fprint(writer, "\r\033[2K\033[?25h")
+	}
+
+	if msg != "" {
+		_, _ = fmt.Fprintln(writer, msg)
+	}
 }
 
 // NewAutoProgressReporter constructs a ProgressReporter based on style ("auto", "human", "ai", "none")

@@ -113,7 +113,7 @@ func TestWorkflowRun_AutoUpdateInProgress(t *testing.T) {
 
 	// Pre-create an in-progress workflow run JSON on disk
 	targetDir := filepath.Join(testDataDir, testGatherOwner, testGatherRepo, WorkflowRunsDataDir)
-	require.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0o700))
 	targetFile := filepath.Join(targetDir, fmt.Sprintf("%d.json", runID))
 
 	staleData := &WorkflowRunData{
@@ -130,7 +130,7 @@ func TestWorkflowRun_AutoUpdateInProgress(t *testing.T) {
 	}
 	staleBytes, err := json.Marshal(staleData)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(targetFile, staleBytes, 0600))
+	require.NoError(t, os.WriteFile(targetFile, staleBytes, 0o600))
 
 	// Mock GitHub client returning COMPLETED run
 	completedRun := *staleData.WorkflowRun
@@ -194,7 +194,7 @@ func TestWorkflowRun_TimestampSmartCache(t *testing.T) {
 	updatedTime := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 
 	targetDir := filepath.Join(testDataDir, testGatherOwner, testGatherRepo, WorkflowRunsDataDir)
-	require.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0o700))
 	targetFile := filepath.Join(targetDir, fmt.Sprintf("%d.json", runID))
 
 	existingData := &WorkflowRunData{
@@ -221,7 +221,7 @@ func TestWorkflowRun_TimestampSmartCache(t *testing.T) {
 	}
 	existingBytes, err := json.Marshal(existingData)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(targetFile, existingBytes, 0600))
+	require.NoError(t, os.WriteFile(targetFile, existingBytes, 0o600))
 
 	// Mock GitHub returning same UpdatedAt
 	remoteRun := *existingData.WorkflowRun
@@ -272,11 +272,11 @@ func TestWorkflowRun_CorruptCacheRecovery(t *testing.T) {
 	runID := int64(7771)
 
 	targetDir := filepath.Join(testDataDir, testGatherOwner, testGatherRepo, WorkflowRunsDataDir)
-	require.NoError(t, os.MkdirAll(targetDir, 0700))
+	require.NoError(t, os.MkdirAll(targetDir, 0o700))
 	targetFile := filepath.Join(targetDir, fmt.Sprintf("%d.json", runID))
 
 	// Write garbage JSON to cache file
-	require.NoError(t, os.WriteFile(targetFile, []byte("{invalid json corrupt content..."), 0600))
+	require.NoError(t, os.WriteFile(targetFile, []byte("{invalid json corrupt content..."), 0o600))
 
 	completedRun := *mockWorkflowRun
 	completedRun.ID = new(int64(7771))

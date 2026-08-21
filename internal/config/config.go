@@ -204,7 +204,7 @@ func (c *Config) ValidateWorkflowFilters() error {
 var timeLayouts = []string{time.RFC3339, "2006-01-02"}
 
 func stringToTimeHookFunc() mapstructure.DecodeHookFuncType {
-	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
+	return func(f, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String || t != reflect.TypeFor[time.Time]() {
 			return data, nil
 		}

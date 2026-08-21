@@ -241,7 +241,7 @@ func writeSummary(summaryPath, markdown string) (err error) {
 	f, err := os.OpenFile(
 		summaryPath,
 		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
-		0600,
+		0o600,
 	) //nolint:gosec // GHA controls this path
 	if err != nil {
 		return fmt.Errorf("failed to open step summary file: %w", err)

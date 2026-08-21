@@ -72,4 +72,16 @@ func TestVsTargetParsing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), runID)
 	assert.Equal(t, "64bb0b9579d398aa3afcc332f0e8dc729679ddf8", sha)
+
+	runID, sha, err = parseVsTarget("https://github.com/smartcontractkit/chainlink/actions/runs/31831066312")
+	require.NoError(t, err)
+	assert.Equal(t, int64(31831066312), runID)
+	assert.Empty(t, sha)
+
+	runID, sha, err = parseVsTarget(
+		"https://github.com/smartcontractkit/chainlink/commit/64bb0b9579d398aa3afcc332f0e8dc729679ddf8",
+	)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), runID)
+	assert.Equal(t, "64bb0b9579d398aa3afcc332f0e8dc729679ddf8", sha)
 }

@@ -145,6 +145,9 @@ func PullRequest(
 		opt(options)
 	}
 
+	reporter := options.getReporter()
+	reporter.Start(fmt.Sprintf("Building observation (pull request #%d)", pullRequestNumber))
+
 	prData, err := gather.PullRequest(ctx, log, client, owner, repo, pullRequestNumber, options.gatherOptions...)
 	if err != nil {
 		return nil, err

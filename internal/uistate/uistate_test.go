@@ -23,7 +23,7 @@ func TestLoad_CorruptFile(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "ui_state.json")
-	require.NoError(t, os.WriteFile(filePath, []byte("{invalid json"), 0600))
+	require.NoError(t, os.WriteFile(filePath, []byte("{invalid json"), 0o600))
 
 	st, err := Load(dir)
 	require.NoError(t, err)

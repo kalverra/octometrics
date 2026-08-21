@@ -147,8 +147,8 @@ func GetCleanJobLogs(
 		} else {
 			cachePath = filepath.Join(dataDir, owner, repo, "logs", fmt.Sprintf("%d.log", jobID))
 		}
-		if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0700); mkErr == nil {
-			_ = os.WriteFile(cachePath, []byte(raw), 0600)
+		if mkErr := os.MkdirAll(filepath.Dir(cachePath), 0o700); mkErr == nil {
+			_ = os.WriteFile(cachePath, []byte(raw), 0o600)
 		}
 	}
 

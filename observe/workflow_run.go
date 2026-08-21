@@ -25,6 +25,9 @@ func WorkflowRun(
 		opt(options)
 	}
 
+	reporter := options.getReporter()
+	reporter.Start(fmt.Sprintf("Building observation (workflow run %d)", workflowRunID))
+
 	workflowRun, _, err := gather.WorkflowRun(ctx, log, client, owner, repo, workflowRunID, options.gatherOptions...)
 	if err != nil {
 		return nil, err
@@ -47,22 +50,20 @@ func workflowRunObservation(workflowRun *gather.WorkflowRunData) (*Observation, 
 		state = workflowRun.GetStatus()
 	}
 
-	var (
-		observationData = &Observation{
-			ID:           fmt.Sprint(workflowRunID),
-			Name:         workflowRun.GetName(),
-			GitHubLink:   workflowRun.GetHTMLURL(),
-			Owner:        owner,
-			Repo:         repo,
-			State:        state,
-			Actor:        workflowRun.GetActor().GetLogin(),
-			DataType:     "workflow_run",
-			Cost:         workflowRun.GetCost(),
-			CostEstimate: workflowRun.GetCostEstimate(),
-			CostGathered: workflowRun.GetCostGathered(),
-			LogsDir:      workflowRun.GetLogsDir(),
-		}
-	)
+	observationData := &Observation{
+		ID:           fmt.Sprint(workflowRunID),
+		Name:         workflowRun.GetName(),
+		GitHubLink:   workflowRun.GetHTMLURL(),
+		Owner:        owner,
+		Repo:         repo,
+		State:        state,
+		Actor:        workflowRun.GetActor().GetLogin(),
+		DataType:     "workflow_run",
+		Cost:         workflowRun.GetCost(),
+		CostEstimate: workflowRun.GetCostEstimate(),
+		CostGathered: workflowRun.GetCostGathered(),
+		LogsDir:      workflowRun.GetLogsDir(),
+	}
 
 	workflowRunTimelineData, err := buildWorkflowRunTimelineData(workflowRun)
 	if err != nil {
@@ -168,6 +169,9 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*Timelin
 		SkippedItems:      skippedItems,
 		QueuedItems:       queuedItems,
 		PostTimelineItems: postTimelineItems,
+		Cost:              workflowRun.GetCost(),
+		CostEstimate:      workflowRun.GetCostEstimate(),
+		CostGathered:      workflowRun.GetCostGathered(),
 	}
 
 	if err := templateData.normalize(); err != nil {

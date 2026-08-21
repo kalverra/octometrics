@@ -36,7 +36,7 @@ func writeFileAtomic(targetFile string, data []byte, perm os.FileMode) error {
 }
 
 func ensureDataDir(dir, dirName string) error {
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to make data dir '%s': %w", dirName, err)
 	}
 	return nil
@@ -59,7 +59,7 @@ func writeJSONFile(path string, value any) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal data to json: %w", err)
 	}
-	if err := writeFileAtomic(path, bytes, 0600); err != nil {
+	if err := writeFileAtomic(path, bytes, 0o600); err != nil {
 		return fmt.Errorf("failed to write data to file: %w", err)
 	}
 	return nil

@@ -25,7 +25,6 @@ import (
 	texttemplate "text/template"
 	"time"
 
-	"charm.land/huh/v2/spinner"
 	"github.com/rs/zerolog"
 
 	"github.com/kalverra/octometrics/gather"
@@ -183,7 +182,7 @@ func outputDirForFormat(outputType string) string {
 
 // WriteStaticAssets writes static CSS and JS files to the given output directory.
 func WriteStaticAssets(outputDir string) error {
-	if err := os.MkdirAll(outputDir, 0750); err != nil {
+	if err := os.MkdirAll(outputDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
@@ -191,7 +190,7 @@ func WriteStaticAssets(outputDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read styles.css: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(outputDir, "styles.css"), styles, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "styles.css"), styles, 0o600); err != nil {
 		return fmt.Errorf("failed to write styles.css: %w", err)
 	}
 
@@ -199,7 +198,7 @@ func WriteStaticAssets(outputDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read mermaid-init.js: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(outputDir, "mermaid-init.js"), mermaidJS, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "mermaid-init.js"), mermaidJS, 0o600); err != nil {
 		return fmt.Errorf("failed to write mermaid-init.js: %w", err)
 	}
 
@@ -207,7 +206,7 @@ func WriteStaticAssets(outputDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read export-png.js: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(outputDir, "export-png.js"), exportJS, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "export-png.js"), exportJS, 0o600); err != nil {
 		return fmt.Errorf("failed to write export-png.js: %w", err)
 	}
 
@@ -215,7 +214,7 @@ func WriteStaticAssets(outputDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read search.js: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(outputDir, "search.js"), searchJS, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "search.js"), searchJS, 0o600); err != nil {
 		return fmt.Errorf("failed to write search.js: %w", err)
 	}
 
@@ -223,7 +222,7 @@ func WriteStaticAssets(outputDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read tables.js: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(outputDir, "tables.js"), tablesJS, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(outputDir, "tables.js"), tablesJS, 0o600); err != nil {
 		return fmt.Errorf("failed to write tables.js: %w", err)
 	}
 
@@ -311,6 +310,7 @@ type options struct {
 	includeWorkflows []string
 	noOpen           bool
 	port             int
+	reporter         gather.ProgressReporter
 }
 
 func defaultOptions() *options {
@@ -318,6 +318,34 @@ func defaultOptions() *options {
 		gatherOptions: []gather.Option{},
 		outputDir:     OutputDir,
 		port:          8080,
+		reporter:      &gather.NoopProgressReporter{},
+	}
+}
+
+func (o *options) getReporter() gather.ProgressReporter {
+	if o == nil {
+		return &gather.NoopProgressReporter{}
+	}
+	if o.reporter != nil {
+		if _, isNoop := o.reporter.(*gather.NoopProgressReporter); !isNoop {
+			return o.reporter
+		}
+	}
+	if len(o.gatherOptions) > 0 {
+		return gather.GetReporter(o.gatherOptions...)
+	}
+	if o.reporter != nil {
+		return o.reporter
+	}
+	return &gather.NoopProgressReporter{}
+}
+
+// WithProgressReporter sets the ProgressReporter for the observe command.
+func WithProgressReporter(reporter gather.ProgressReporter) Option {
+	return func(o *options) {
+		if reporter != nil {
+			o.reporter = reporter
+		}
 	}
 }
 
@@ -472,12 +500,12 @@ func (o *Observation) Render(
 	}
 
 	//nolint:gosec // directory path built safely
-	err = os.MkdirAll(filepath.Dir(observationFile), 0750)
+	err = os.MkdirAll(filepath.Dir(observationFile), 0o750)
 	if err != nil {
 		return "", fmt.Errorf("failed to create observation file directory: %w", err)
 	}
 	//nolint:gosec // observation file path built safely
-	err = os.WriteFile(observationFile, buf.Bytes(), 0600)
+	err = os.WriteFile(observationFile, buf.Bytes(), 0o600)
 	if err != nil {
 		return "", fmt.Errorf("failed to write observation file: %w", err)
 	}
@@ -563,6 +591,9 @@ func Interactive(
 	for _, opt := range opts {
 		opt(observeOpts)
 	}
+	reporter := observeOpts.getReporter()
+	reporter.Stop("")
+
 	setActiveHTMLOutputDir(observeOpts.outputDir)
 
 	if err := WriteStaticAssets(activeHTMLOutputDir); err != nil {
@@ -600,7 +631,7 @@ func Interactive(
 		Msg("Observing data...")
 	printObserveURLs(os.Stdout, serverURL, initialPath, markdownOutputDir)
 
-	return ServeHTMLWithHandler(log, initialPath, handler, opts...)
+	return ServeHTMLWithHandler(ctx, log, initialPath, handler, opts...)
 }
 
 func printObserveURLs(w io.Writer, serverURL, initialPath, markdownOutputDir string) {
@@ -615,15 +646,23 @@ func printObserveURLs(w io.Writer, serverURL, initialPath, markdownOutputDir str
 // and opens the browser to the specified initial path.
 func ServeHTML(log zerolog.Logger, initialPath string) error {
 	handler := NewOnDemandHandler(log, nil, config.DefaultDataDir(), activeHTMLOutputDir)
-	return ServeHTMLWithHandler(log, initialPath, handler)
+	return ServeHTMLWithHandler(context.Background(), log, initialPath, handler)
 }
 
 // ServeHTMLWithHandler starts a local HTTP server with the given handler.
-func ServeHTMLWithHandler(log zerolog.Logger, initialPath string, handler http.Handler, opts ...Option) error {
+func ServeHTMLWithHandler(
+	ctx context.Context,
+	log zerolog.Logger,
+	initialPath string,
+	handler http.Handler,
+	opts ...Option,
+) error {
 	observeOpts := defaultOptions()
 	for _, opt := range opts {
 		opt(observeOpts)
 	}
+	reporter := observeOpts.getReporter()
+	reporter.Stop("")
 	port := observeOpts.port
 	if port <= 0 {
 		port = 8080
@@ -663,10 +702,15 @@ func ServeHTMLWithHandler(log zerolog.Logger, initialPath string, handler http.H
 	}
 
 	idleConnsClosed := make(chan struct{})
+	//nolint:gosec // graceful shutdown requires fresh context after ctx is canceled
 	go func() {
 		sigint := make(chan os.Signal, 1)
 		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
-		<-sigint
+		select {
+		case <-sigint:
+		case <-ctx.Done():
+		}
+		signal.Stop(sigint)
 
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -718,24 +762,21 @@ func All(
 	dataDir string,
 	opts ...Option,
 ) error {
-	var (
-		startTime = time.Now()
-		err       error
-	)
-	spinnerErr := spinner.New().
-		Title("Building observations").
-		Action(func() {
-			err = generateAllObserveData(ctx, log, client, outputTypes, dataDir, opts...)
-		}).
-		Run()
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+	startTime := time.Now()
+	reporter := options.getReporter()
+	reporter.Start("Building observations")
+
+	err := generateAllObserveData(ctx, log, client, outputTypes, dataDir, opts...)
 	if err != nil {
+		reporter.Stop("")
 		return err
 	}
-	if spinnerErr != nil {
-		return spinnerErr
-	}
 
-	fmt.Printf("Observations built (%s) ✅\n", time.Since(startTime).Round(10*time.Millisecond).String())
+	reporter.Stop(fmt.Sprintf("Observations built (%s) ✅", time.Since(startTime).Round(10*time.Millisecond).String()))
 	return nil
 }
 
@@ -812,7 +853,8 @@ func generateAllObserveData(
 			dataCat,
 			dataName,
 			observeOpts,
-			opts...)
+			opts...,
+		)
 		jsonLoadDur += time.Since(loadStart)
 
 		if err != nil {

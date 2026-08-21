@@ -167,7 +167,7 @@ func TestWriteSummary(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "summary.md")
 
-		require.NoError(t, os.WriteFile(path, []byte("existing\n"), 0600))
+		require.NoError(t, os.WriteFile(path, []byte("existing\n"), 0o600))
 
 		err := writeSummary(path, "appended\n")
 		require.NoError(t, err)

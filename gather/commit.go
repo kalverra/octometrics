@@ -314,6 +314,7 @@ func Commit(
 			if client == nil {
 				return nil, fmt.Errorf("github client is nil")
 			}
+			options.Reporter.Start(fmt.Sprintf("Collecting data (commit %s)", sha[:min(7, len(sha))]))
 			ctx, cancel := ghCtx(parentCtx)
 			var resp *github.Response
 			var fetchErr error
@@ -447,9 +448,7 @@ func setWorkflowRunsForCommit(
 	commitData *CommitData,
 	opts []Option,
 ) error {
-	var (
-		workflowRunIDsSet = map[int64]struct{}{}
-	)
+	workflowRunIDsSet := map[int64]struct{}{}
 
 	ghCtxInst, cancel := ghCtx(parentCtx)
 	defer cancel()

@@ -151,6 +151,9 @@ func buildJobRunTimelineData(job *gather.JobData) (*Timeline, error) {
 		Items:        items,
 		SkippedItems: skippedItems,
 		QueuedItems:  queuedItems,
+		Cost:         job.GetCost(),
+		CostEstimate: job.GetCostEstimate(),
+		CostGathered: job.GetCostGathered(),
 	}
 
 	if err := timeline.normalize(); err != nil {

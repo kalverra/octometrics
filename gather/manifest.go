@@ -39,12 +39,12 @@ func AppendManifestRecord(dataDir, owner, repo string, rec ManifestRecord) error
 
 	p := ManifestPath(dataDir, owner, repo)
 	p = filepath.Clean(p)
-	if err := os.MkdirAll(filepath.Dir(p), 0750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
 		return fmt.Errorf("failed to create manifest directory: %w", err)
 	}
 
 	//nolint:gosec // ManifestPath constructs path within data directory
-	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to open manifest file: %w", err)
 	}

@@ -43,7 +43,7 @@ linters:
 
 formatters:
   enable:
-    - gofmt
+    - gofumpt
     - goimports
     - golines
   settings:
@@ -52,3 +52,5 @@ formatters:
         - github.com/kalverra/octometrics
     golines:
       max-len: 120
+    gofumpt:
+      extra-rules: true

@@ -139,7 +139,7 @@
                         <tbody>
                             {{ range .Items }}
                             <tr{{ if or .StatusChanged .RunnerChanged }} class="{{ if .StatusChanged }}status-changed{{ end }} {{ if .RunnerChanged }}runner-changed{{ end }}"{{ end }}>
-                                <td class="ct-name">{{ .Name }}</td>
+                                <td class="ct-name">{{ if and .LeftID .RightID }}<a href="/{{ $.Owner }}/{{ $.Repo }}/comparisons/{{ .LeftID }}_vs_{{ .RightID }}.html">{{ .Name }}</a>{{ else }}{{ .Name }}{{ end }}</td>
                                 <td class="ct-runner">{{ .LeftRunner }}</td>
                                 <td class="ct-runner">{{ .RightRunner }}</td>
                                 <td class="ct-duration">{{ .LeftDuration }}</td>

@@ -148,13 +148,25 @@ func WithPollInterval(d time.Duration) Option {
 	}
 }
 
-// WithProgressReporter sets the ProgressReporter used during wait operations.
+// WithProgressReporter sets the ProgressReporter used during wait and gather operations.
 func WithProgressReporter(reporter ProgressReporter) Option {
 	return func(o *options) {
 		if reporter != nil {
 			o.Reporter = reporter
 		}
 	}
+}
+
+// GetReporter returns the ProgressReporter configured in options, or NoopProgressReporter.
+func GetReporter(opts ...Option) ProgressReporter {
+	o := defaultOptions()
+	for _, opt := range opts {
+		opt(o)
+	}
+	if o.Reporter != nil {
+		return o.Reporter
+	}
+	return &NoopProgressReporter{}
 }
 
 // withPullRequestData passes optional prData down the stack of data
@@ -265,6 +277,9 @@ func Range(
 		Str("event", event).
 		Msg("Gathering workflow runs in range")
 
+	reporter := GetReporter(opts...)
+	reporter.Start(fmt.Sprintf("Collecting data (%s to %s)", since.Format("2006-01-02"), until.Format("2006-01-02")))
+
 	// GitHub API expects created filter in format YYYY-MM-DD..YYYY-MM-DD
 	createdFilter := fmt.Sprintf("%s..%s", since.Format("2006-01-02"), until.Format("2006-01-02"))
 
@@ -272,15 +287,13 @@ func Range(
 		event = ""
 	}
 
-	var (
-		listOpts = &github.ListWorkflowRunsOptions{
-			Created: createdFilter,
-			Event:   event,
-			ListOptions: github.ListOptions{
-				PerPage: 100,
-			},
-		}
-	)
+	listOpts := &github.ListWorkflowRunsOptions{
+		Created: createdFilter,
+		Event:   event,
+		ListOptions: github.ListOptions{
+			PerPage: 100,
+		},
+	}
 
 	ghCtxInst, cancel := ghCtx(ctx)
 	defer cancel()

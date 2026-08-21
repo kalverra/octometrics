@@ -3,10 +3,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
-	"charm.land/huh/v2/spinner"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/kalverra/octometrics/gather"
 	"github.com/kalverra/octometrics/observe"
@@ -66,17 +67,9 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 
 		workflowRuns, _ := cmd.Flags().GetInt64Slice("workflow-runs")
 		commits, _ := cmd.Flags().GetStringSlice("commits")
-
-		gatherOpts := []gather.Option{
-			gather.CustomDataFolder(cfg.DataDir),
-		}
-		if cfg.ForceUpdate {
-			gatherOpts = append(gatherOpts, gather.ForceUpdate())
-		}
-		opts := []observe.Option{
-			observe.WithGatherOptions(gatherOpts...),
-			observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
-		}
+		reporter := gather.NewAutoProgressReporter(cfg.Progress, term.IsTerminal(int(os.Stderr.Fd())), os.Stderr)
+		defer reporter.Stop("")
+		obsOpts := buildObserveOptions(cfg, reporter)
 
 		var (
 			comparison *observe.Comparison
@@ -84,33 +77,25 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 		)
 
 		ctx := cmd.Context()
-		spinnerErr := spinner.New().
-			Title("Building comparison").
-			Action(func() {
-				if len(workflowRuns) == 2 {
-					comparison, err = observe.CompareWorkflowRuns(
-						ctx,
-						logger, githubClient,
-						cfg.Owner, cfg.Repo,
-						workflowRuns[0], workflowRuns[1],
-						opts...,
-					)
-				} else {
-					comparison, err = observe.CompareCommits(
-						ctx,
-						logger, githubClient,
-						cfg.Owner, cfg.Repo,
-						commits[0], commits[1],
-						opts...,
-					)
-				}
-			}).
-			Run()
+		if len(workflowRuns) == 2 {
+			comparison, err = observe.CompareWorkflowRuns(
+				ctx,
+				logger, githubClient,
+				cfg.Owner, cfg.Repo,
+				workflowRuns[0], workflowRuns[1],
+				obsOpts...,
+			)
+		} else {
+			comparison, err = observe.CompareCommits(
+				ctx,
+				logger, githubClient,
+				cfg.Owner, cfg.Repo,
+				commits[0], commits[1],
+				obsOpts...,
+			)
+		}
 		if err != nil {
 			return err
-		}
-		if spinnerErr != nil {
-			return spinnerErr
 		}
 
 		format, toStdout, err := determineFormat(cmd)
@@ -137,7 +122,7 @@ octometrics compare -o kalverra -r octometrics --workflow-runs 123,456 -u
 			return fmt.Errorf("failed to render comparison markdown: %w", err)
 		}
 
-		if err := observe.EnsureCompareObservationLinks(ctx, logger, githubClient, comparison, opts...); err != nil {
+		if err := observe.EnsureCompareObservationLinks(ctx, logger, githubClient, comparison, obsOpts...); err != nil {
 			return fmt.Errorf("failed to render pages linked from comparison: %w", err)
 		}
 

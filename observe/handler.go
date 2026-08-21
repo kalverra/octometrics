@@ -50,12 +50,19 @@ func NewOnDemandHandler(
 
 	_ = WriteStaticAssets(outputDir)
 
+	handlerOpts := make([]Option, 0, len(opts)+2)
+	handlerOpts = append(handlerOpts, opts...)
+	handlerOpts = append(handlerOpts,
+		WithProgressReporter(&gather.NoopProgressReporter{}),
+		WithGatherOptions(gather.WithProgressReporter(&gather.NoopProgressReporter{})),
+	)
+
 	h := &OnDemandHandler{
 		log:       log,
 		client:    client,
 		dataDir:   dataDir,
 		outputDir: outputDir,
-		opts:      opts,
+		opts:      handlerOpts,
 		uiState:   st,
 		jobs:      make(map[string]*gatherJob),
 	}
@@ -229,10 +236,16 @@ func (h *OnDemandHandler) sourceJSONPath(owner, repo, category, id string) strin
 }
 
 func (h *OnDemandHandler) renderEntity(ctx context.Context, owner, repo, category, id, format string) error {
-	allOpts := make([]Option, 0, len(h.opts)+2)
+	allOpts := make([]Option, 0, len(h.opts)+4)
 	allOpts = append(allOpts, WithCustomOutputDir(h.outputDir))
 	allOpts = append(allOpts, h.opts...)
-	allOpts = append(allOpts, WithGatherOptions(gather.CustomDataFolder(h.dataDir)))
+	allOpts = append(allOpts,
+		WithGatherOptions(
+			gather.CustomDataFolder(h.dataDir),
+			gather.WithProgressReporter(&gather.NoopProgressReporter{}),
+		),
+		WithProgressReporter(&gather.NoopProgressReporter{}),
+	)
 
 	switch category {
 	case "workflow_runs", "job_runs":
@@ -302,6 +315,48 @@ func (h *OnDemandHandler) renderEntity(ctx context.Context, owner, repo, categor
 			return err
 		}
 		_, err = obs.Render(h.log, format, WithCustomOutputDir(h.outputDir))
+		return err
+
+	case "comparisons":
+		parts := strings.Split(id, "_vs_")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid comparison ID '%s': expected format 'left_vs_right'", id)
+		}
+		leftStr, rightStr := parts[0], parts[1]
+		leftNum, errL := strconv.ParseInt(leftStr, 10, 64)
+		rightNum, errR := strconv.ParseInt(rightStr, 10, 64)
+
+		var (
+			comp *Comparison
+			err  error
+		)
+		if errL == nil && errR == nil {
+			comp, err = CompareWorkflowRuns(ctx, h.log, h.client, owner, repo, leftNum, rightNum, allOpts...)
+			if err != nil {
+				leftWfID, errWfL := gather.FindWorkflowRunIDForJob(h.dataDir, owner, repo, leftNum)
+				rightWfID, errWfR := gather.FindWorkflowRunIDForJob(h.dataDir, owner, repo, rightNum)
+				if errWfL == nil && errWfR == nil {
+					comp, err = CompareJobRuns(
+						ctx,
+						h.log,
+						h.client,
+						owner,
+						repo,
+						leftWfID,
+						rightWfID,
+						leftNum,
+						rightNum,
+						allOpts...,
+					)
+				}
+			}
+		} else {
+			comp, err = CompareCommits(ctx, h.log, h.client, owner, repo, leftStr, rightStr, allOpts...)
+		}
+		if err != nil {
+			return err
+		}
+		_, err = comp.Render(h.log, format, WithCustomOutputDir(h.outputDir))
 		return err
 
 	default:

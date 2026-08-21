@@ -384,6 +384,7 @@ func WorkflowRun(
 			return nil, fmt.Errorf("github client is nil")
 		}
 
+		opts.Reporter.Start(fmt.Sprintf("Collecting data (workflow run %d)", workflowRunID))
 		workflowRunData, fetchErr := fetchWorkflowRunFromGitHub(
 			ctx,
 			log,
@@ -770,8 +771,8 @@ func downloadWorkflowRunLogs(
 
 								targetName := filepath.Clean(f.Name)
 								destPath := filepath.Join(logsDir, targetName)
-								_ = os.MkdirAll(filepath.Dir(destPath), 0700)
-								_ = os.WriteFile(destPath, content, 0600)
+								_ = os.MkdirAll(filepath.Dir(destPath), 0o700)
+								_ = os.WriteFile(destPath, content, 0o600)
 							}
 						}
 					}
@@ -794,7 +795,7 @@ func downloadWorkflowRunLogs(
 		if client != nil {
 			logs, err := fetchFullJobLogs(ctx, client, owner, repo, job.GetID())
 			if err == nil && logs != "" {
-				_ = os.WriteFile(jobLogPath, []byte(logs), 0600)
+				_ = os.WriteFile(jobLogPath, []byte(logs), 0o600)
 			}
 		}
 	}

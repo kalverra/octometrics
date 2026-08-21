@@ -26,6 +26,13 @@ func Commit(
 		opt(options)
 	}
 
+	reporter := options.getReporter()
+	shaDisplay := commitSHA
+	if len(shaDisplay) > 7 {
+		shaDisplay = shaDisplay[:7]
+	}
+	reporter.Start(fmt.Sprintf("Building observation (commit %s)", shaDisplay))
+
 	commit, err := gather.Commit(ctx, log, client, owner, repo, commitSHA, options.gatherOptions...)
 	if err != nil {
 		return nil, err
@@ -44,7 +51,8 @@ func Commit(
 				owner,
 				repo,
 				workflowRunID,
-				options.gatherOptions...)
+				options.gatherOptions...,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -76,7 +84,6 @@ func Commit(
 	observation.TimelineData = buildCommitTimelineData(log, commit, filtered)
 
 	return observation, nil
-
 }
 
 func buildCommitTimelineData(
@@ -104,9 +111,19 @@ func buildCommitTimelineData(
 			postTimelineItems = []PostTimelineItem{}
 			allJobs           = make([]*gather.JobData, 0)
 			def               *gather.WorkflowDef
+			cost              int64
+			costEstimate      bool
+			costGathered      bool
 		)
 
 		for _, workflowRun := range runs {
+			if workflowRun.GetCostGathered() {
+				costGathered = true
+			}
+			if workflowRun.GetCostEstimate() {
+				costEstimate = true
+			}
+			cost += workflowRun.GetCost()
 			allJobs = append(allJobs, workflowRun.GetJobs()...)
 			if def == nil && workflowRun.GetWorkflowDef() != nil {
 				def = workflowRun.GetWorkflowDef()
@@ -186,6 +203,9 @@ func buildCommitTimelineData(
 			CriticalPath:      cp,
 			StepSummaries:     stepSums,
 			SlowestJobSteps:   slowestSteps,
+			Cost:              cost,
+			CostEstimate:      costEstimate,
+			CostGathered:      costGathered,
 		})
 	}
 

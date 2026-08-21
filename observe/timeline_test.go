@@ -1,11 +1,16 @@
 package observe
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/google/go-github/v89/github"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kalverra/octometrics/gather"
 )
 
 func TestGanttFormatsForDuration(t *testing.T) {
@@ -206,4 +211,156 @@ func TestConclusionToGanttStatus(t *testing.T) {
 	assert.Equal(t, "crit", conclusionToGanttStatus("failure"))
 	assert.Equal(t, "done", conclusionToGanttStatus("cancelled"))
 	assert.Empty(t, conclusionToGanttStatus("success"))
+}
+
+func TestObservation_MultipleEventTimelines_PerEventCost(t *testing.T) {
+	t.Parallel()
+
+	obs := &Observation{
+		ID:           "abc1234",
+		Name:         "Commit abc1234",
+		Owner:        "owner",
+		Repo:         "repo",
+		DataType:     "commit",
+		State:        "success",
+		Cost:         5000, // $5.00 total
+		CostGathered: true,
+		TimelineData: []*Timeline{
+			{
+				Event:        "push",
+				Duration:     5 * time.Minute,
+				Cost:         1200, // $1.20
+				CostGathered: true,
+				Items: []TimelineItem{
+					{Name: "build", ID: "1", Duration: 5 * time.Minute, Cost: 1200, CostGathered: true},
+				},
+			},
+			{
+				Event:        "pull_request",
+				Duration:     10 * time.Minute,
+				Cost:         3800, // $3.80
+				CostGathered: true,
+				Items: []TimelineItem{
+					{Name: "test", ID: "2", Duration: 10 * time.Minute, Cost: 3800, CostGathered: true},
+				},
+			},
+		},
+	}
+
+	buf, err := obs.renderToFormat("html")
+	require.NoError(t, err)
+	htmlStr := buf.String()
+
+	// Overall cost in header badge
+	assert.Contains(t, htmlStr, `<span class="badge-label">Cost</span> $5.00`)
+
+	// Event summary headers should show their respective event costs, not overall cost
+	assert.Contains(t, htmlStr, "push &mdash; 5m0s, $1.20")
+	assert.Contains(t, htmlStr, "pull_request &mdash; 10m0s, $3.80")
+	assert.NotContains(t, htmlStr, "push &mdash; 5m0s, $5.00")
+	assert.NotContains(t, htmlStr, "pull_request &mdash; 10m0s, $5.00")
+
+	// Check markdown format as well
+	bufMD, err := obs.renderToFormat("md")
+	require.NoError(t, err)
+	mdStr := bufMD.String()
+
+	assert.Contains(t, mdStr, "## push — 5m0s, $1.20")
+	assert.Contains(t, mdStr, "## pull_request — 10m0s, $3.80")
+	assert.NotContains(t, mdStr, "## push — 5m0s, $5.00")
+	assert.NotContains(t, mdStr, "## pull_request — 10m0s, $5.00")
+}
+
+func TestBuildCommitTimelineData_PerEventCost(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	commitData := &gather.CommitData{
+		Owner: "owner",
+		Repo:  "repo",
+	}
+
+	run1 := &gather.WorkflowRunData{
+		WorkflowRun: &github.WorkflowRun{
+			ID:           new(int64(1)),
+			Name:         new("CI"),
+			Event:        new("push"),
+			Status:       new("completed"),
+			Conclusion:   new("success"),
+			RunStartedAt: &github.Timestamp{Time: now},
+		},
+		RunCompletedAt: now.Add(5 * time.Minute),
+		Cost:           1200,
+		CostGathered:   true,
+	}
+
+	run2 := &gather.WorkflowRunData{
+		WorkflowRun: &github.WorkflowRun{
+			ID:           new(int64(2)),
+			Name:         new("PR Checks"),
+			Event:        new("pull_request"),
+			Status:       new("completed"),
+			Conclusion:   new("success"),
+			RunStartedAt: &github.Timestamp{Time: now},
+		},
+		RunCompletedAt: now.Add(10 * time.Minute),
+		Cost:           3800,
+		CostGathered:   true,
+	}
+
+	timelines := buildCommitTimelineData(zerolog.Nop(), commitData, []*gather.WorkflowRunData{run1, run2})
+	require.Len(t, timelines, 2)
+
+	timelineByEvent := make(map[string]*Timeline)
+	for _, tl := range timelines {
+		timelineByEvent[tl.Event] = tl
+	}
+
+	pushTL, ok := timelineByEvent["push"]
+	require.True(t, ok)
+	assert.Equal(t, int64(1200), pushTL.Cost)
+	assert.True(t, pushTL.CostGathered)
+
+	prTL, ok := timelineByEvent["pull_request"]
+	require.True(t, ok)
+	assert.Equal(t, int64(3800), prTL.Cost)
+	assert.True(t, prTL.CostGathered)
+}
+
+type recordingReporter struct {
+	starts []string
+	stops  []string
+}
+
+func (r *recordingReporter) Start(msg string) {
+	r.starts = append(r.starts, msg)
+}
+
+func (r *recordingReporter) Update(_ string, _ time.Duration) {}
+
+func (r *recordingReporter) Stop(msg string) {
+	r.stops = append(r.stops, msg)
+}
+
+func TestObserveProgressReporter_Option(t *testing.T) {
+	t.Parallel()
+
+	rec := &recordingReporter{}
+	opts := defaultOptions()
+	WithProgressReporter(rec)(opts)
+
+	assert.Equal(t, rec, opts.reporter)
+}
+
+func TestInteractive_StopsProgressReporter(t *testing.T) {
+	t.Parallel()
+
+	rec := &recordingReporter{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	log := zerolog.Nop()
+	_ = Interactive(ctx, log, nil, "/", t.TempDir(), WithProgressReporter(rec), WithNoOpen(true), WithPort(0))
+
+	assert.NotEmpty(t, rec.stops, "Interactive must call reporter.Stop before starting server")
 }

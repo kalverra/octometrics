@@ -137,6 +137,7 @@ func PullRequest(
 			return nil, fmt.Errorf("github client is nil")
 		}
 
+		options.Reporter.Start(fmt.Sprintf("Collecting data (pull request #%d)", pullRequestNumber))
 		ctx, cancel := ghCtx(parentCtx)
 		pr, resp, getErr := client.Rest.PullRequests.Get(ctx, owner, repo, pullRequestNumber)
 		cancel()
@@ -329,7 +330,8 @@ func prCommitData(
 	// Sort the commit data by commit date
 	sort.Slice(commitData, func(i, j int) bool {
 		return commitData[i].GetCommit().GetAuthor().GetDate().Before(
-			commitData[j].GetCommit().GetAuthor().GetDate().Time)
+			commitData[j].GetCommit().GetAuthor().GetDate().Time,
+		)
 	})
 
 	return commitData, nil

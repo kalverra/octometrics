@@ -60,3 +60,85 @@ func TestNewAutoProgressReporter(t *testing.T) {
 	_, isAIAuto := r5.(*AIProgressReporter)
 	assert.True(t, isAIAuto, "style=auto + isTTY=false should return AIProgressReporter")
 }
+
+func TestProgressReporter_Human_Transitions(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	reporter := NewHumanProgressReporter(&buf)
+
+	reporter.Start("Collecting data (commit abc1234)")
+	assert.Equal(t, "Collecting data (commit abc1234)", reporter.currentMsg)
+
+	reporter.Start("Building observation (commit abc1234)")
+	assert.Equal(t, "Building observation (commit abc1234)", reporter.currentMsg)
+
+	reporter.Stop("Done ✅")
+	assert.Contains(t, buf.String(), "Done ✅")
+}
+
+func TestProgressReporter_Human_StopEmpty(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	reporter := NewHumanProgressReporter(&buf)
+
+	reporter.Start("Collecting data (workflow run 123)")
+	reporter.Stop("")
+	assert.NotContains(t, buf.String(), "\n\n")
+}
+
+func TestProgressReporter_Human_StopClearsLine(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	reporter := NewHumanProgressReporter(&buf)
+	reporter.isTTY = true
+
+	reporter.Stop("")
+	assert.Contains(
+		t,
+		buf.String(),
+		"\r\033[2K\033[?25h",
+		"Stop should clear terminal line and restore cursor when TTY",
+	)
+}
+
+func TestProgressReporter_Human_ConsistentCountUpDurationFormat(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	reporter := NewHumanProgressReporter(&buf)
+
+	reporter.Start("Collecting data (commit abc1234)")
+	initialStartTime := reporter.startTime
+	assert.False(t, initialStartTime.IsZero())
+
+	assert.Contains(t, reporter.formatTitle("Collecting data (commit abc1234)", 0), "(0s)")
+	assert.Contains(t, reporter.formatTitle("Collecting data (commit abc1234)", 5*time.Second), "(5s)")
+	assert.Contains(t, reporter.formatTitle("Collecting data (commit abc1234)", 62*time.Second), "(1m2s)")
+
+	reporter.startTime = time.Now().Add(-10 * time.Second)
+	preservedStartTime := reporter.startTime
+
+	reporter.Start("Building observation (commit abc1234)")
+	assert.Equal(t, "Building observation (commit abc1234)", reporter.currentMsg)
+	assert.Equal(
+		t,
+		preservedStartTime,
+		reporter.startTime,
+		"Start should preserve overall process start time for continuous count up",
+	)
+
+	reporter.Start("Building comparison (commit abc1234 vs def5678)")
+	assert.Equal(t, "Building comparison (commit abc1234 vs def5678)", reporter.currentMsg)
+	assert.Equal(
+		t,
+		preservedStartTime,
+		reporter.startTime,
+		"Start should preserve overall process start time across all phases",
+	)
+
+	reporter.Stop("")
+	assert.True(t, reporter.startTime.IsZero(), "Stop should reset start time")
+}

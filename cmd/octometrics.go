@@ -64,15 +64,16 @@ func commandNeedsGitHubToken(cmd *cobra.Command) bool {
 	return true
 }
 
-func buildGatherOptions(cfg *config.Config) []gather.Option {
+func buildGatherOptions(cfg *config.Config, reporter gather.ProgressReporter) []gather.Option {
+	if reporter == nil {
+		reporter = gather.NewAutoProgressReporter(cfg.Progress, term.IsTerminal(int(os.Stderr.Fd())), os.Stderr)
+	}
 	opts := []gather.Option{
 		gather.CustomDataFolder(cfg.DataDir),
 		gather.WithWait(cfg.Wait),
 		gather.WithWaitTimeout(cfg.WaitTimeout),
 		gather.WithPollInterval(cfg.PollInterval),
-		gather.WithProgressReporter(
-			gather.NewAutoProgressReporter(cfg.Progress, term.IsTerminal(int(os.Stderr.Fd())), os.Stderr),
-		),
+		gather.WithProgressReporter(reporter),
 	}
 	if cfg.ForceUpdate {
 		opts = append(opts, gather.ForceUpdate())
@@ -88,9 +89,14 @@ func buildGatherOptions(cfg *config.Config) []gather.Option {
 	return opts
 }
 
-func buildObserveOptions(cfg *config.Config) []observe.Option {
+func buildObserveOptions(cfg *config.Config, reporter gather.ProgressReporter) []observe.Option {
+	if reporter == nil {
+		reporter = gather.NewAutoProgressReporter(cfg.Progress, term.IsTerminal(int(os.Stderr.Fd())), os.Stderr)
+	}
+	gatherOpts := buildGatherOptions(cfg, reporter)
 	opts := []observe.Option{
-		observe.WithGatherOptions(buildGatherOptions(cfg)...),
+		observe.WithGatherOptions(gatherOpts...),
+		observe.WithProgressReporter(reporter),
 		observe.ExcludeWorkflows(cfg.ExcludeWorkflows),
 		observe.IncludeWorkflows(cfg.IncludeWorkflows),
 		observe.WithNoOpen(cfg.NoOpen),
@@ -108,7 +114,8 @@ var rootCmd = &cobra.Command{
 	Long: `See metrics and profiling of your GitHub Actions.
 
 GitHub Actions provides surprisingly little metrics to help you optimize things like runtime and profiling data.
-Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and inefficiencies in your CI/CD pipelines.`,
+Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and
+inefficiencies in your CI/CD pipelines.`,
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 		var err error
 
@@ -175,6 +182,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 		hasTarget := cfg.WorkflowRunID != 0 || cfg.PullRequestNumber != 0 || cfg.CommitSHA != "" ||
 			(!cfg.From.IsZero() && !cfg.To.IsZero())
 
+		var githubClient *gather.GitHubClient
 		if cfg.GitHubToken != "" {
 			var clientErr error
 			githubClient, clientErr = gather.NewGitHubClient(logger, cfg.GitHubToken, nil)
@@ -183,14 +191,18 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 			}
 		}
 
+		reporter := gather.NewAutoProgressReporter(cfg.Progress, term.IsTerminal(int(os.Stderr.Fd())), os.Stderr)
+		defer reporter.Stop("")
+
 		if hasTarget {
 			if err := cfg.ValidateGather(); err != nil {
 				return err
 			}
 
 			ctx := cmd.Context()
-			opts := buildGatherOptions(cfg)
+			opts := buildGatherOptions(cfg, reporter)
 
+			var err error
 			var rangeFailures int
 			if cfg.WorkflowRunID != 0 {
 				_, _, err = gather.WorkflowRun(
@@ -200,7 +212,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 					cfg.Owner,
 					cfg.Repo,
 					cfg.WorkflowRunID,
-					opts...)
+					opts...,
+				)
 			} else if cfg.PullRequestNumber != 0 {
 				_, err = gather.PullRequest(
 					ctx,
@@ -209,9 +222,18 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 					cfg.Owner,
 					cfg.Repo,
 					cfg.PullRequestNumber,
-					opts...)
+					opts...,
+				)
 			} else if cfg.CommitSHA != "" {
-				_, err = gather.Commit(ctx, logger, githubClient, cfg.Owner, cfg.Repo, cfg.CommitSHA, opts...)
+				_, err = gather.Commit(
+					ctx,
+					logger,
+					githubClient,
+					cfg.Owner,
+					cfg.Repo,
+					cfg.CommitSHA,
+					opts...,
+				)
 			} else if !cfg.From.IsZero() && !cfg.To.IsZero() {
 				rangeFailures, err = gather.Range(
 					ctx,
@@ -222,7 +244,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 					cfg.From,
 					cfg.To,
 					cfg.Event,
-					opts...)
+					opts...,
+				)
 			}
 
 			if err != nil {
@@ -244,7 +267,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 				comparison *observe.Comparison
 				compErr    error
 			)
-			obsOpts := buildObserveOptions(cfg)
+			obsOpts := buildObserveOptions(cfg, reporter)
 			if vsRunID != 0 && cfg.WorkflowRunID != 0 {
 				comparison, compErr = observe.CompareWorkflowRuns(
 					cmd.Context(),
@@ -254,7 +277,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 					cfg.Repo,
 					cfg.WorkflowRunID,
 					vsRunID,
-					obsOpts...)
+					obsOpts...,
+				)
 			} else if vsSHA != "" && cfg.CommitSHA != "" {
 				comparison, compErr = observe.CompareCommits(
 					cmd.Context(),
@@ -264,26 +288,57 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 					cfg.Repo,
 					cfg.CommitSHA,
 					vsSHA,
-					obsOpts...)
+					obsOpts...,
+				)
+			} else {
+				return fmt.Errorf("cannot compare: baseline and target must both be workflow runs or both be commits")
 			}
 			if compErr != nil {
 				return fmt.Errorf("failed to compare against %s: %w", vsTarget, compErr)
 			}
 			if comparison != nil {
-				outStr, renderErr := comparison.RenderString(logger, format)
+				if toStdout || format == "md" || format == "json" || cfg.OutputFile != "" {
+					outStr, renderErr := comparison.RenderString(logger, format)
+					if renderErr != nil {
+						return fmt.Errorf("failed to render comparison: %w", renderErr)
+					}
+					if cfg.OutputFile != "" {
+						//nolint:gosec // user specified output file path
+						if writeErr := os.WriteFile(cfg.OutputFile, []byte(outStr), 0o600); writeErr != nil {
+							return fmt.Errorf("failed to write output file %q: %w", cfg.OutputFile, writeErr)
+						}
+						return nil
+					}
+					fmt.Print(outStr)
+					return nil
+				}
+
+				if cfg.NoObserve {
+					return nil
+				}
+
+				pagePath, renderErr := comparison.Render(logger, "html")
 				if renderErr != nil {
 					return fmt.Errorf("failed to render comparison: %w", renderErr)
 				}
-				if cfg.OutputFile != "" {
-					//nolint:gosec // user specified output file path
-					return os.WriteFile(cfg.OutputFile, []byte(outStr), 0600)
+				if _, renderMdErr := comparison.Render(logger, "md"); renderMdErr != nil {
+					return fmt.Errorf("failed to render comparison markdown: %w", renderMdErr)
 				}
-				fmt.Print(outStr)
-				return nil
+				if ensureErr := observe.EnsureCompareObservationLinks(
+					cmd.Context(),
+					logger,
+					githubClient,
+					comparison,
+					obsOpts...,
+				); ensureErr != nil {
+					return fmt.Errorf("failed to render pages linked from comparison: %w", ensureErr)
+				}
+
+				return observe.Interactive(cmd.Context(), logger, githubClient, pagePath, cfg.DataDir, obsOpts...)
 			}
 		}
 
-		obsOpts := buildObserveOptions(cfg)
+		obsOpts := buildObserveOptions(cfg, reporter)
 
 		if toStdout || format == "md" || format == "json" || cfg.OutputFile != "" {
 			var obs *observe.Observation
@@ -295,7 +350,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 					cfg.Owner,
 					cfg.Repo,
 					cfg.WorkflowRunID,
-					obsOpts...)
+					obsOpts...,
+				)
 			} else if cfg.PullRequestNumber != 0 {
 				obs, err = observe.PullRequest(
 					cmd.Context(),
@@ -304,7 +360,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 					cfg.Owner,
 					cfg.Repo,
 					cfg.PullRequestNumber,
-					obsOpts...)
+					obsOpts...,
+				)
 			} else if cfg.CommitSHA != "" {
 				obs, err = observe.Commit(
 					cmd.Context(),
@@ -313,7 +370,8 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 					cfg.Owner,
 					cfg.Repo,
 					cfg.CommitSHA,
-					obsOpts...)
+					obsOpts...,
+				)
 			}
 
 			if err != nil {
@@ -334,7 +392,7 @@ Octometrics aims to help you easily visualize what your workflows look like, hel
 				}
 				if cfg.OutputFile != "" {
 					//nolint:gosec // user specified output file path
-					if writeErr := os.WriteFile(cfg.OutputFile, []byte(outStr), 0600); writeErr != nil {
+					if writeErr := os.WriteFile(cfg.OutputFile, []byte(outStr), 0o600); writeErr != nil {
 						return fmt.Errorf("failed to write output file %q: %w", cfg.OutputFile, writeErr)
 					}
 					return nil

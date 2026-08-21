@@ -63,7 +63,7 @@ func Setup(tb testing.TB, options ...Option) (log zerolog.Logger, testDir string
 	testDir = filepath.Join("test_results", tb.Name())
 	err := os.RemoveAll(testDir)
 	require.NoError(tb, err, "error removing test_results dir")
-	err = os.MkdirAll(testDir, 0700)
+	err = os.MkdirAll(testDir, 0o700)
 	require.NoError(tb, err, "error creating test_results dir")
 
 	logFile := filepath.Join(testDir, testLogFile)

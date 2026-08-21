@@ -61,7 +61,6 @@ func TestObservationHTMLIncludesExportScript(t *testing.T) {
 
 //nolint:paralleltest
 func TestCompareHTMLIncludesExportScript(t *testing.T) {
-
 	log, tempDir := testhelpers.Setup(t)
 
 	comp := &Comparison{

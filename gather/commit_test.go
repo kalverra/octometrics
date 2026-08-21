@@ -267,11 +267,11 @@ func TestCommit_WorkflowRunsNotPersistedAndHydrated(t *testing.T) {
 	log, tempDir := testhelpers.Setup(t)
 
 	wfDir := filepath.Join(tempDir, "owner", "repo", WorkflowRunsDataDir)
-	require.NoError(t, os.MkdirAll(wfDir, 0750))
+	require.NoError(t, os.MkdirAll(wfDir, 0o750))
 	sampleWFJSON := []byte(
 		`{"id":999,"name":"test-wf","status":"completed","conclusion":"success","cost_gathered":true}`,
 	)
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "999.json"), sampleWFJSON, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "999.json"), sampleWFJSON, 0o600))
 
 	cd := &CommitData{
 		Owner:          "owner",
@@ -286,9 +286,9 @@ func TestCommit_WorkflowRunsNotPersistedAndHydrated(t *testing.T) {
 	assert.NotContains(t, jsonStr, "workflow_runs", "CommitData JSON should not persist workflow_runs")
 
 	commitDir := filepath.Join(tempDir, "owner", "repo", CommitsDataDir)
-	require.NoError(t, os.MkdirAll(commitDir, 0750))
+	require.NoError(t, os.MkdirAll(commitDir, 0o750))
 	commitFile := filepath.Join(commitDir, "abc1234.json")
-	require.NoError(t, os.WriteFile(commitFile, data, 0600))
+	require.NoError(t, os.WriteFile(commitFile, data, 0o600))
 
 	loaded, err := Commit(t.Context(), log, nil, "owner", "repo", "abc1234", CustomDataFolder(tempDir))
 	require.NoError(t, err)

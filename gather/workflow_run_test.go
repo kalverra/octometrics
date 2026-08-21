@@ -352,9 +352,9 @@ func TestGetRunnerFromLabels(t *testing.T) {
 }
 
 var (
-	startTime       = time.Date(2025, 04, 20, 0, 1, 0, 0, time.UTC)
-	createdTime     = time.Date(2025, 04, 20, 0, 0, 0, 0, time.UTC)
-	endTime         = time.Date(2025, 04, 20, 1, 1, 0, 0, time.UTC)
+	startTime       = time.Date(2025, 0o4, 20, 0, 1, 0, 0, time.UTC)
+	createdTime     = time.Date(2025, 0o4, 20, 0, 0, 0, 0, time.UTC)
+	endTime         = time.Date(2025, 0o4, 20, 1, 1, 0, 0, time.UTC)
 	mockWorkflowRun = &github.WorkflowRun{
 		ID:               new(int64(1)),
 		Name:             new("mocked-workflow-run"),

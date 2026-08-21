@@ -26,15 +26,15 @@ func TestGetCleanJobLogs_FromDisk(t *testing.T) {
 
 	dataDir := t.TempDir()
 	logDir := filepath.Join(dataDir, "owner", "repo", "logs", "100")
-	require.NoError(t, os.MkdirAll(logDir, 0700))
+	require.NoError(t, os.MkdirAll(logDir, 0o700))
 
 	logFile := filepath.Join(logDir, "500.log")
-	require.NoError(t, os.WriteFile(logFile, []byte("\x1b[31m2026-08-03T19:57:55.1234567Z Error!\x1b[0m"), 0600))
+	require.NoError(t, os.WriteFile(logFile, []byte("\x1b[31m2026-08-03T19:57:55.1234567Z Error!\x1b[0m"), 0o600))
 
 	wfDir := filepath.Join(dataDir, "owner", "repo", WorkflowRunsDataDir)
-	require.NoError(t, os.MkdirAll(wfDir, 0700))
+	require.NoError(t, os.MkdirAll(wfDir, 0o700))
 	wfData := `{"id":100,"jobs":[{"id":500,"name":"Test Job"}]}`
-	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "100.json"), []byte(wfData), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(wfDir, "100.json"), []byte(wfData), 0o600))
 
 	log, _ := testhelpers.Setup(t)
 	cleaned, err := GetCleanJobLogs(t.Context(), log, nil, "", "", 500, dataDir)
@@ -215,12 +215,12 @@ func TestFetchRunsOnCostFromLogs_DiskCache(t *testing.T) {
 
 	// Pre-create disk cache for job 999
 	cacheDir := filepath.Join(tempDir, "owner", "repo", "runs_on_costs")
-	require.NoError(t, os.MkdirAll(cacheDir, 0750))
+	require.NoError(t, os.MkdirAll(cacheDir, 0o750))
 	cacheFile := filepath.Join(cacheDir, "999.json")
 	summary := &RunsOnCostSummary{InstanceType: "c7i.2xlarge", CostUSD: 0.05}
 	data, err := json.Marshal(summary)
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(cacheFile, data, 0600))
+	require.NoError(t, os.WriteFile(cacheFile, data, 0o600))
 
 	// client is nil to prove no HTTP network calls are made
 	cost, loadedSummary, err := fetchRunsOnCostFromLogs(t.Context(), log, nil, "owner", "repo", 999, tempDir)

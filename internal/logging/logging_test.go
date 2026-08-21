@@ -8,13 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	//nolint:unused // only here to make it valid for others who call the test helpers
-	silenceTestLogs = flag.Bool(
-		"silence-test-logs",
-		false,
-		"Disable test logging to console",
-	)
+//nolint:unused // only here to make it valid for others who call the test helpers
+var silenceTestLogs = flag.Bool(
+	"silence-test-logs",
+	false,
+	"Disable test logging to console",
 )
 
 func TestLogging(t *testing.T) {

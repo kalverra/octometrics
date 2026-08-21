@@ -370,7 +370,7 @@ func buildCPUPerCoreMultiLineDiagram(
 }
 
 // cpuPerCoreCombinedDiagram returns title and one xychart-beta with a line per CPU when there are multiple cores.
-func cpuPerCoreCombinedDiagram(analysis *monitor.Analysis) (title string, diagram string) {
+func cpuPerCoreCombinedDiagram(analysis *monitor.Analysis) (title, diagram string) {
 	series := collectPerCoreDownsampledSeries(analysis)
 	if len(series) < 2 {
 		return "", ""
@@ -387,7 +387,7 @@ func cpuPerCoreCombinedDiagram(analysis *monitor.Analysis) (title string, diagra
 func cpuPerCoreCombinedDiagramWindowed(
 	analysis *monitor.Analysis,
 	windowStart, axisEnd time.Time,
-) (title string, diagram string) {
+) (title, diagram string) {
 	if analysis == nil || !axisEnd.After(windowStart) {
 		return "", ""
 	}

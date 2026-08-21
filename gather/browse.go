@@ -78,8 +78,10 @@ type cacheEntry struct {
 	expiresAt time.Time
 }
 
-var browseTTL = 60 * time.Second
-var browseCache sync.Map
+var (
+	browseTTL   = 60 * time.Second
+	browseCache sync.Map
+)
 
 func getCached(key string) (any, bool) {
 	if val, ok := browseCache.Load(key); ok {

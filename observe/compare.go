@@ -141,6 +141,13 @@ func CompareWorkflowRuns(
 	leftID, rightID int64,
 	opts ...Option,
 ) (*Comparison, error) {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+	reporter := options.getReporter()
+	reporter.Start(fmt.Sprintf("Building comparison (workflow run %d vs %d)", leftID, rightID))
+
 	left, err := WorkflowRun(ctx, log, client, owner, repo, leftID, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build left observation (run %d): %w", leftID, err)
@@ -161,6 +168,21 @@ func CompareCommits(
 	leftSHA, rightSHA string,
 	opts ...Option,
 ) (*Comparison, error) {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(options)
+	}
+	reporter := options.getReporter()
+	lSHA := leftSHA
+	if len(lSHA) > 7 {
+		lSHA = lSHA[:7]
+	}
+	rSHA := rightSHA
+	if len(rSHA) > 7 {
+		rSHA = rSHA[:7]
+	}
+	reporter.Start(fmt.Sprintf("Building comparison (commit %s vs %s)", lSHA, rSHA))
+
 	left, err := Commit(ctx, log, client, owner, repo, leftSHA, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build left observation (commit %s): %w", leftSHA, err)
@@ -228,6 +250,7 @@ func buildComparison(left, right *Observation, owner, repo, compareType string) 
 		Owner:       owner,
 		Repo:        repo,
 		CompareType: compareType,
+		EventPairs:  buildEventPairs(left.TimelineData, right.TimelineData, owner, repo, compareType),
 		Summary: ComparisonSummary{
 			LeftDuration:   leftDur,
 			RightDuration:  rightDur,
@@ -285,13 +308,22 @@ func buildComparison(left, right *Observation, owner, repo, compareType string) 
 
 // matchItems computes matched, only-left, and only-right items for two sets of timeline items.
 func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []ComparisonOnlyItem, []ComparisonOnlyItem) {
+	leftCounts := make(map[string]int)
 	leftByKey := make(map[itemMatchKey]TimelineItem, len(leftItems))
 	for _, item := range leftItems {
-		leftByKey[compareMatchKey(item)] = item
+		name := normalizeCompareName(item.Name)
+		key := itemMatchKey{name: name, index: leftCounts[name]}
+		leftCounts[name]++
+		leftByKey[key] = item
 	}
+
+	rightCounts := make(map[string]int)
 	rightByKey := make(map[itemMatchKey]TimelineItem, len(rightItems))
 	for _, item := range rightItems {
-		rightByKey[compareMatchKey(item)] = item
+		name := normalizeCompareName(item.Name)
+		key := itemMatchKey{name: name, index: rightCounts[name]}
+		rightCounts[name]++
+		rightByKey[key] = item
 	}
 
 	var matched []ComparisonItem
@@ -300,7 +332,7 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 		if ri, ok := rightByKey[key]; ok {
 			delta := ri.Duration - li.Duration
 			matched = append(matched, ComparisonItem{
-				Name:            li.Name,
+				Name:            key.name,
 				LeftID:          li.ID,
 				RightID:         ri.ID,
 				LeftDuration:    li.Duration,
@@ -350,15 +382,8 @@ func matchItems(leftItems, rightItems []TimelineItem) ([]ComparisonItem, []Compa
 }
 
 type itemMatchKey struct {
-	id   string
-	name string
-}
-
-func compareMatchKey(item TimelineItem) itemMatchKey {
-	if item.ID != "" {
-		return itemMatchKey{id: item.ID}
-	}
-	return itemMatchKey{name: normalizeCompareName(item.Name)}
+	name  string
+	index int
 }
 
 func normalizeCompareName(name string) string {
@@ -526,8 +551,12 @@ func buildEventPairs(left, right []*Timeline, owner, repo, compareType string) [
 		pair.RightDuration = rightDur
 		pair.DurationDelta = rightDur - leftDur
 		pair.DurationDeltaPercent = formatPercentDelta(int64(pair.DurationDelta), int64(pair.LeftDuration))
-		pair.LeftCost = sumItemCosts(pair.Left.Items)
-		pair.RightCost = sumItemCosts(pair.Right.Items)
+		if pair.Left != nil {
+			pair.LeftCost = sumItemCosts(pair.Left.Items)
+		}
+		if pair.Right != nil {
+			pair.RightCost = sumItemCosts(pair.Right.Items)
+		}
 		pair.CostDelta = pair.RightCost - pair.LeftCost
 		pair.CostDeltaPercent = formatPercentDelta(pair.CostDelta, pair.LeftCost)
 
@@ -577,18 +606,19 @@ func rewriteLinksForComparisonItems(pair *EventPair, owner, repo, compareType st
 		return
 	}
 
-	// Create a map of matched items by their name
-	matchedLeft := make(map[string]string)
-	matchedRight := make(map[string]string)
+	matchedLeftByLeftID := make(map[string]string)
+	matchedRightByRightID := make(map[string]string)
 	for _, item := range pair.Items {
-		matchedLeft[item.Name] = item.RightID
-		matchedRight[item.Name] = item.LeftID
+		if item.LeftID != "" && item.RightID != "" {
+			matchedLeftByLeftID[item.LeftID] = item.RightID
+			matchedRightByRightID[item.RightID] = item.LeftID
+		}
 	}
 
 	// Update left items
 	if pair.Left != nil {
 		for i, item := range pair.Left.Items {
-			if rightID, ok := matchedLeft[item.Name]; ok {
+			if rightID, ok := matchedLeftByLeftID[item.ID]; ok {
 				pair.Left.Items[i].Link = path.Join(
 					"/",
 					owner,
@@ -603,7 +633,7 @@ func rewriteLinksForComparisonItems(pair *EventPair, owner, repo, compareType st
 	// Update right items
 	if pair.Right != nil {
 		for i, item := range pair.Right.Items {
-			if leftID, ok := matchedRight[item.Name]; ok {
+			if leftID, ok := matchedRightByRightID[item.ID]; ok {
 				pair.Right.Items[i].Link = path.Join(
 					"/",
 					owner,
@@ -755,7 +785,8 @@ func ensureCompareObservationLinks(
 						rightWfID,
 						leftJobID,
 						rightJobID,
-						opts...)
+						opts...,
+					)
 				}
 			}
 
@@ -812,12 +843,23 @@ func renderWorkflowRunAndJobs(
 // Render writes the comparison to a file in the given format ("html" or "md") and returns
 // the output file path. For HTML the path is a URL-style path suitable for the browser;
 // for markdown it is a filesystem path.
-func (c *Comparison) Render(log zerolog.Logger, outputType string) (string, error) {
+func (c *Comparison) Render(log zerolog.Logger, outputType string, opts ...Option) (string, error) {
 	if len(c.EventPairs) == 0 {
 		c.EventPairs = buildEventPairs(c.Left.TimelineData, c.Right.TimelineData, c.Owner, c.Repo, c.CompareType)
 	}
 
-	baseDir := outputDirForFormat(outputType)
+	observeOpts := defaultOptions()
+	for _, opt := range opts {
+		opt(observeOpts)
+	}
+
+	baseDir := activeHTMLOutputDir
+	if observeOpts.outputDir != OutputDir && observeOpts.outputDir != "" {
+		baseDir = observeOpts.outputDir
+	}
+	if outputType == "md" {
+		baseDir = markdownOutputDir
+	}
 	fileName := fmt.Sprintf("%s_vs_%s.%s", c.Left.ID, c.Right.ID, outputType)
 
 	targetFile := filepath.Join(baseDir, c.Owner, c.Repo, comparisonsOutputDir, fileName)
@@ -834,10 +876,12 @@ func (c *Comparison) Render(log zerolog.Logger, outputType string) (string, erro
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(targetFile), 0750); err != nil {
+	//nolint:gosec // internal target path
+	if err := os.MkdirAll(filepath.Dir(targetFile), 0o750); err != nil {
 		return "", fmt.Errorf("failed to create comparison directory: %w", err)
 	}
-	if err := os.WriteFile(targetFile, buf.Bytes(), 0600); err != nil {
+	//nolint:gosec // internal target path
+	if err := os.WriteFile(targetFile, buf.Bytes(), 0o600); err != nil {
 		return "", fmt.Errorf("failed to write comparison file: %w", err)
 	}
 

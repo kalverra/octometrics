@@ -217,3 +217,132 @@ func TestCompareHTMLVisualFixes(t *testing.T) {
 	assert.Contains(t, htmlStr, `class="delta-faster"`)
 	assert.Contains(t, htmlStr, `-$3.63`)
 }
+
+//nolint:paralleltest
+func TestWorkflowRunComparison_GanttLinks_AreComparisons(t *testing.T) {
+	log, tempDir := testhelpers.Setup(t)
+
+	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	leftObs := &Observation{
+		ID:       "111",
+		Name:     "run-1",
+		Owner:    "owner",
+		Repo:     "repo",
+		DataType: "workflow_run",
+		TimelineData: []*Timeline{
+			{
+				Event: "push",
+				Items: []TimelineItem{
+					{
+						ID:         "101",
+						Name:       "build",
+						StartTime:  now,
+						Duration:   time.Minute,
+						Conclusion: "success",
+						Link:       "/owner/repo/job_runs/101.html",
+					},
+					{
+						ID:         "102",
+						Name:       "test",
+						StartTime:  now.Add(time.Minute),
+						Duration:   2 * time.Minute,
+						Conclusion: "success",
+						Link:       "/owner/repo/job_runs/102.html",
+					},
+				},
+			},
+		},
+	}
+	rightObs := &Observation{
+		ID:       "222",
+		Name:     "run-2",
+		Owner:    "owner",
+		Repo:     "repo",
+		DataType: "workflow_run",
+		TimelineData: []*Timeline{
+			{
+				Event: "push",
+				Items: []TimelineItem{
+					{
+						ID:         "201",
+						Name:       "build",
+						StartTime:  now,
+						Duration:   90 * time.Second,
+						Conclusion: "success",
+						Link:       "/owner/repo/job_runs/201.html",
+					},
+					{
+						ID:         "202",
+						Name:       "test",
+						StartTime:  now.Add(90 * time.Second),
+						Duration:   2 * time.Minute,
+						Conclusion: "success",
+						Link:       "/owner/repo/job_runs/202.html",
+					},
+				},
+			},
+		},
+	}
+
+	comp := buildComparison(leftObs, rightObs, "owner", "repo", "workflow_run")
+	require.Len(t, comp.EventPairs, 1)
+	require.Len(t, comp.EventPairs[0].Items, 2, "jobs with same name but different IDs across runs should match")
+
+	setActiveHTMLOutputDir(tempDir)
+	renderedRelPath, err := comp.Render(log, "html")
+	require.NoError(t, err)
+
+	outPath := filepath.Join(tempDir, renderedRelPath)
+	//nolint:gosec // test file read
+	content, err := os.ReadFile(outPath)
+	require.NoError(t, err)
+	htmlStr := string(content)
+
+	// Gantt chart tasks should link to comparisons
+	assert.Contains(t, htmlStr, `click cl-101 href "/owner/repo/comparisons/101_vs_201.html"`)
+	assert.Contains(t, htmlStr, `click cr-201 href "/owner/repo/comparisons/101_vs_201.html"`)
+	assert.Contains(t, htmlStr, `click cl-102 href "/owner/repo/comparisons/102_vs_202.html"`)
+	assert.Contains(t, htmlStr, `click cr-202 href "/owner/repo/comparisons/102_vs_202.html"`)
+
+	// Comparison table should also link to comparisons
+	assert.Contains(t, htmlStr, `<a href="/owner/repo/comparisons/101_vs_201.html">build</a>`)
+	assert.Contains(t, htmlStr, `<a href="/owner/repo/comparisons/102_vs_202.html">test</a>`)
+}
+
+func TestBuildEventPairs_unmatchedEvents(t *testing.T) {
+	t.Parallel()
+
+	left := []*Timeline{
+		{
+			Event: "pull_request",
+			Items: []TimelineItem{
+				{Name: "lint", ID: "1", StartTime: time.Now(), Duration: time.Minute, Cost: 100},
+			},
+		},
+	}
+	right := []*Timeline{
+		{
+			Event: "push",
+			Items: []TimelineItem{
+				{Name: "build", ID: "2", StartTime: time.Now(), Duration: 2 * time.Minute, Cost: 200},
+			},
+		},
+	}
+
+	pairs := buildEventPairs(left, right, "owner", "repo", "commit")
+	require.Len(t, pairs, 2)
+
+	assert.Equal(t, "pull_request", pairs[0].Event)
+	assert.NotNil(t, pairs[0].Left)
+	assert.Nil(t, pairs[0].Right)
+	assert.Equal(t, int64(100), pairs[0].LeftCost)
+	assert.Equal(t, int64(0), pairs[0].RightCost)
+	assert.Equal(t, int64(-100), pairs[0].CostDelta)
+
+	assert.Equal(t, "push", pairs[1].Event)
+	assert.Nil(t, pairs[1].Left)
+	assert.NotNil(t, pairs[1].Right)
+	assert.Equal(t, int64(0), pairs[1].LeftCost)
+	assert.Equal(t, int64(200), pairs[1].RightCost)
+	assert.Equal(t, int64(200), pairs[1].CostDelta)
+}

@@ -64,7 +64,7 @@ Total Duration: {{ .CriticalPath.TotalDuration }} (Queue: {{ .CriticalPath.Total
 {{ end }}
 
 {{ range .TimelineData }}
-## {{ .Event }} — {{ .Duration }}, {{ if not $.CostGathered }}cost not gathered{{ else }}${{ printf "%.2f" (divideBy1000 $.Cost) }}{{ if $.CostEstimate }} (est.){{ end }}{{ end }} ({{ .RealStartTime.Format "2006-01-02T15:04:05" }} to {{ .RealEndTime.Format "2006-01-02T15:04:05" }})
+## {{ .Event }} — {{ .Duration }}, {{ if not .CostGathered }}cost not gathered{{ else }}${{ printf "%.2f" (divideBy1000 .Cost) }}{{ if .CostEstimate }} (est.){{ end }}{{ end }} ({{ .RealStartTime.Format "2006-01-02T15:04:05" }} to {{ .RealEndTime.Format "2006-01-02T15:04:05" }})
 
 {{ template "timeline_md" . }}
 {{ if $.MonitoringData }}{{ range $.MonitoringData.Charts }}

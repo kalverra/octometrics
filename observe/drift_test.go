@@ -30,10 +30,10 @@ func TestCheckWorkflowDrift(t *testing.T) {
 	runCmd("config", "commit.gpgsign", "false")
 
 	wfDir := filepath.Join(tmpDir, ".github", "workflows")
-	require.NoError(t, os.MkdirAll(wfDir, 0700))
+	require.NoError(t, os.MkdirAll(wfDir, 0o700))
 
 	wfFile := filepath.Join(wfDir, "test.yaml")
-	require.NoError(t, os.WriteFile(wfFile, []byte("name: test\n"), 0600))
+	require.NoError(t, os.WriteFile(wfFile, []byte("name: test\n"), 0o600))
 	runCmd("add", ".")
 	runCmd("commit", "--no-gpg-sign", "-m", "Initial commit")
 
@@ -45,7 +45,7 @@ func TestCheckWorkflowDrift(t *testing.T) {
 	baseSHA := string(out)[:40]
 
 	// Make another commit modifying the workflow
-	require.NoError(t, os.WriteFile(wfFile, []byte("name: test\n# update\n"), 0600))
+	require.NoError(t, os.WriteFile(wfFile, []byte("name: test\n# update\n"), 0o600))
 	runCmd("add", ".")
 	runCmd("commit", "--no-gpg-sign", "-m", "Update workflow")
 

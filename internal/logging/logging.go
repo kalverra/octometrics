@@ -69,7 +69,7 @@ func New(options ...Option) (zerolog.Logger, error) {
 		return zerolog.Nop(), nil
 	}
 
-	err := os.WriteFile(logFileName, []byte{}, 0600)
+	err := os.WriteFile(logFileName, []byte{}, 0o600)
 	if err != nil {
 		return zerolog.Logger{}, err
 	}

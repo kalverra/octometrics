@@ -63,7 +63,7 @@ func (s *State) saveLocked() error {
 	if s.dataDir == "" {
 		return nil
 	}
-	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
+	if err := os.MkdirAll(s.dataDir, 0o700); err != nil {
 		return fmt.Errorf("mkdir data dir: %w", err)
 	}
 
@@ -81,7 +81,7 @@ func (s *State) saveLocked() error {
 	}
 
 	targetFile := filepath.Join(s.dataDir, "ui_state.json")
-	return writeFileAtomic(targetFile, data, 0600)
+	return writeFileAtomic(targetFile, data, 0o600)
 }
 
 func writeFileAtomic(targetFile string, data []byte, perm os.FileMode) error {
