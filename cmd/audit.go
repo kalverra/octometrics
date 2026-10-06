@@ -92,7 +92,8 @@ actionable runner rightsizing and cost optimization recommendations.`,
 
 func runAuditFlow(cmd *cobra.Command, target string) error {
 	ctx := context.Background()
-	if cmd != nil {
+	// cmd.Context() is nil unless a context was set via ExecuteContext
+	if cmd != nil && cmd.Context() != nil {
 		ctx = cmd.Context()
 	}
 

@@ -130,6 +130,9 @@ func ListWorkflowRuns(
 	return listWorkflowRunsFromCache(log, owner, repo, workflowTarget, branch, status, limit, dataDir)
 }
 
+// workflowRunsMaxPerPage matches GitHub's per-request page size cap.
+const workflowRunsMaxPerPage = 100
+
 func listWorkflowRunsFromAPI(
 	ctx context.Context,
 	client *GitHubClient,
@@ -139,8 +142,9 @@ func listWorkflowRunsFromAPI(
 	if client == nil || client.Rest == nil {
 		return nil
 	}
+	perPage := min(limit, workflowRunsMaxPerPage)
 	opts := &github.ListWorkflowRunsOptions{
-		PerPage: limit,
+		PerPage: perPage,
 	}
 	if branch != "" {
 		opts.Branch = branch
@@ -149,34 +153,46 @@ func listWorkflowRunsFromAPI(
 		opts.Status = status
 	}
 
-	cleanTarget := filepath.Base(workflowTarget)
-	var runs []*github.WorkflowRun
-	if wfID, err := strconv.ParseInt(cleanTarget, 10, 64); err == nil && wfID > 0 {
-		res, _, apiErr := client.Rest.Actions.ListWorkflowRunsByID(ctx, owner, repo, wfID, opts)
-		if apiErr == nil && res != nil {
-			runs = res.WorkflowRuns
+	fetchPage := func(page int) []*github.WorkflowRun {
+		opts.Page = page
+		cleanTarget := filepath.Base(workflowTarget)
+		if wfID, err := strconv.ParseInt(cleanTarget, 10, 64); err == nil && wfID > 0 {
+			res, _, apiErr := client.Rest.Actions.ListWorkflowRunsByID(ctx, owner, repo, wfID, opts)
+			if apiErr == nil && res != nil {
+				return res.WorkflowRuns
+			}
+			return nil
 		}
-	} else {
 		res, _, apiErr := client.Rest.Actions.ListWorkflowRunsByFileName(ctx, owner, repo, cleanTarget, opts)
 		if apiErr == nil && res != nil {
-			runs = res.WorkflowRuns
-		} else if workflowTarget != cleanTarget {
+			return res.WorkflowRuns
+		}
+		if workflowTarget != cleanTarget {
 			res2, _, apiErr2 := client.Rest.Actions.ListWorkflowRunsByFileName(ctx, owner, repo, workflowTarget, opts)
 			if apiErr2 == nil && res2 != nil {
-				runs = res2.WorkflowRuns
+				return res2.WorkflowRuns
 			}
 		}
-	}
-
-	if len(runs) == 0 {
 		return nil
 	}
 
 	var runIDs []int64
-	for _, r := range runs {
-		if r != nil && r.GetID() > 0 {
-			runIDs = append(runIDs, r.GetID())
+	for page := 1; len(runIDs) < limit; page++ {
+		pageRuns := fetchPage(page)
+		if len(pageRuns) == 0 {
+			break
 		}
+		for _, r := range pageRuns {
+			if r != nil && r.GetID() > 0 {
+				runIDs = append(runIDs, r.GetID())
+			}
+		}
+		if len(pageRuns) < perPage {
+			break
+		}
+	}
+	if len(runIDs) == 0 {
+		return nil
 	}
 	return runIDs
 }
@@ -279,6 +295,7 @@ func listWorkflowRunsFromCache(
 }
 
 // EnsureJobMetrics ensures JobData has RunsOnMetrics or Analysis populated.
+// Best-effort: log read or fetch failures are logged and skipped.
 func EnsureJobMetrics(
 	ctx context.Context,
 	log zerolog.Logger,
@@ -287,12 +304,12 @@ func EnsureJobMetrics(
 	job *JobData,
 	runID int64,
 	dataDir string,
-) error {
+) {
 	if job == nil {
-		return nil
+		return
 	}
 	if job.RunsOnMetrics != nil || job.Analysis != nil {
-		return nil
+		return
 	}
 
 	jobLogPath := filepath.Join(
@@ -310,23 +327,22 @@ func EnsureJobMetrics(
 	if cacheFileExists(jobLogPath) {
 		//nolint:gosec // job log path is safe
 		content, err := os.ReadFile(jobLogPath)
-		if err == nil {
-			if metrics, ok := ParseRunsOnJobMetrics(string(content)); ok {
-				job.RunsOnMetrics = metrics
-				return nil
-			}
+		if err != nil {
+			log.Debug().Err(err).Int64("job_id", job.GetID()).Msg("failed to read cached job log for metrics")
+		} else if metrics, ok := ParseRunsOnJobMetrics(string(content)); ok {
+			job.RunsOnMetrics = metrics
+			return
 		}
 	}
 
 	if client != nil {
 		cleanedLogs, err := GetCleanJobLogs(ctx, log, client, owner, repo, job.GetID(), dataDir)
-		if err == nil && cleanedLogs != "" {
+		if err != nil {
+			log.Debug().Err(err).Int64("job_id", job.GetID()).Msg("failed to fetch job logs for metrics")
+		} else if cleanedLogs != "" {
 			if metrics, ok := ParseRunsOnJobMetrics(cleanedLogs); ok {
 				job.RunsOnMetrics = metrics
-				return nil
 			}
 		}
 	}
-
-	return nil
 }

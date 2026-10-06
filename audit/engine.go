@@ -10,10 +10,15 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/kalverra/octometrics/gather"
 	"github.com/kalverra/octometrics/monitor"
 )
+
+// auditGatherConcurrency bounds how many workflow runs are gathered in parallel.
+// Each gather already fetches job logs concurrently, so keep this modest.
+const auditGatherConcurrency = 4
 
 // RunAudit performs an audit on a workflow across recent runs.
 func RunAudit(
@@ -45,34 +50,47 @@ func RunAudit(
 		return nil, fmt.Errorf("no runs found for workflow %q", opts.Workflow)
 	}
 
-	// 2. Gather run data for each run ID
+	// 2. Gather run data for each run ID (bounded concurrency, order preserved)
 	gatherOpts := []gather.Option{
 		gather.CustomDataFolder(opts.DataDir),
 		gather.WithCost(),
 		gather.WithDownloadLogs(true),
 	}
 
-	var runs []*gather.WorkflowRunData
-	for _, id := range runIDs {
-		runData, _, gatherErr := gather.WorkflowRun(
-			ctx,
-			log,
-			client,
-			opts.Owner,
-			opts.Repo,
-			id,
-			gatherOpts...,
-		)
-		if gatherErr != nil {
-			log.Debug().Err(gatherErr).Int64("run_id", id).Msg("failed to gather workflow run, skipping")
-			continue
-		}
-		if runData != nil {
-			// Ensure metrics are populated for every job
-			for _, job := range runData.Jobs {
-				_ = gather.EnsureJobMetrics(ctx, log, client, opts.Owner, opts.Repo, job, id, opts.DataDir)
+	results := make([]*gather.WorkflowRunData, len(runIDs))
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.SetLimit(auditGatherConcurrency)
+	for i, id := range runIDs {
+		eg.Go(func() error {
+			runData, _, gatherErr := gather.WorkflowRun(
+				egCtx,
+				log,
+				client,
+				opts.Owner,
+				opts.Repo,
+				id,
+				gatherOpts...,
+			)
+			if gatherErr != nil {
+				log.Debug().Err(gatherErr).Int64("run_id", id).Msg("failed to gather workflow run, skipping")
+				return nil
 			}
-			runs = append(runs, runData)
+			if runData != nil {
+				// Ensure metrics are populated for every job
+				for _, job := range runData.Jobs {
+					gather.EnsureJobMetrics(egCtx, log, client, opts.Owner, opts.Repo, job, id, opts.DataDir)
+				}
+				results[i] = runData
+			}
+			return nil
+		})
+	}
+	_ = eg.Wait()
+
+	var runs []*gather.WorkflowRunData
+	for _, r := range results {
+		if r != nil {
+			runs = append(runs, r)
 		}
 	}
 
@@ -510,8 +528,10 @@ func generateRecommendations(jobs []JobAudit, overall RunSummaryStats, opts Opti
 	var recs []Recommendation
 	for i := range jobs {
 		job := &jobs[i]
+		hasRightsizing := false
 		if rec := evaluateJobRightsizing(job, opts); rec != nil {
 			recs = append(recs, *rec)
+			hasRightsizing = true
 		}
 		if rec := evaluateJobOOM(job); rec != nil {
 			recs = append(recs, *rec)
@@ -519,8 +539,12 @@ func generateRecommendations(jobs []JobAudit, overall RunSummaryStats, opts Opti
 		if rec := evaluateJobSpot(job); rec != nil {
 			recs = append(recs, *rec)
 		}
-		if rec := evaluateJobGraviton(job); rec != nil {
-			recs = append(recs, *rec)
+		// Skip the Graviton suggestion when a rightsizing downgrade is already recommended:
+		// the downgrade changes the instance first, so re-audit afterwards for a cleaner signal.
+		if !hasRightsizing {
+			if rec := evaluateJobGraviton(job); rec != nil {
+				recs = append(recs, *rec)
+			}
 		}
 		if rec := evaluateJobBottleneck(job, overall); rec != nil {
 			recs = append(recs, *rec)

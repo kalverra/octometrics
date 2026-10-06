@@ -37,6 +37,9 @@ type RunsOnJobMetrics struct {
 }
 
 // RunsOnCostSummary holds parsed cost data from runs-on's "Execution Cost Summary" step.
+// JSON tags were added after these fields were first cached untagged, so workflow run
+// cache files written before the tags exist will not unmarshal these fields; they are
+// re-populated on the next gather.
 type RunsOnCostSummary struct {
 	InstanceType         string            `json:"instance_type,omitempty"`
 	InstanceLifecycle    string            `json:"instance_lifecycle,omitempty"`

@@ -228,14 +228,8 @@ func FormatTable(audit *WorkflowAudit) string {
 			ramPct = "-"
 		}
 
-		name := j.Name
-		if len(name) > 24 {
-			name = name[:21] + "..."
-		}
-		runner := j.Runner
-		if len(runner) > 16 {
-			runner = runner[:13] + "..."
-		}
+		name := truncateStr(j.Name, 24)
+		runner := truncateStr(j.Runner, 16)
 
 		fmt.Fprintf(
 			&sb,
@@ -253,10 +247,7 @@ func FormatTable(audit *WorkflowAudit) string {
 	)
 	sb.WriteString(strings.Repeat("-", 80) + "\n")
 	for _, j := range audit.Jobs {
-		name := j.Name
-		if len(name) > 24 {
-			name = name[:21] + "..."
-		}
+		name := truncateStr(j.Name, 24)
 		fmt.Fprintf(
 			&sb,
 			"%-24s | %6d | %14s | %14s | $%13.4f\n",
@@ -270,6 +261,16 @@ func FormatTable(audit *WorkflowAudit) string {
 	sb.WriteString("\n")
 
 	return sb.String()
+}
+
+// truncateStr shortens s to max runes, appending "..." when truncated, so
+// multi-byte characters are never split mid-rune.
+func truncateStr(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes-3]) + "..."
 }
 
 const htmlTemplateStr = `<!DOCTYPE html>

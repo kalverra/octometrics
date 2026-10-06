@@ -70,8 +70,9 @@ func ExtractRunnerSpecFromContent(content []byte) string {
 	return "2cpu-linux-x64"
 }
 
-// RateForRunnerSpec returns estimated rate in dollars per minute for a runner spec,
-// calibrated against empirical Cloudzero AWS spot billing.
+// RateForRunnerSpec returns estimated rate in dollars per minute for a runner spec.
+// Rates are approximations calibrated against empirical Cloudzero AWS spot billing;
+// treat them as rough estimates, not exact pricing.
 func RateForRunnerSpec(spec string) float64 {
 	switch {
 	case strings.HasPrefix(spec, "64cpu"):
@@ -202,6 +203,8 @@ func ResolveWorkflowSpecs(
 	return results
 }
 
+// fallbackSpecForWorkflow guesses a runner spec from workflow path naming conventions
+// when neither the local cache nor the GitHub API can resolve it.
 func fallbackSpecForWorkflow(_, wfPath string) string {
 	lowerPath := strings.ToLower(wfPath)
 	switch {

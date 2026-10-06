@@ -202,8 +202,7 @@ func TestEnsureJobMetrics(t *testing.T) {
 	}
 
 	log, _ := testhelpers.Setup(t)
-	err := EnsureJobMetrics(t.Context(), log, nil, owner, repo, job, runID, dataDir)
-	require.NoError(t, err)
+	EnsureJobMetrics(t.Context(), log, nil, owner, repo, job, runID, dataDir)
 	require.NotNil(t, job.RunsOnMetrics)
 	assert.InDelta(t, 3.20, job.RunsOnMetrics.CPULoad1m.Avg, 0.001)
 	assert.InDelta(t, 25.40, job.RunsOnMetrics.MemoryUtilPct.Max, 0.001)
