@@ -16,10 +16,19 @@ func NewMockProgressReporter(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockProgressReporter {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &MockProgressReporter{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -50,7 +59,7 @@ type MockProgressReporter_Start_Call struct {
 
 // Start is a helper method to define mock.On call
 //   - msg string
-func (_e *MockProgressReporter_Expecter) Start(msg interface{}) *MockProgressReporter_Start_Call {
+func (_e *MockProgressReporter_Expecter) Start(msg any) *MockProgressReporter_Start_Call {
 	return &MockProgressReporter_Start_Call{Call: _e.mock.On("Start", msg)}
 }
 
@@ -90,7 +99,7 @@ type MockProgressReporter_Stop_Call struct {
 
 // Stop is a helper method to define mock.On call
 //   - msg string
-func (_e *MockProgressReporter_Expecter) Stop(msg interface{}) *MockProgressReporter_Stop_Call {
+func (_e *MockProgressReporter_Expecter) Stop(msg any) *MockProgressReporter_Stop_Call {
 	return &MockProgressReporter_Stop_Call{Call: _e.mock.On("Stop", msg)}
 }
 
@@ -131,7 +140,7 @@ type MockProgressReporter_Update_Call struct {
 // Update is a helper method to define mock.On call
 //   - msg string
 //   - elapsed time.Duration
-func (_e *MockProgressReporter_Expecter) Update(msg interface{}, elapsed interface{}) *MockProgressReporter_Update_Call {
+func (_e *MockProgressReporter_Expecter) Update(msg any, elapsed any) *MockProgressReporter_Update_Call {
 	return &MockProgressReporter_Update_Call{Call: _e.mock.On("Update", msg, elapsed)}
 }
 

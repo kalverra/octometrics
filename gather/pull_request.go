@@ -2,12 +2,14 @@ package gather
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -134,7 +136,7 @@ func PullRequest(
 			Logger()
 
 		if client == nil {
-			return nil, fmt.Errorf("github client is nil")
+			return nil, errors.New("github client is nil")
 		}
 
 		options.Reporter.Start(fmt.Sprintf("Collecting data (pull request #%d)", pullRequestNumber))
@@ -196,7 +198,7 @@ func PullRequest(
 
 		_ = AppendManifestRecord(options.DataDir, owner, repo, ManifestRecord{
 			Type:      "pull_request",
-			ID:        fmt.Sprint(pullRequestNumber),
+			ID:        strconv.Itoa(pullRequestNumber),
 			Name:      pullRequestData.GetTitle(),
 			State:     pullRequestData.GetState(),
 			Actor:     pullRequestData.GetUser().GetLogin(),

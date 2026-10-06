@@ -25,7 +25,6 @@ import (
 
 // GitHub API constants for authentication and timeouts.
 const (
-	//nolint:gosec // This is a mock token for testing purposes
 	MockGitHubToken = "mock_github_token"
 	timeoutDur      = 30 * time.Second
 )
@@ -268,7 +267,7 @@ func Range(
 	opts ...Option,
 ) (int, error) {
 	if client == nil {
-		return 0, fmt.Errorf("github client is nil")
+		return 0, errors.New("github client is nil")
 	}
 
 	log.Info().
@@ -290,9 +289,7 @@ func Range(
 	listOpts := &github.ListWorkflowRunsOptions{
 		Created: createdFilter,
 		Event:   event,
-		ListOptions: github.ListOptions{
-			PerPage: 100,
-		},
+		PerPage: 100,
 	}
 
 	ghCtxInst, cancel := ghCtx(ctx)
@@ -405,19 +402,19 @@ func (lt *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 
 	// Process rate limit headers
-	callsRemainingStr := resp.Header.Get("X-RateLimit-Remaining")
+	callsRemainingStr := resp.Header.Get("X-Ratelimit-Remaining")
 	if callsRemainingStr == "" {
 		callsRemainingStr = "0"
 	}
-	callLimitStr := resp.Header.Get("X-RateLimit-Limit")
+	callLimitStr := resp.Header.Get("X-Ratelimit-Limit")
 	if callLimitStr == "" {
 		callLimitStr = "0"
 	}
-	callsUsedStr := resp.Header.Get("X-RateLimit-Used")
+	callsUsedStr := resp.Header.Get("X-Ratelimit-Used")
 	if callsUsedStr == "" {
 		callsUsedStr = "0"
 	}
-	limitResetStr := resp.Header.Get("X-RateLimit-Reset")
+	limitResetStr := resp.Header.Get("X-Ratelimit-Reset")
 	if limitResetStr == "" {
 		limitResetStr = "0"
 	}

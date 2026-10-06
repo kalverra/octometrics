@@ -116,7 +116,8 @@ func Load(opts ...LoadOption) (*Config, error) {
 	v.AutomaticEnv()
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok { // If the config file is not found, we don't need to return an error
+		// If the config file is not found, we don't need to return an error
+		if _, ok := errors.AsType[viper.ConfigFileNotFoundError](err); !ok {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 	}

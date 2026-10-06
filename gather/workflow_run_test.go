@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/go-github/v89/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -168,7 +170,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 	var (
 		mockGitHubDownloadPath = "/mock/artifact/download"
 		mockGitHubDownloadURL  = "https://api.github.com" + mockGitHubDownloadPath
-		mockZipFile            = filepath.Join(testDataDir, fmt.Sprintf("%s.zip", monitor.DataFile))
+		mockZipFile            = filepath.Join(testDataDir, monitor.DataFile+".zip")
 	)
 	require.FileExists(t, mockZipFile, "test zip file should exist")
 	require.NotEmpty(t, mockZipFile, "test zip file should not be empty")
@@ -526,7 +528,7 @@ var (
 				},
 			},
 			"UBUNTU_16_CORE": &github.WorkflowRunBill{
-				TotalMS: new(int64(endTime.Sub(startTime).Milliseconds() * 2)),
+				TotalMS: new(endTime.Sub(startTime).Milliseconds() * 2),
 				Jobs:    new(2),
 				JobRuns: []*github.WorkflowRunJobRun{
 					{
@@ -540,7 +542,7 @@ var (
 				},
 			},
 			"UBUNTU_8_CORE_ARM": &github.WorkflowRunBill{
-				TotalMS: new(int64(endTime.Sub(startTime).Milliseconds())),
+				TotalMS: new(endTime.Sub(startTime).Milliseconds()),
 				Jobs:    new(1),
 				JobRuns: []*github.WorkflowRunJobRun{
 					{
@@ -634,27 +636,27 @@ func TestSafeMonitorJSONLZipEntry(t *testing.T) {
 
 	require.True(
 		t,
-		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "octometrics.monitor.log.jsonl"}}),
+		safeMonitorJSONLZipEntry(&zip.File{Name: "octometrics.monitor.log.jsonl"}),
 	)
 	require.True(
 		t,
-		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "job/octometrics.monitor.log.jsonl"}}),
+		safeMonitorJSONLZipEntry(&zip.File{Name: "job/octometrics.monitor.log.jsonl"}),
 	)
 	require.False(
 		t,
 		safeMonitorJSONLZipEntry(
-			&zip.File{FileHeader: zip.FileHeader{Name: "../../../tmp/octometrics.monitor.log.jsonl"}},
+			&zip.File{Name: "../../../tmp/octometrics.monitor.log.jsonl"},
 		),
 	)
 	require.False(
 		t,
-		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "/abs/octometrics.monitor.log.jsonl"}}),
+		safeMonitorJSONLZipEntry(&zip.File{Name: "/abs/octometrics.monitor.log.jsonl"}),
 	)
 	require.False(
 		t,
-		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: `win\octometrics.monitor.log.jsonl`}}),
+		safeMonitorJSONLZipEntry(&zip.File{Name: `win\octometrics.monitor.log.jsonl`}),
 	)
-	require.False(t, safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "wrong.log.jsonl"}}))
+	require.False(t, safeMonitorJSONLZipEntry(&zip.File{Name: "wrong.log.jsonl"}))
 }
 
 func TestProcessJobs_RunsOnAlwaysFetchLogs(t *testing.T) {
@@ -727,6 +729,69 @@ func TestProcessJobs_RunsOnAlwaysFetchLogs(t *testing.T) {
 	assert.Equal(t, int64(0), data.Jobs[0].Cost)
 	assert.Positive(t, data.Jobs[1].Cost)
 	assert.True(t, data.Jobs[1].CostEstimate, "cost should be estimate when log fetch fails to return exact cost")
+}
+
+func TestCalculateJobCostAndRunner(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	runsOnJob := func() *github.WorkflowJob {
+		return &github.WorkflowJob{
+			ID:          new(int64(1)),
+			Labels:      []string{"runs-on=123/cpu=16/ram=64/family=m8i/spot=false/image=ubuntu24-full-x64"},
+			Conclusion:  new("success"),
+			StartedAt:   new(github.Timestamp{Time: now}),
+			CompletedAt: new(github.Timestamp{Time: now.Add(22 * time.Minute)}),
+		}
+	}
+
+	tests := []struct {
+		name         string
+		summary      *RunsOnCostSummary
+		wantCost     int64
+		wantEstimate bool
+		wantRunner   string
+	}{
+		{
+			name:         "metrics-only summary falls back to label estimate",
+			summary:      &RunsOnCostSummary{Metrics: &RunsOnJobMetrics{}},
+			wantCost:     946, // 22 min * 43 tenths-of-cent/min (16cpu-linux-x64)
+			wantEstimate: true,
+			wantRunner:   "runs-on:m8i (on-demand)",
+		},
+		{
+			name:         "cost summary provides exact cost",
+			summary:      &RunsOnCostSummary{InstanceType: "m8i.4xlarge", InstanceLifecycle: "on-demand", CostUSD: 0.5},
+			wantCost:     500,
+			wantEstimate: false,
+			wantRunner:   "runs-on:m8i.4xlarge (on-demand)",
+		},
+		{
+			name:         "exact zero cost is not overridden by label estimate",
+			summary:      &RunsOnCostSummary{InstanceType: "m8i.4xlarge", CostUSD: 0},
+			wantCost:     0,
+			wantEstimate: false,
+			wantRunner:   "runs-on:m8i.4xlarge",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			job := runsOnJob()
+			var logResults sync.Map
+			if tt.summary != nil {
+				logResults.Store(job.GetID(), tt.summary)
+			}
+
+			runner, cost, costEstimate := calculateJobCostAndRunner(zerolog.Nop(), job, true, true, nil, &logResults)
+
+			assert.Equal(t, tt.wantCost, cost)
+			assert.Equal(t, tt.wantEstimate, costEstimate)
+			assert.Equal(t, tt.wantRunner, runner)
+		})
+	}
 }
 
 func TestWorkflowRun_ReadCacheAndSingleflight(t *testing.T) {
@@ -808,18 +873,15 @@ func TestBuildJobBillingIndex_KnownRunners(t *testing.T) {
 
 	index := buildJobBillingIndex(usage)
 
-	runner, cost, err := calculateJobRunBilling(1, index)
-	require.NoError(t, err)
+	runner, cost := calculateJobRunBilling(1, index)
 	require.Equal(t, "UBUNTU", runner)
 	require.Equal(t, int64(8), cost, "ubuntu cost should be 0.8 cents per minute")
 
-	runner, cost, err = calculateJobRunBilling(2, index)
-	require.NoError(t, err)
+	runner, cost = calculateJobRunBilling(2, index)
 	require.Equal(t, "MACOS", runner)
 	require.Positive(t, cost, "macOS job should have a non-zero cost")
 
-	runner, cost, err = calculateJobRunBilling(3, index)
-	require.NoError(t, err)
+	runner, cost = calculateJobRunBilling(3, index)
 	require.Equal(t, "WINDOWS", runner)
 	require.Positive(t, cost, "Windows job should have a non-zero cost")
 }

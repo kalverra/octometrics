@@ -210,7 +210,7 @@ func CompareJobRuns(
 	}
 	var leftObs *Observation
 	for _, j := range leftJobs {
-		if j.ID == fmt.Sprint(leftJobID) {
+		if j.ID == strconv.FormatInt(leftJobID, 10) {
 			leftObs = j
 			break
 		}
@@ -225,7 +225,7 @@ func CompareJobRuns(
 	}
 	var rightObs *Observation
 	for _, j := range rightJobs {
-		if j.ID == fmt.Sprint(rightJobID) {
+		if j.ID == strconv.FormatInt(rightJobID, 10) {
 			rightObs = j
 			break
 		}

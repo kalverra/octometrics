@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -55,6 +56,7 @@ func TestRootCmdURLArgs(t *testing.T) {
 	assert.Equal(t, "octometrics [url]", rootCmd.Use)
 
 	t.Run("invalid URL returns error", func(t *testing.T) {
+		t.Parallel()
 		err := rootCmd.RunE(rootCmd, []string{"https://invalid-domain.com/owner/repo/pull/1"})
 		assert.ErrorContains(t, err, "unsupported GitHub URL host")
 	})
@@ -84,4 +86,28 @@ func TestVsTargetParsing(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), runID)
 	assert.Equal(t, "64bb0b9579d398aa3afcc332f0e8dc729679ddf8", sha)
+}
+
+func TestRootCmdHiddenFlags(t *testing.T) {
+	t.Parallel()
+
+	cpuFlag := rootCmd.PersistentFlags().Lookup("cpu-profile")
+	require.NotNil(t, cpuFlag)
+	assert.True(t, cpuFlag.Hidden, "--cpu-profile should be hidden")
+
+	rebuildFlag := rootCmd.Flags().Lookup("rebuild-manifest")
+	require.NotNil(t, rebuildFlag)
+	assert.True(t, rebuildFlag.Hidden, "--rebuild-manifest should be hidden")
+}
+
+//nolint:paralleltest // modifies rootCmd output buffer and global config
+func TestRootCmdNoArgsShowsHelp(t *testing.T) {
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	defer rootCmd.SetOut(nil)
+
+	err := rootCmd.RunE(rootCmd, []string{})
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Profile, analyze, and visualize GitHub Actions workflows")
+	assert.Contains(t, buf.String(), "octometrics skill")
 }

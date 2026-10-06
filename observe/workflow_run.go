@@ -2,8 +2,10 @@ package observe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -38,7 +40,7 @@ func WorkflowRun(
 
 func workflowRunObservation(workflowRun *gather.WorkflowRunData) (*Observation, error) {
 	if workflowRun == nil {
-		return nil, fmt.Errorf("workflow run data is nil")
+		return nil, errors.New("workflow run data is nil")
 	}
 
 	owner := workflowRun.GetRepository().GetOwner().GetLogin()
@@ -51,7 +53,7 @@ func workflowRunObservation(workflowRun *gather.WorkflowRunData) (*Observation, 
 	}
 
 	observationData := &Observation{
-		ID:           fmt.Sprint(workflowRunID),
+		ID:           strconv.FormatInt(workflowRunID, 10),
 		Name:         workflowRun.GetName(),
 		GitHubLink:   workflowRun.GetHTMLURL(),
 		Owner:        owner,
@@ -138,7 +140,7 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*Timelin
 
 		newTask := TimelineItem{
 			Name:          job.GetName(),
-			ID:            fmt.Sprint(job.GetID()),
+			ID:            strconv.FormatInt(job.GetID(), 10),
 			JobID:         job.GetID(),
 			StartTime:     startedAt,
 			Conclusion:    conclusionToGanttStatus(conclusion),
@@ -153,9 +155,9 @@ func buildWorkflowRunTimelineData(workflowRun *gather.WorkflowRunData) (*Timelin
 			LogPath:       job.GetLogPath(),
 		}
 		if inProgress {
-			newTask.Name = fmt.Sprintf("%s (in progress)", job.GetName())
+			newTask.Name = job.GetName() + " (in progress)"
 		} else if job.GetConclusion() == "cancelled" {
-			newTask.Name = fmt.Sprintf("%s (cancelled)", job.GetName())
+			newTask.Name = job.GetName() + " (cancelled)"
 		}
 		if job.GetRunAttempt() > 1 {
 			newTask.Name = fmt.Sprintf("%s (attempt %d)", job.GetName(), job.GetRunAttempt())
@@ -197,9 +199,9 @@ func conclusionToGanttStatus(conclusion string) string {
 // jobRunLink returns the link to a specific job run's rendering.
 // You need to add on the extension (.html, .md) to this path.
 func jobRunLink(owner, repo string, jobRunID int64) string {
-	return path.Join("/", owner, repo, jobRunOutputDir, fmt.Sprint(jobRunID))
+	return path.Join("/", owner, repo, jobRunOutputDir, strconv.FormatInt(jobRunID, 10))
 }
 
 func workflowRunLink(owner, repo string, workflowRunID int64) string {
-	return path.Join("/", owner, repo, gather.WorkflowRunsDataDir, fmt.Sprint(workflowRunID))
+	return path.Join("/", owner, repo, gather.WorkflowRunsDataDir, strconv.FormatInt(workflowRunID, 10))
 }

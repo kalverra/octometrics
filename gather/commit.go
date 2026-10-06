@@ -4,6 +4,7 @@ package gather
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -248,7 +249,7 @@ func Commit(
 			Repo:  repo,
 		}
 		targetDir  = filepath.Join(options.DataDir, owner, repo, CommitsDataDir)
-		targetFile = filepath.Join(targetDir, fmt.Sprintf("%s.json", sha))
+		targetFile = filepath.Join(targetDir, sha+".json")
 	)
 
 	if options.pullRequestData != nil {
@@ -312,7 +313,7 @@ func Commit(
 			commit = options.repositoryCommit
 		} else {
 			if client == nil {
-				return nil, fmt.Errorf("github client is nil")
+				return nil, errors.New("github client is nil")
 			}
 			options.Reporter.Start(fmt.Sprintf("Collecting data (commit %s)", sha[:min(7, len(sha))]))
 			ctx, cancel := ghCtx(parentCtx)
@@ -417,10 +418,8 @@ func checkRunsForCommit(
 	var (
 		allCheckRuns []*github.CheckRun
 		listOpts     = &github.ListCheckRunsOptions{
-			Filter: new("all"),
-			ListOptions: github.ListOptions{
-				PerPage: 100,
-			},
+			Filter:  new("all"),
+			PerPage: 100,
 		}
 	)
 

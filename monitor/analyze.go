@@ -114,7 +114,7 @@ func Analyze(log zerolog.Logger, dataFile string) (*Analysis, error) {
 	for {
 		var entry *monitorEntry
 		err := decoder.Decode(&entry)
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

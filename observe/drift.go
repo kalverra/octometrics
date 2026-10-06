@@ -12,8 +12,8 @@ func CheckWorkflowDrift(repoDir, baseSHA string) []string {
 	if baseSHA == "" {
 		return nil
 	}
-	//nolint:gosec // execution of git command for SHA verification
-	verifyCmd := exec.Command("git", "cat-file", "-e", fmt.Sprintf("%s^{commit}", baseSHA))
+	//nolint:gosec,noctx // execution of git command for SHA verification
+	verifyCmd := exec.Command("git", "cat-file", "-e", baseSHA+"^{commit}")
 	if repoDir != "" {
 		verifyCmd.Dir = repoDir
 	}
@@ -26,13 +26,13 @@ func CheckWorkflowDrift(repoDir, baseSHA string) []string {
 		}
 	}
 
-	//nolint:gosec // execution of git command for workflow drift detection
+	//nolint:gosec,noctx // execution of git command for workflow drift detection
 	cmd := exec.Command(
 		"git",
 		"log",
 		"--name-only",
 		"--oneline",
-		fmt.Sprintf("%s..HEAD", baseSHA),
+		baseSHA+"..HEAD",
 		"--",
 		".github/workflows/",
 	)

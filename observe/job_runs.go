@@ -2,7 +2,9 @@ package observe
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -37,7 +39,7 @@ func JobRuns(
 
 func jobRunObservations(workflowRun *gather.WorkflowRunData) ([]*Observation, error) {
 	if workflowRun == nil {
-		return nil, fmt.Errorf("workflow run data is nil")
+		return nil, errors.New("workflow run data is nil")
 	}
 
 	owner := workflowRun.GetRepository().GetOwner().GetLogin()
@@ -57,10 +59,7 @@ func jobRunObservations(workflowRun *gather.WorkflowRunData) ([]*Observation, er
 			}
 			jobRunTemplateData.Event = workflowRun.GetEvent()
 			winStart, winEnd, _ := jobMonitoringTimeWindow(job)
-			jobRunMonitoringData, err := monitoring(job.Analysis, winStart, winEnd)
-			if err != nil {
-				return fmt.Errorf("failed to build monitoring data for job '%d': %w", job.GetID(), err)
-			}
+			jobRunMonitoringData := monitoring(job.Analysis, winStart, winEnd)
 
 			jobState := job.GetConclusion()
 			if jobState == "" {
@@ -68,7 +67,7 @@ func jobRunObservations(workflowRun *gather.WorkflowRunData) ([]*Observation, er
 			}
 
 			observationsChan <- &Observation{
-				ID:             fmt.Sprint(job.GetID()),
+				ID:             strconv.FormatInt(job.GetID(), 10),
 				Name:           job.GetName(),
 				GitHubLink:     job.GetHTMLURL(),
 				TimelineData:   []*Timeline{jobRunTemplateData},
@@ -141,9 +140,9 @@ func buildJobRunTimelineData(job *gather.JobData) (*Timeline, error) {
 			Duration:   duration,
 		}
 		if inProgress {
-			newItem.Name = fmt.Sprintf("%s (in progress)", step.GetName())
+			newItem.Name = step.GetName() + " (in progress)"
 		} else if step.GetConclusion() == "cancelled" {
-			newItem.Name = fmt.Sprintf("%s (cancelled)", step.GetName())
+			newItem.Name = step.GetName() + " (cancelled)"
 		}
 		items = append(items, newItem)
 	}

@@ -7,9 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+//nolint:paralleltest // TestSetup verifies sequential cleanup after subtest finishes
 func TestSetup(t *testing.T) {
-	t.Parallel()
-
 	var (
 		log     zerolog.Logger
 		testDir string

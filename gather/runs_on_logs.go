@@ -20,24 +20,51 @@ var unauthenticatedHTTPClient = &http.Client{
 	Timeout: 30 * time.Second,
 }
 
+// MinMaxAvg holds min, max, and avg statistics for a resource metric.
+type MinMaxAvg struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+	Avg float64 `json:"avg"`
+}
+
+// RunsOnJobMetrics holds resource metrics extracted from RunsOn's "📊 Job Metrics" log section.
+type RunsOnJobMetrics struct {
+	CPULoad1m      *MinMaxAvg `json:"cpu_load_1m,omitempty"`
+	CPULoad5m      *MinMaxAvg `json:"cpu_load_5m,omitempty"`
+	CPUUtilCorePct *MinMaxAvg `json:"cpu_util_core_pct,omitempty"`
+	MemoryUtilPct  *MinMaxAvg `json:"memory_util_pct,omitempty"`
+	NetworkIOMB    *MinMaxAvg `json:"network_io_mb,omitempty"`
+}
+
 // RunsOnCostSummary holds parsed cost data from runs-on's "Execution Cost Summary" step.
+// JSON tags were added after these fields were first cached untagged, so workflow run
+// cache files written before the tags exist will not unmarshal these fields; they are
+// re-populated on the next gather.
 type RunsOnCostSummary struct {
-	InstanceType         string
-	InstanceLifecycle    string
-	Region               string
-	Platform             string
-	Arch                 string
-	Az                   string
-	ZoneID               string
-	Duration             string
-	CostUSD              float64
-	GitHubEquivalentCost float64
-	Savings              string
+	InstanceType         string            `json:"instance_type,omitempty"`
+	InstanceLifecycle    string            `json:"instance_lifecycle,omitempty"`
+	Region               string            `json:"region,omitempty"`
+	Platform             string            `json:"platform,omitempty"`
+	Arch                 string            `json:"arch,omitempty"`
+	Az                   string            `json:"az,omitempty"`
+	ZoneID               string            `json:"zone_id,omitempty"`
+	Duration             string            `json:"duration,omitempty"`
+	CostUSD              float64           `json:"cost_usd,omitempty"`
+	GitHubEquivalentCost float64           `json:"github_equivalent_cost,omitempty"`
+	Savings              string            `json:"savings,omitempty"`
+	Metrics              *RunsOnJobMetrics `json:"metrics,omitempty"`
 }
 
 // CostInTenthsOfCent converts CostUSD to tenths-of-cent (matching existing convention).
 func (s *RunsOnCostSummary) CostInTenthsOfCent() int64 {
 	return int64(math.Round(s.CostUSD * 1000))
+}
+
+// HasCostData reports whether the summary contains a parsed Execution Cost Summary
+// table, as opposed to only Job Metrics with no cost fields. Metrics-only summaries
+// must not be treated as cost results: callers fall back to a label-based estimate.
+func (s *RunsOnCostSummary) HasCostData() bool {
+	return s != nil && (s.InstanceType != "" || s.CostUSD > 0 || s.GitHubEquivalentCost > 0)
 }
 
 // costSummaryMarker is the marker that runs-on uses in job logs.
@@ -81,7 +108,14 @@ func GetCleanJobLogs(
 
 	wfID, err := FindWorkflowRunIDForJob(dataDir, owner, repo, jobID)
 	if err == nil {
-		jobLogPath := filepath.Join(dataDir, owner, repo, "logs", fmt.Sprintf("%d", wfID), fmt.Sprintf("%d.log", jobID))
+		jobLogPath := filepath.Join(
+			dataDir,
+			owner,
+			repo,
+			"logs",
+			strconv.FormatInt(wfID, 10),
+			fmt.Sprintf("%d.log", jobID),
+		)
 		if cacheFileExists(jobLogPath) {
 			//nolint:gosec // job log path is safely constructed inside dataDir
 			data, readErr := os.ReadFile(jobLogPath)
@@ -96,6 +130,7 @@ func GetCleanJobLogs(
 	targetLogName := fmt.Sprintf("%d.log", jobID)
 	_ = filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
+			//nolint:nilerr // continue walking on access error
 			return nil
 		}
 		if d.Name() == targetLogName {
@@ -141,7 +176,7 @@ func GetCleanJobLogs(
 				owner,
 				repo,
 				"logs",
-				fmt.Sprintf("%d", wfID),
+				strconv.FormatInt(wfID, 10),
 				fmt.Sprintf("%d.log", jobID),
 			)
 		} else {
@@ -255,6 +290,92 @@ func parseUSDValue(s string) float64 {
 	return f
 }
 
+var (
+	cpuLoad1mChartPattern = regexp.MustCompile(
+		`CPU Load Average \(1m\)\s*\(min:\s*([0-9.-]+),\s*max:\s*([0-9.-]+),\s*avg:\s*([0-9.-]+)\)`,
+	)
+	cpuUtilCoreChartPattern = regexp.MustCompile(
+		`CPU Utilization per Core \(%\)\s*\(min:\s*([0-9.-]+),\s*max:\s*([0-9.-]+),\s*avg:\s*([0-9.-]+)\s*%\)`,
+	)
+	memUtilChartPattern = regexp.MustCompile(
+		`Memory Utilization \(%\)\s*\(min:\s*([0-9.-]+),\s*max:\s*([0-9.-]+),\s*avg:\s*([0-9.-]+)\s*%\)`,
+	)
+	netIOChartPattern = regexp.MustCompile(
+		`Network I/O by Direction \(MB\)\s*\(min:\s*([0-9.-]+),\s*max:\s*([0-9.-]+),\s*avg:\s*([0-9.-]+)\s*MB\)`,
+	)
+
+	cpuLoad1mStatPattern = regexp.MustCompile(
+		`system\.cpu\.load_average\.1m\s+min:\s*([0-9.-]+)\s+max:\s*([0-9.-]+)\s+avg:\s*([0-9.-]+)`,
+	)
+	cpuLoad5mStatPattern = regexp.MustCompile(
+		`system\.cpu\.load_average\.5m\s+min:\s*([0-9.-]+)\s+max:\s*([0-9.-]+)\s+avg:\s*([0-9.-]+)`,
+	)
+	memUtilStatPattern = regexp.MustCompile(
+		`system\.memory\.utilization(?:\s*\(used\))?\s+min:\s*([0-9.-]+)\s+max:\s*([0-9.-]+)\s+avg:\s*([0-9.-]+)`,
+	)
+)
+
+func parseMinMaxAvgMatch(m []string) *MinMaxAvg {
+	if len(m) < 4 {
+		return nil
+	}
+	minVal, _ := strconv.ParseFloat(m[1], 64)
+	maxVal, _ := strconv.ParseFloat(m[2], 64)
+	avgVal, _ := strconv.ParseFloat(m[3], 64)
+	return &MinMaxAvg{
+		Min: minVal,
+		Max: maxVal,
+		Avg: avgVal,
+	}
+}
+
+// ParseRunsOnJobMetrics extracts CPU, memory, and network metrics from RunsOn's "📊 Job Metrics" section.
+func ParseRunsOnJobMetrics(logs string) (*RunsOnJobMetrics, bool) {
+	if !strings.Contains(logs, "Job Metrics") && !strings.Contains(logs, "Summary Statistics:") {
+		return nil, false
+	}
+
+	metrics := &RunsOnJobMetrics{}
+	found := false
+
+	if m := cpuLoad1mStatPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.CPULoad1m = parseMinMaxAvgMatch(m)
+		found = true
+	} else if m := cpuLoad1mChartPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.CPULoad1m = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if m := cpuLoad5mStatPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.CPULoad5m = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if m := cpuUtilCoreChartPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.CPUUtilCorePct = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if m := memUtilStatPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.MemoryUtilPct = parseMinMaxAvgMatch(m)
+		found = true
+	} else if m := memUtilChartPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.MemoryUtilPct = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if m := netIOChartPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.NetworkIOMB = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if !found {
+		return nil, false
+	}
+
+	return metrics, true
+}
+
 // fetchJobLogs downloads the logs for a single workflow job.
 func fetchJobLogs(parentCtx context.Context, client *GitHubClient, owner, repo string, jobID int64) (string, error) {
 	ctx, cancel := ghCtx(parentCtx)
@@ -291,7 +412,7 @@ func fetchJobLogs(parentCtx context.Context, client *GitHubClient, owner, repo s
 
 	logs := string(bodyBytes)
 	if downloadResp.StatusCode == http.StatusPartialContent || downloadResp.StatusCode == http.StatusOK {
-		if strings.Contains(logs, costSummaryMarker) {
+		if strings.Contains(logs, costSummaryMarker) || strings.Contains(logs, "Job Metrics") {
 			return logs, nil
 		}
 	}
@@ -380,6 +501,7 @@ func fetchFullJobLogs(
 
 // fetchRunsOnCostFromLogs fetches job logs and parses the runs-on cost summary.
 // Checks disk cache at data/<owner>/<repo>/runs_on_costs/<jobID>.json first.
+// Returns a summary with cost data, a metrics-only summary, or nil if neither is found.
 func fetchRunsOnCostFromLogs(
 	ctx context.Context,
 	log zerolog.Logger,
@@ -387,32 +509,43 @@ func fetchRunsOnCostFromLogs(
 	owner, repo string,
 	jobID int64,
 	dataDir string,
-) (int64, *RunsOnCostSummary, error) {
+) (*RunsOnCostSummary, error) {
 	cacheFile := filepath.Join(dataDir, owner, repo, "runs_on_costs", fmt.Sprintf("%d.json", jobID))
 
 	if cacheFileExists(cacheFile) {
 		if summary, err := readJSONFile[*RunsOnCostSummary](cacheFile); err == nil && summary != nil {
 			log.Debug().Int64("job_id", jobID).Msg("loaded runs-on cost summary from disk cache")
-			return summary.CostInTenthsOfCent(), summary, nil
+			return summary, nil
 		}
 	}
 
 	logs, err := fetchJobLogs(ctx, client, owner, repo, jobID)
 	if err != nil {
 		log.Debug().Err(err).Int64("job_id", jobID).Msg("failed to fetch job logs for runs-on cost")
-		return 0, nil, err
+		return nil, err
 	}
 
 	summary, ok := ParseRunsOnCostSummary(logs)
-	if !ok || summary == nil {
-		log.Debug().Int64("job_id", jobID).Int("log_size", len(logs)).Msg("no runs-on cost summary found in job logs")
-		return 0, nil, nil
+	metrics, hasMetrics := ParseRunsOnJobMetrics(logs)
+	if hasMetrics {
+		if summary == nil {
+			summary = &RunsOnCostSummary{}
+		}
+		summary.Metrics = metrics
+	}
+
+	if summary == nil || (!ok && !hasMetrics) {
+		log.Debug().
+			Int64("job_id", jobID).
+			Int("log_size", len(logs)).
+			Msg("no runs-on cost summary or metrics found in job logs")
+		return nil, nil
 	}
 
 	_ = ensureDataDir(filepath.Dir(cacheFile), "runs_on_costs")
 	_ = writeJSONFile(cacheFile, summary)
 
-	return summary.CostInTenthsOfCent(), summary, nil
+	return summary, nil
 }
 
 // LogGap represents a delay between consecutive log lines.

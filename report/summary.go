@@ -1,6 +1,7 @@
 package report
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -17,7 +18,7 @@ func buildReport(analysis *monitor.Analysis, steps []*github.TaskStep) string {
 
 	title := "Octometrics Report"
 	if analysis.JobName != "" {
-		title = fmt.Sprintf("Octometrics — %s", analysis.JobName)
+		title = "Octometrics — " + analysis.JobName
 	}
 	fmt.Fprintf(&b, "## %s\n\n", title)
 
@@ -234,7 +235,7 @@ func formatBytes(b uint64) string {
 // writeSummary appends the markdown report to the GITHUB_STEP_SUMMARY file.
 func writeSummary(summaryPath, markdown string) (err error) {
 	if summaryPath == "" {
-		return fmt.Errorf("github_step_summary path is empty")
+		return errors.New("github_step_summary path is empty")
 	}
 
 	//nolint:gosec // GHA controls this path

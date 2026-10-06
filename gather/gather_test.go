@@ -1,7 +1,6 @@
 package gather
 
 import (
-	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -39,7 +38,7 @@ func TestNewGitHubClient(t *testing.T) {
 		mock.WithRequestMatchHandler(
 			mockEndpoint,
 			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Header.Get("Authorization") != fmt.Sprintf("Bearer %s", githubToken) {
+				if r.Header.Get("Authorization") != "Bearer "+githubToken {
 					w.WriteHeader(http.StatusUnauthorized)
 					_, writeBodyErr = w.Write([]byte(`{"message": "authorization token not present"}`))
 					return
@@ -58,8 +57,11 @@ func TestNewGitHubClient(t *testing.T) {
 	rawRestClient := client.Rest.Client()
 	require.NotNil(t, rawRestClient, "rawRestClient should not be nil")
 
-	resp, err := rawRestClient.Get(mockEndpoint.Pattern)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, mockEndpoint.Pattern, nil)
+	require.NoError(t, err, "error creating mock request")
+	resp, err := rawRestClient.Do(req)
 	require.NoError(t, err, "error getting mock endpoint")
+	defer func() { _ = resp.Body.Close() }()
 	bodyBytes, err := io.ReadAll(resp.Body)
 	require.NoError(t, err, "error reading mock endpoint response")
 	require.Equal(t, http.StatusOK, resp.StatusCode, "status code should be 200, got body: %s", string(bodyBytes))

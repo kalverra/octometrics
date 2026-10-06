@@ -17,7 +17,7 @@ func TestCheckWorkflowDrift(t *testing.T) {
 
 	runCmd := func(args ...string) {
 		//nolint:gosec // git commands in unit test
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(t.Context(), "git", args...)
 		cmd.Dir = tmpDir
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
 		out, err := cmd.CombinedOutput()
@@ -37,8 +37,7 @@ func TestCheckWorkflowDrift(t *testing.T) {
 	runCmd("add", ".")
 	runCmd("commit", "--no-gpg-sign", "-m", "Initial commit")
 
-	//nolint:gosec // git rev-parse in unit test
-	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd := exec.CommandContext(t.Context(), "git", "rev-parse", "HEAD")
 	cmd.Dir = tmpDir
 	out, err := cmd.Output()
 	require.NoError(t, err)
@@ -61,7 +60,7 @@ func TestCheckWorkflowDrift_UnresolvableSHA(t *testing.T) {
 
 	runCmd := func(args ...string) {
 		//nolint:gosec // git commands in unit test
-		cmd := exec.Command("git", args...)
+		cmd := exec.CommandContext(t.Context(), "git", args...)
 		cmd.Dir = tmpDir
 		cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
 		out, err := cmd.CombinedOutput()

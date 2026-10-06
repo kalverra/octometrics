@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,9 +84,9 @@ func formatDuration(d time.Duration) string {
 	}
 	d = d.Round(time.Second)
 	h := d / time.Hour
-	d -= h * time.Hour
+	d %= time.Hour
 	m := d / time.Minute
-	d -= m * time.Minute
+	d %= time.Minute
 	s := d / time.Second
 	if h > 0 {
 		return fmt.Sprintf("%dh %dm %ds", h, m, s)
@@ -115,7 +116,7 @@ func buildPRObservation(owner, repo string, pullRequestNumber int, prData *gathe
 	}
 
 	observation := &Observation{
-		ID:           fmt.Sprint(pullRequestNumber),
+		ID:           strconv.Itoa(pullRequestNumber),
 		Name:         fmt.Sprintf("Pull Request #%d", pullRequestNumber),
 		GitHubLink:   prData.GetHTMLURL(),
 		Owner:        owner,

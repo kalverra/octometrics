@@ -242,7 +242,7 @@ func cpuChartDiagramWindowed(analysis *monitor.Analysis, windowStart, axisEnd ti
 		return ""
 	}
 	downsampled := downsample(points, defaultTargetPoints, maxAggregator)
-	return buildXYChartDiagramWindowed("CPU Usage (%)", "Usage %", 0, 100, downsampled, windowStart, axisEnd)
+	return buildXYChartDiagramWindowed("CPU Usage (%)", "Usage %", 100, downsampled, windowStart, axisEnd)
 }
 
 func sortedCPUNums(m map[int][]*monitor.CPUMeasurement) []int {
@@ -476,7 +476,6 @@ func memoryChartDiagramWindowed(analysis *monitor.Analysis, windowStart, axisEnd
 	return buildXYChartDiagramWindowed(
 		fmt.Sprintf("Memory Usage (%s)", unit),
 		unit,
-		0,
 		maxY,
 		downsampled,
 		windowStart,
@@ -560,7 +559,6 @@ func diskChartDiagramWindowed(analysis *monitor.Analysis, windowStart, axisEnd t
 	return buildXYChartDiagramWindowed(
 		fmt.Sprintf("Disk Usage (%s)", unit),
 		unit,
-		0,
 		maxY,
 		downsampled,
 		windowStart,
@@ -641,7 +639,6 @@ func ioChartDiagrams(analysis *monitor.Analysis) []MonitoringChart {
 			charts = append(charts, MonitoringChart{Title: "Network Received", Diagram: d})
 		}
 	}
-
 	return charts
 }
 
@@ -658,6 +655,7 @@ func ioChartDiagramsWindowed(analysis *monitor.Analysis, windowStart, axisEnd ti
 			maxRawRecv = m.BytesRecv
 		}
 	}
+
 	var charts []MonitoringChart
 	if maxRawSent > 0 {
 		sentDiv, sentUnit := byteScale(maxRawSent)
@@ -670,7 +668,6 @@ func ioChartDiagramsWindowed(analysis *monitor.Analysis, windowStart, axisEnd ti
 		d := buildXYChartDiagramWindowed(
 			fmt.Sprintf("Network Sent (%s)", sentUnit),
 			sentUnit,
-			0,
 			maxSent*1.1,
 			dsSent,
 			windowStart,
@@ -691,7 +688,6 @@ func ioChartDiagramsWindowed(analysis *monitor.Analysis, windowStart, axisEnd ti
 		d := buildXYChartDiagramWindowed(
 			fmt.Sprintf("Network Received (%s)", recvUnit),
 			recvUnit,
-			0,
 			maxRecv*1.1,
 			dsRecv,
 			windowStart,
@@ -852,11 +848,11 @@ func buildXYChartDiagram(
 
 func buildXYChartDiagramWindowed(
 	title, yLabel string,
-	yMin, yMax float64,
+	yMax float64,
 	points []timeValue,
 	windowStart, axisEnd time.Time,
 ) string {
-	return buildXYChartDiagram(title, yLabel, yMin, yMax, points, windowStart, axisEnd, true)
+	return buildXYChartDiagram(title, yLabel, 0, yMax, points, windowStart, axisEnd, true)
 }
 
 func interpolateAt(points []timeValue, t time.Time) float64 {
@@ -870,7 +866,7 @@ func interpolateAt(points []timeValue, t time.Time) float64 {
 	if !t.Before(last.Time) {
 		return last.Value
 	}
-	for i := 0; i < len(points)-1; i++ {
+	for i := range len(points) - 1 {
 		a, b := points[i], points[i+1]
 		if !t.Before(a.Time) && !t.After(b.Time) {
 			if b.Time.Equal(a.Time) {

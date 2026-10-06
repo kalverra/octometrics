@@ -229,6 +229,7 @@ func WriteStaticAssets(outputDir string) error {
 	// Clean up legacy index.html files in outputDir
 	_ = filepath.WalkDir(outputDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
+			//nolint:nilerr // ignore walk errors during legacy cleanup
 			return nil
 		}
 		if !d.IsDir() && d.Name() == "index.html" {
@@ -672,11 +673,11 @@ func ServeHTMLWithHandler(
 		browserURL = baseURL + initialPath
 	)
 
+	var lc net.ListenConfig
 	var l net.Listener
 	var err error
 	for i := range 15 {
-		//nolint:gosec // user configurable port
-		l, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+		l, err = lc.Listen(ctx, "tcp", fmt.Sprintf(":%d", port))
 		if err == nil {
 			break
 		}
@@ -692,7 +693,7 @@ func ServeHTMLWithHandler(
 		// Wait a moment for server to start before opening browser
 		go func() {
 			time.Sleep(100 * time.Millisecond)
-			_ = openBrowser(log, browserURL)
+			_ = openBrowser(ctx, log, browserURL)
 		}()
 	}
 
@@ -726,7 +727,7 @@ func ServeHTMLWithHandler(
 	return nil
 }
 
-func openBrowser(log zerolog.Logger, url string) error {
+func openBrowser(ctx context.Context, log zerolog.Logger, url string) error {
 	var cmd string
 	var args []string
 
@@ -746,7 +747,7 @@ func openBrowser(log zerolog.Logger, url string) error {
 
 	args = append(args, url)
 	//nolint:gosec // I don't care
-	if err := exec.Command(cmd, args...).Run(); err != nil {
+	if err := exec.CommandContext(ctx, cmd, args...).Run(); err != nil {
 		log.Error().Err(err).Msg("Failed to open browser")
 		return err
 	}
@@ -877,7 +878,7 @@ func generateAllObserveData(
 		for _, outputType := range outputTypes {
 			for _, obs := range observations {
 				if obs == nil {
-					return fmt.Errorf("found a nil observation, this should never happen")
+					return errors.New("found a nil observation, this should never happen")
 				}
 				targetPath := filepath.Join(
 					outputDirForFormat(outputType),
