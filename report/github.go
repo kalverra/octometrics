@@ -3,6 +3,7 @@ package report
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -27,7 +28,7 @@ type ghaContext struct {
 
 func detectGitHubActions() (*ghaContext, error) {
 	if os.Getenv("GITHUB_ACTIONS") != "true" {
-		return nil, fmt.Errorf("not running in GitHub Actions (GITHUB_ACTIONS != true)")
+		return nil, errors.New("not running in GitHub Actions (GITHUB_ACTIONS != true)")
 	}
 
 	repository := os.Getenv("GITHUB_REPOSITORY")
@@ -83,10 +84,10 @@ func (g *ghaContext) newGitHubClient() (*github.Client, error) {
 // fetchJobSteps retrieves step timing for the current job from the GitHub Actions API.
 func fetchJobSteps(log zerolog.Logger, gha *ghaContext) ([]*github.TaskStep, error) {
 	if gha.Token == "" {
-		return nil, fmt.Errorf("github_token not set, cannot fetch job steps")
+		return nil, errors.New("github_token not set, cannot fetch job steps")
 	}
 	if gha.JobName == "" {
-		return nil, fmt.Errorf("github_job_name not set, cannot match job")
+		return nil, errors.New("github_job_name not set, cannot match job")
 	}
 
 	client, err := gha.newGitHubClient()
@@ -97,8 +98,8 @@ func fetchJobSteps(log zerolog.Logger, gha *ghaContext) ([]*github.TaskStep, err
 	defer cancel()
 
 	opts := &github.ListWorkflowJobsOptions{
-		Filter:      "latest",
-		ListOptions: github.ListOptions{PerPage: 100},
+		Filter:  "latest",
+		PerPage: 100,
 	}
 
 	var allJobNames []string

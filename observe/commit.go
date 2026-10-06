@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -168,7 +169,7 @@ func buildCommitTimelineData(
 
 			newItem := TimelineItem{
 				Name:         workflowRun.GetName(),
-				ID:           fmt.Sprint(workflowRun.GetID()),
+				ID:           strconv.FormatInt(workflowRun.GetID(), 10),
 				StartTime:    workflowRun.GetRunStartedAt().Time,
 				Conclusion:   conclusionToGanttStatus(conclusion),
 				Duration:     duration,
@@ -178,9 +179,9 @@ func buildCommitTimelineData(
 				CostGathered: workflowRun.GetCostGathered(),
 			}
 			if inProgress {
-				newItem.Name = fmt.Sprintf("%s (in progress)", workflowRun.GetName())
+				newItem.Name = workflowRun.GetName() + " (in progress)"
 			} else if workflowRun.GetConclusion() == "cancelled" {
-				newItem.Name = fmt.Sprintf("%s (cancelled)", workflowRun.GetName())
+				newItem.Name = workflowRun.GetName() + " (cancelled)"
 			}
 			items = append(items, newItem)
 		}

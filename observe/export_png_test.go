@@ -98,7 +98,7 @@ func TestHandlerServesExportJS(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, tempDir, tempDir)
 
-	req := httptest.NewRequest("GET", "/export-png.js", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/export-png.js", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 

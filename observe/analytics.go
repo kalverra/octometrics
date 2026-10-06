@@ -112,13 +112,12 @@ func CalculateCriticalPath(jobs []*gather.JobData, def *gather.WorkflowDef) *Cri
 	if len(queues) > 0 {
 		slices.Sort(queues)
 		medianQueue := queues[len(queues)/2]
-		//nolint:staticcheck,revive // zero duration initialization
-		totalRunnerSecs := time.Duration(0)
+		var totalRunnerTime time.Duration
 		for range queues {
-			totalRunnerSecs += medianQueue
+			totalRunnerTime += medianQueue
 		}
 		finding = fmt.Sprintf("Median queue %s × %d jobs ≈ %s runner-time waiting.",
-			medianQueue.Round(time.Second), len(queues), totalRunnerSecs.Round(time.Minute))
+			medianQueue.Round(time.Second), len(queues), totalRunnerTime.Round(time.Minute))
 	}
 
 	return &CriticalPathInfo{

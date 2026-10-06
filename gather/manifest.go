@@ -43,7 +43,6 @@ func AppendManifestRecord(dataDir, owner, repo string, rec ManifestRecord) error
 		return fmt.Errorf("failed to create manifest directory: %w", err)
 	}
 
-	//nolint:gosec // ManifestPath constructs path within data directory
 	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to open manifest file: %w", err)
@@ -69,7 +68,7 @@ func LoadManifest(dataDir, owner, repo string) ([]ManifestRecord, error) {
 	defer manifestMu.Unlock()
 
 	p := filepath.Clean(ManifestPath(dataDir, owner, repo))
-	//nolint:gosec // ManifestPath constructs path within data directory
+
 	f, err := os.Open(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -108,11 +107,13 @@ func RebuildManifest(ctx context.Context, log zerolog.Logger, dataDir string) er
 
 	err := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".json" {
+			//nolint:nilerr // skip unreadable files and non-json directories
 			return nil
 		}
 
 		relPath, relErr := filepath.Rel(dataDir, path)
 		if relErr != nil {
+			//nolint:nilerr // skip files with invalid relative paths
 			return nil
 		}
 		parts := strings.Split(relPath, string(filepath.Separator))
@@ -147,7 +148,7 @@ func RebuildManifest(ctx context.Context, log zerolog.Logger, dataDir string) er
 						}
 						byRepo[repoKey] = append(byRepo[repoKey], ManifestRecord{
 							Type:      "job_run",
-							ID:        fmt.Sprint(job.GetID()),
+							ID:        strconv.FormatInt(job.GetID(), 10),
 							Name:      job.GetName(),
 							State:     jState,
 							Actor:     wfData.GetActor().GetLogin(),

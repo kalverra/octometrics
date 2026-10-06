@@ -296,7 +296,7 @@ func tryLoadWorkflowRunFromCache(
 		return nil, false
 	}
 
-	logsDir := filepath.Join(opts.DataDir, owner, repo, "logs", fmt.Sprintf("%d", workflowRunID))
+	logsDir := filepath.Join(opts.DataDir, owner, repo, "logs", strconv.FormatInt(workflowRunID, 10))
 	if cacheFileExists(logsDir) {
 		data.LogsDir = logsDir
 	}
@@ -381,7 +381,7 @@ func WorkflowRun(
 		}
 
 		if client == nil {
-			return nil, fmt.Errorf("github client is nil")
+			return nil, errors.New("github client is nil")
 		}
 
 		opts.Reporter.Start(fmt.Sprintf("Collecting data (workflow run %d)", workflowRunID))
@@ -433,6 +433,7 @@ func FindWorkflowRunIDForJob(dataDir, owner, repo string, jobID int64) (int64, e
 
 	err := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || filepath.Ext(path) != ".json" {
+			//nolint:nilerr // skip unreadable files and non-json entries
 			return nil
 		}
 		dirName := filepath.Base(filepath.Dir(path))
@@ -450,10 +451,12 @@ func FindWorkflowRunIDForJob(dataDir, owner, repo string, jobID int64) (int64, e
 		}
 		wfID, parseErr := strconv.ParseInt(strings.TrimSuffix(d.Name(), ".json"), 10, 64)
 		if parseErr != nil {
+			//nolint:nilerr // skip malformed file names
 			return nil
 		}
 		data, loadErr := loadWorkflowRunFromDisk(path)
 		if loadErr != nil {
+			//nolint:nilerr // skip unreadable JSON files
 			return nil
 		}
 		for _, job := range data.Jobs {
@@ -480,6 +483,7 @@ func FindOwnerRepoForJob(dataDir string, jobID int64) (owner, repo string, wfID 
 
 	walkErr := filepath.WalkDir(dataDir, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil || d.IsDir() || filepath.Ext(path) != ".json" {
+			//nolint:nilerr // skip unreadable files and non-json entries
 			return nil
 		}
 		if filepath.Base(filepath.Dir(path)) != WorkflowRunsDataDir {
@@ -487,10 +491,12 @@ func FindOwnerRepoForJob(dataDir string, jobID int64) (owner, repo string, wfID 
 		}
 		wfIDVal, parseErr := strconv.ParseInt(strings.TrimSuffix(d.Name(), ".json"), 10, 64)
 		if parseErr != nil {
+			//nolint:nilerr // skip malformed file names
 			return nil
 		}
 		data, loadErr := loadWorkflowRunFromDisk(path)
 		if loadErr != nil {
+			//nolint:nilerr // skip unreadable JSON files
 			return nil
 		}
 		for _, job := range data.Jobs {
@@ -523,7 +529,7 @@ func saveWorkflowRunToDisk(data *WorkflowRunData, owner, repo, dataDir, targetFi
 	}
 	_ = AppendManifestRecord(dataDir, owner, repo, ManifestRecord{
 		Type:      "workflow_run",
-		ID:        fmt.Sprint(data.GetID()),
+		ID:        strconv.FormatInt(data.GetID(), 10),
 		Name:      data.GetName(),
 		State:     state,
 		Actor:     data.GetActor().GetLogin(),
@@ -536,7 +542,7 @@ func saveWorkflowRunToDisk(data *WorkflowRunData, owner, repo, dataDir, targetFi
 		}
 		_ = AppendManifestRecord(dataDir, owner, repo, ManifestRecord{
 			Type:      "job_run",
-			ID:        fmt.Sprint(job.GetID()),
+			ID:        strconv.FormatInt(job.GetID(), 10),
 			Name:      job.GetName(),
 			State:     jState,
 			Actor:     data.GetActor().GetLogin(),
@@ -744,7 +750,7 @@ func downloadWorkflowRunLogs(
 	jobs []*JobData,
 	dataDir string,
 ) (string, error) {
-	logsDir := filepath.Join(dataDir, owner, repo, "logs", fmt.Sprintf("%d", workflowRunID))
+	logsDir := filepath.Join(dataDir, owner, repo, "logs", strconv.FormatInt(workflowRunID, 10))
 	if err := ensureDataDir(logsDir, "logs"); err != nil {
 		return "", err
 	}
@@ -909,18 +915,14 @@ func processJobs(
 }
 
 func calculateJobCostAndRunner(
-	log zerolog.Logger,
+	_ zerolog.Logger,
 	job *github.WorkflowJob,
 	completed, gatherCost bool,
 	billingIndex map[int64]jobBillingEntry,
 	logResults *sync.Map,
 ) (runner string, cost int64, costEstimate bool) {
 	if completed && gatherCost {
-		var billingErr error
-		runner, cost, billingErr = calculateJobRunBilling(job.GetID(), billingIndex)
-		if billingErr != nil {
-			log.Warn().Err(billingErr).Int64("job_id", job.GetID()).Msg("failed to calculate cost for job")
-		}
+		runner, cost = calculateJobRunBilling(job.GetID(), billingIndex)
 	}
 
 	if runner == "" {
@@ -1036,10 +1038,8 @@ func jobsData(
 	workflowRunID int64,
 ) ([]*github.WorkflowJob, error) {
 	listOpts := &github.ListWorkflowJobsOptions{
-		Filter: "all",
-		ListOptions: github.ListOptions{
-			PerPage: workflowJobsPerPage,
-		},
+		Filter:  "all",
+		PerPage: workflowJobsPerPage,
 	}
 
 	var lastErr error
@@ -1110,12 +1110,12 @@ func buildJobBillingIndex(billingData *github.WorkflowRunUsage) map[int64]jobBil
 func calculateJobRunBilling(
 	jobID int64,
 	billingIndex map[int64]jobBillingEntry,
-) (runner string, costInTenthsOfCents int64, err error) {
+) (runner string, costInTenthsOfCents int64) {
 	if entry, ok := billingIndex[jobID]; ok {
-		return entry.runner, entry.cost, nil
+		return entry.runner, entry.cost
 	}
 	// if we didn't find the job ID in billing data, it was free
-	return "Free", 0, nil
+	return "Free", 0
 }
 
 func billableMinutes(durationMS int64) int64 {
@@ -1321,7 +1321,6 @@ func downloadAndAnalyzeArtifact(
 		}
 	}()
 
-	//nolint:gosec // pattern is fixed; dir is the workflow run data dir
 	monitorFile, err := os.CreateTemp(targetDir, "octometrics-monitor-*.jsonl")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file to extract monitoring data to: %w", err)

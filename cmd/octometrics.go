@@ -3,6 +3,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -57,7 +58,7 @@ func versionInfo() string {
 func commandNeedsGitHubToken(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "monitor", "report", "help", "completion":
+		case "monitor", "report", "help", "completion", "cost":
 			return false
 		}
 	}
@@ -291,7 +292,7 @@ inefficiencies in your CI/CD pipelines.`,
 					obsOpts...,
 				)
 			} else {
-				return fmt.Errorf("cannot compare: baseline and target must both be workflow runs or both be commits")
+				return errors.New("cannot compare: baseline and target must both be workflow runs or both be commits")
 			}
 			if compErr != nil {
 				return fmt.Errorf("failed to compare against %s: %w", vsTarget, compErr)
@@ -303,7 +304,7 @@ inefficiencies in your CI/CD pipelines.`,
 						return fmt.Errorf("failed to render comparison: %w", renderErr)
 					}
 					if cfg.OutputFile != "" {
-						//nolint:gosec // user specified output file path
+
 						if writeErr := os.WriteFile(cfg.OutputFile, []byte(outStr), 0o600); writeErr != nil {
 							return fmt.Errorf("failed to write output file %q: %w", cfg.OutputFile, writeErr)
 						}
@@ -391,7 +392,7 @@ inefficiencies in your CI/CD pipelines.`,
 					return fmt.Errorf("failed to render observation: %w", err)
 				}
 				if cfg.OutputFile != "" {
-					//nolint:gosec // user specified output file path
+
 					if writeErr := os.WriteFile(cfg.OutputFile, []byte(outStr), 0o600); writeErr != nil {
 						return fmt.Errorf("failed to write output file %q: %w", cfg.OutputFile, writeErr)
 					}

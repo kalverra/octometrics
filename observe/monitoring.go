@@ -12,9 +12,9 @@ type Monitoring struct {
 	Charts []report.MonitoringChart
 }
 
-func monitoring(analysis *monitor.Analysis, windowStart, windowEnd time.Time) (*Monitoring, error) {
+func monitoring(analysis *monitor.Analysis, windowStart, windowEnd time.Time) *Monitoring {
 	if analysis == nil {
-		return nil, nil
+		return nil
 	}
 	var charts []report.MonitoringChart
 	if windowEnd.After(windowStart) {
@@ -24,7 +24,7 @@ func monitoring(analysis *monitor.Analysis, windowStart, windowEnd time.Time) (*
 		charts = report.MonitoringMermaidCharts(analysis)
 	}
 	if len(charts) == 0 {
-		return nil, nil
+		return nil
 	}
-	return &Monitoring{Charts: charts}, nil
+	return &Monitoring{Charts: charts}
 }

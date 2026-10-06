@@ -1,7 +1,7 @@
 package observe
 
 import (
-	"fmt"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -134,7 +134,7 @@ func (g *Timeline) HasCost() bool {
 
 func (g *Timeline) normalize() error {
 	if g == nil {
-		return fmt.Errorf("timeline is nil")
+		return errors.New("timeline is nil")
 	}
 	if len(g.Items) == 0 {
 		return nil

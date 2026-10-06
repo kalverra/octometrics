@@ -81,7 +81,14 @@ func GetCleanJobLogs(
 
 	wfID, err := FindWorkflowRunIDForJob(dataDir, owner, repo, jobID)
 	if err == nil {
-		jobLogPath := filepath.Join(dataDir, owner, repo, "logs", fmt.Sprintf("%d", wfID), fmt.Sprintf("%d.log", jobID))
+		jobLogPath := filepath.Join(
+			dataDir,
+			owner,
+			repo,
+			"logs",
+			strconv.FormatInt(wfID, 10),
+			fmt.Sprintf("%d.log", jobID),
+		)
 		if cacheFileExists(jobLogPath) {
 			//nolint:gosec // job log path is safely constructed inside dataDir
 			data, readErr := os.ReadFile(jobLogPath)
@@ -96,6 +103,7 @@ func GetCleanJobLogs(
 	targetLogName := fmt.Sprintf("%d.log", jobID)
 	_ = filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
+			//nolint:nilerr // continue walking on access error
 			return nil
 		}
 		if d.Name() == targetLogName {
@@ -141,7 +149,7 @@ func GetCleanJobLogs(
 				owner,
 				repo,
 				"logs",
-				fmt.Sprintf("%d", wfID),
+				strconv.FormatInt(wfID, 10),
 				fmt.Sprintf("%d.log", jobID),
 			)
 		} else {

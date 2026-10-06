@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,7 +22,7 @@ func commentMarker(jobName string) string {
 // associated with a PR, it falls back to a commit comment on the HEAD SHA.
 func postComment(log zerolog.Logger, gha *ghaContext, markdown string) error {
 	if gha.Token == "" {
-		return fmt.Errorf("github_token not set, cannot post comment")
+		return errors.New("github_token not set, cannot post comment")
 	}
 
 	marker := commentMarker(gha.JobName)
@@ -35,7 +36,7 @@ func postComment(log zerolog.Logger, gha *ghaContext, markdown string) error {
 		return createCommitComment(log, gha, body)
 	}
 
-	return fmt.Errorf("no PR number or SHA available for posting a comment")
+	return errors.New("no PR number or SHA available for posting a comment")
 }
 
 // upsertPRComment creates or updates an octometrics report comment on a PR.
@@ -82,7 +83,7 @@ func findExistingComment(
 	marker string,
 ) (int64, error) {
 	opts := &github.IssueListCommentsOptions{
-		ListOptions: github.ListOptions{PerPage: 100},
+		PerPage: 100,
 	}
 
 	for comment, err := range client.Issues.ListCommentsIter(ctx, owner, repo, prNumber, opts) {

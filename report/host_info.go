@@ -18,7 +18,7 @@ func machineInfoMarkdown(analysis *monitor.Analysis) string {
 	if len(si.CPU) > 0 {
 		line := fmt.Sprintf("- **CPU:** %d logical processor(s)", len(si.CPU))
 		if m := si.CPU[0]; m.Model != "" {
-			line += fmt.Sprintf(", %s", m.Model)
+			line += ", " + m.Model
 		}
 		if m := si.CPU[0]; m.Mhz > 0 {
 			line += fmt.Sprintf(" (~%.0f MHz)", m.Mhz)

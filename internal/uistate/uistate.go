@@ -47,6 +47,7 @@ func Load(dataDir string) (*State, error) {
 		Recents   []RepoRef `json:"recents"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
+		//nolint:nilerr // fallback to empty state on corrupt json
 		return st, nil
 	}
 

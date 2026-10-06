@@ -55,6 +55,7 @@ func TestRootCmdURLArgs(t *testing.T) {
 	assert.Equal(t, "octometrics [url]", rootCmd.Use)
 
 	t.Run("invalid URL returns error", func(t *testing.T) {
+		t.Parallel()
 		err := rootCmd.RunE(rootCmd, []string{"https://invalid-domain.com/owner/repo/pull/1"})
 		assert.ErrorContains(t, err, "unsupported GitHub URL host")
 	})

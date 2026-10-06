@@ -1,7 +1,7 @@
 [tools]
-go = "1.27.0"
-golangci-lint = "2.13.2"
-goreleaser = "2.18.0"
+go = "1.27.1"
+golangci-lint = "2.14.0"
+goreleaser = "2.18.2"
 air = "1.67.4"
 
 [tasks.goreleaser]

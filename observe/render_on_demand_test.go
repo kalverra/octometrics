@@ -66,7 +66,7 @@ func TestRenderOnDemandHandler(t *testing.T) {
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
 	// Request 1: Cold hit returns 202 Pending and triggers background job
-	req := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/workflow_runs/555.html", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusAccepted, rr.Code)
@@ -75,7 +75,7 @@ func TestRenderOnDemandHandler(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Request 2: Job done -> returns 200 with rendered page
-	req2 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	req2 := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/workflow_runs/555.html", nil)
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 
@@ -90,7 +90,7 @@ func TestRenderOnDemandHandler(t *testing.T) {
 	assert.Contains(t, string(outContent), "on-demand-wf")
 
 	// Request 3: Warm hit (serves directly from disk cache)
-	req3 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	req3 := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/workflow_runs/555.html", nil)
 	rr3 := httptest.NewRecorder()
 	handler.ServeHTTP(rr3, req3)
 
@@ -139,7 +139,7 @@ func TestRenderOnDemandHandler_JobRun(t *testing.T) {
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
 	// First request -> 202 Pending
-	req := httptest.NewRequest("GET", "/owner/repo/job_runs/777.html", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/job_runs/777.html", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusAccepted, rr.Code)
@@ -147,7 +147,7 @@ func TestRenderOnDemandHandler_JobRun(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Second request -> 200 OK
-	req2 := httptest.NewRequest("GET", "/owner/repo/job_runs/777.html", nil)
+	req2 := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/job_runs/777.html", nil)
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 
@@ -175,7 +175,7 @@ func TestRenderOnDemandHandler_Comparison(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	req := httptest.NewRequest("GET", "/owner/repo/comparisons/111_vs_222.html", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/comparisons/111_vs_222.html", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -214,7 +214,7 @@ func TestRenderOnDemandHandler_Comparison_OnDemand(t *testing.T) {
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
 	// First request -> 202 Pending
-	req := httptest.NewRequest("GET", "/owner/repo/comparisons/111_vs_222.html", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/comparisons/111_vs_222.html", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusAccepted, rr.Code)
@@ -222,7 +222,7 @@ func TestRenderOnDemandHandler_Comparison_OnDemand(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// Second request -> 200 OK
-	req2 := httptest.NewRequest("GET", "/owner/repo/comparisons/111_vs_222.html", nil)
+	req2 := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/comparisons/111_vs_222.html", nil)
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 
@@ -259,14 +259,19 @@ func TestRenderOnDemandHandler_StaleHTMLRefreshed(t *testing.T) {
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
 	// First request -> 202, wait -> 200
-	req := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/workflow_runs/555.html", nil)
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	require.Equal(t, http.StatusAccepted, rr.Code)
 
 	time.Sleep(100 * time.Millisecond)
 
-	reqFirst200 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	reqFirst200 := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/owner/repo/workflow_runs/555.html",
+		nil,
+	)
 	rrFirst200 := httptest.NewRecorder()
 	handler.ServeHTTP(rrFirst200, reqFirst200)
 	require.Equal(t, http.StatusOK, rrFirst200.Code)
@@ -292,14 +297,14 @@ func TestRenderOnDemandHandler_StaleHTMLRefreshed(t *testing.T) {
 	require.NoError(t, os.Chtimes(jsonPath, now, now))
 
 	// Second request detects stale HTML -> 202, triggers background job
-	req2 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	req2 := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/workflow_runs/555.html", nil)
 	rr2 := httptest.NewRecorder()
 	handler.ServeHTTP(rr2, req2)
 	assert.Equal(t, http.StatusAccepted, rr2.Code)
 
 	time.Sleep(100 * time.Millisecond)
 
-	req3 := httptest.NewRequest("GET", "/owner/repo/workflow_runs/555.html", nil)
+	req3 := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/workflow_runs/555.html", nil)
 	rr3 := httptest.NewRecorder()
 	handler.ServeHTTP(rr3, req3)
 

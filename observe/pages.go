@@ -242,7 +242,7 @@ func (h *OnDemandHandler) populateCommitsTab(
 			h.log.Warn().Err(err).Msg("failed to list commits")
 		} else {
 			for i := range commits {
-				commits[i].Downloaded = dlMap[fmt.Sprintf("commit:%s", commits[i].SHA)]
+				commits[i].Downloaded = dlMap["commit:"+commits[i].SHA]
 			}
 			vm.Commits = commits
 		}
@@ -329,7 +329,7 @@ func filterRuns(runs []gather.RunSummary, query string) []gather.RunSummary {
 	qLower := strings.ToLower(query)
 	var filtered []gather.RunSummary
 	for _, run := range runs {
-		if strings.Contains(strings.ToLower(fmt.Sprint(run.ID)), qLower) ||
+		if strings.Contains(strings.ToLower(strconv.FormatInt(run.ID, 10)), qLower) ||
 			strings.Contains(strings.ToLower(run.Name), qLower) ||
 			strings.Contains(strings.ToLower(run.HeadSHA), qLower) ||
 			strings.Contains(strings.ToLower(run.HeadBranch), qLower) ||
@@ -364,7 +364,7 @@ func filterPRs(prs []gather.PRSummary, query string) []gather.PRSummary {
 	qLower := strings.ToLower(query)
 	var filtered []gather.PRSummary
 	for _, pr := range prs {
-		if strings.Contains(strings.ToLower(fmt.Sprint(pr.Number)), qLower) ||
+		if strings.Contains(strings.ToLower(strconv.Itoa(pr.Number)), qLower) ||
 			strings.Contains(strings.ToLower(pr.Title), qLower) ||
 			strings.Contains(strings.ToLower(pr.Actor), qLower) {
 			filtered = append(filtered, pr)

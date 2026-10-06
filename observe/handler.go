@@ -70,7 +70,6 @@ func NewOnDemandHandler(
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", h.handleHome)
 	mux.HandleFunc("GET /index.html", func(w http.ResponseWriter, r *http.Request) {
-		//nolint:gosec // safe redirect to home
 		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 	})
 	mux.HandleFunc("GET /search", h.handleSearch)

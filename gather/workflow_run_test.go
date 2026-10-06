@@ -168,7 +168,7 @@ func TestGatherWorkflowRun(t *testing.T) {
 	var (
 		mockGitHubDownloadPath = "/mock/artifact/download"
 		mockGitHubDownloadURL  = "https://api.github.com" + mockGitHubDownloadPath
-		mockZipFile            = filepath.Join(testDataDir, fmt.Sprintf("%s.zip", monitor.DataFile))
+		mockZipFile            = filepath.Join(testDataDir, monitor.DataFile+".zip")
 	)
 	require.FileExists(t, mockZipFile, "test zip file should exist")
 	require.NotEmpty(t, mockZipFile, "test zip file should not be empty")
@@ -526,7 +526,7 @@ var (
 				},
 			},
 			"UBUNTU_16_CORE": &github.WorkflowRunBill{
-				TotalMS: new(int64(endTime.Sub(startTime).Milliseconds() * 2)),
+				TotalMS: new(endTime.Sub(startTime).Milliseconds() * 2),
 				Jobs:    new(2),
 				JobRuns: []*github.WorkflowRunJobRun{
 					{
@@ -540,7 +540,7 @@ var (
 				},
 			},
 			"UBUNTU_8_CORE_ARM": &github.WorkflowRunBill{
-				TotalMS: new(int64(endTime.Sub(startTime).Milliseconds())),
+				TotalMS: new(endTime.Sub(startTime).Milliseconds()),
 				Jobs:    new(1),
 				JobRuns: []*github.WorkflowRunJobRun{
 					{
@@ -634,27 +634,27 @@ func TestSafeMonitorJSONLZipEntry(t *testing.T) {
 
 	require.True(
 		t,
-		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "octometrics.monitor.log.jsonl"}}),
+		safeMonitorJSONLZipEntry(&zip.File{Name: "octometrics.monitor.log.jsonl"}),
 	)
 	require.True(
 		t,
-		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "job/octometrics.monitor.log.jsonl"}}),
+		safeMonitorJSONLZipEntry(&zip.File{Name: "job/octometrics.monitor.log.jsonl"}),
 	)
 	require.False(
 		t,
 		safeMonitorJSONLZipEntry(
-			&zip.File{FileHeader: zip.FileHeader{Name: "../../../tmp/octometrics.monitor.log.jsonl"}},
+			&zip.File{Name: "../../../tmp/octometrics.monitor.log.jsonl"},
 		),
 	)
 	require.False(
 		t,
-		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "/abs/octometrics.monitor.log.jsonl"}}),
+		safeMonitorJSONLZipEntry(&zip.File{Name: "/abs/octometrics.monitor.log.jsonl"}),
 	)
 	require.False(
 		t,
-		safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: `win\octometrics.monitor.log.jsonl`}}),
+		safeMonitorJSONLZipEntry(&zip.File{Name: `win\octometrics.monitor.log.jsonl`}),
 	)
-	require.False(t, safeMonitorJSONLZipEntry(&zip.File{FileHeader: zip.FileHeader{Name: "wrong.log.jsonl"}}))
+	require.False(t, safeMonitorJSONLZipEntry(&zip.File{Name: "wrong.log.jsonl"}))
 }
 
 func TestProcessJobs_RunsOnAlwaysFetchLogs(t *testing.T) {
@@ -808,18 +808,15 @@ func TestBuildJobBillingIndex_KnownRunners(t *testing.T) {
 
 	index := buildJobBillingIndex(usage)
 
-	runner, cost, err := calculateJobRunBilling(1, index)
-	require.NoError(t, err)
+	runner, cost := calculateJobRunBilling(1, index)
 	require.Equal(t, "UBUNTU", runner)
 	require.Equal(t, int64(8), cost, "ubuntu cost should be 0.8 cents per minute")
 
-	runner, cost, err = calculateJobRunBilling(2, index)
-	require.NoError(t, err)
+	runner, cost = calculateJobRunBilling(2, index)
 	require.Equal(t, "MACOS", runner)
 	require.Positive(t, cost, "macOS job should have a non-zero cost")
 
-	runner, cost, err = calculateJobRunBilling(3, index)
-	require.NoError(t, err)
+	runner, cost = calculateJobRunBilling(3, index)
 	require.Equal(t, "WINDOWS", runner)
 	require.Positive(t, cost, "Windows job should have a non-zero cost")
 }

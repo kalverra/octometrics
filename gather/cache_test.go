@@ -163,7 +163,7 @@ func TestWorkflowRun_AutoUpdateInProgress(t *testing.T) {
 	require.NoError(t, err)
 
 	// Invalidate memory cache if any
-	cacheKey := fmt.Sprintf("%s:cost=true", targetFile)
+	cacheKey := targetFile + ":cost=true"
 	workflowRunCache.Delete(cacheKey)
 
 	fetched, file, err := WorkflowRun(
@@ -246,7 +246,7 @@ func TestWorkflowRun_TimestampSmartCache(t *testing.T) {
 	require.NoError(t, err)
 
 	// Invalidate memory cache to test disk timestamp comparison
-	cacheKey := fmt.Sprintf("%s:cost=true", targetFile)
+	cacheKey := targetFile + ":cost=true"
 	workflowRunCache.Delete(cacheKey)
 
 	fetched, file, err := WorkflowRun(

@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=https://golangci-lint.run/jsonschema/golangci.jsonschema.json
+
 version: "2"
 run:
   timeout: 5m
@@ -5,6 +7,7 @@ run:
 linters:
   default: standard
   enable:
+    # Existing linters
     - errcheck
     - govet
     - ineffassign
@@ -22,6 +25,38 @@ linters:
     - revive
     - depguard
     - modernize
+    # Bug prevention & Error handling
+    - errorlint
+    - nilerr
+    - bodyclose
+    - durationcheck
+    - makezero
+    - gocheckcompilerdirectives
+    # Modern Go & Standard library idioms
+    - intrange
+    - exptostd
+    - usestdlibvars
+    - usetesting
+    - noctx
+    - fatcontext
+    # Performance & Clean code
+    - perfsprint
+    - unconvert
+    - unparam
+    - predeclared
+    - reassign
+    - recvcheck
+    - canonicalheader
+    - nosprintfhostport
+    - mirror
+    - dupword
+    - misspell
+    - tagalign
+    - whitespace
+    - nolintlint
+    # Testing best practices
+    - thelper
+    - tparallel
   settings:
     godox:
       keywords:
@@ -40,6 +75,12 @@ linters:
               desc: "Use github.com/stretchr/testify instead"
             - pkg: gotest.tools/v3/assert
               desc: "Use github.com/stretchr/testify/assert instead"
+    nolintlint:
+      require-explanation: false
+      require-specific: true
+    dupword:
+      ignore:
+        - "test"
 
 formatters:
   enable:
@@ -53,4 +94,5 @@ formatters:
     golines:
       max-len: 120
     gofumpt:
-      extra-rules: true
+      extra:
+        group-params: true

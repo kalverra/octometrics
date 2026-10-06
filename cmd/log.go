@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -69,7 +70,7 @@ var logCmd = &cobra.Command{
 		}
 
 		if jobID == 0 {
-			return fmt.Errorf(
+			return errors.New(
 				"job ID or GitHub job URL is required (usage: octometrics log [job-id|url] or --job-id <id>)",
 			)
 		}

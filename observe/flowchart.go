@@ -3,6 +3,7 @@ package observe
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/kalverra/octometrics/gather"
@@ -24,7 +25,7 @@ func buildFlowChart(def *gather.WorkflowDef, jobs []*gather.JobData) string {
 		}
 		name := job.GetName()
 		if name == "" {
-			name = fmt.Sprint(job.GetID())
+			name = strconv.FormatInt(job.GetID(), 10)
 		}
 		jobConclusions[name] = job.GetConclusion()
 	}

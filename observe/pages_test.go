@@ -21,7 +21,7 @@ func TestHandler_Home(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	req := httptest.NewRequest("GET", "/", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -43,7 +43,7 @@ func TestHandler_Search(t *testing.T) {
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
 	// Full search page
-	req := httptest.NewRequest("GET", "/search?q=test", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/search?q=test", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -53,7 +53,7 @@ func TestHandler_Search(t *testing.T) {
 	assert.Contains(t, body, "Search")
 
 	// Fragment search response (partial=1)
-	reqPartial := httptest.NewRequest("GET", "/search?q=test&partial=1", nil)
+	reqPartial := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/search?q=test&partial=1", nil)
 	recPartial := httptest.NewRecorder()
 	handler.ServeHTTP(recPartial, reqPartial)
 
@@ -70,7 +70,7 @@ func TestHandler_RepoPage(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	req := httptest.NewRequest("GET", "/kalverra/octometrics", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/kalverra/octometrics", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -98,7 +98,7 @@ func TestHandler_RepoPage_CommitsTab(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	req := httptest.NewRequest("GET", "/kalverra/octometrics?tab=commits", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/kalverra/octometrics?tab=commits", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -146,7 +146,12 @@ func TestHandler_RepoPage_SearchFilter(t *testing.T) {
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
 	// Filter commits by SHA/query
-	reqCommit := httptest.NewRequest("GET", "/kalverra/octometrics?tab=commits&q=abc1234", nil)
+	reqCommit := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/kalverra/octometrics?tab=commits&q=abc1234",
+		nil,
+	)
 	recCommit := httptest.NewRecorder()
 	handler.ServeHTTP(recCommit, reqCommit)
 	require.Equal(t, http.StatusOK, recCommit.Code)
@@ -155,7 +160,12 @@ func TestHandler_RepoPage_SearchFilter(t *testing.T) {
 	assert.NotContains(t, bodyCommit, "def987654321")
 
 	// Filter workflow runs by run ID
-	reqRun := httptest.NewRequest("GET", "/kalverra/octometrics?tab=workflows&q=12345", nil)
+	reqRun := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/kalverra/octometrics?tab=workflows&q=12345",
+		nil,
+	)
 	recRun := httptest.NewRecorder()
 	handler.ServeHTTP(recRun, reqRun)
 	require.Equal(t, http.StatusOK, recRun.Code)
@@ -163,7 +173,7 @@ func TestHandler_RepoPage_SearchFilter(t *testing.T) {
 	assert.Contains(t, bodyRun, "#12345")
 
 	// Filter PRs by PR number
-	reqPR := httptest.NewRequest("GET", "/kalverra/octometrics?tab=pulls&q=42", nil)
+	reqPR := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/kalverra/octometrics?tab=pulls&q=42", nil)
 	recPR := httptest.NewRecorder()
 	handler.ServeHTTP(recPR, reqPR)
 	require.Equal(t, http.StatusOK, recPR.Code)
@@ -179,7 +189,7 @@ func TestHandler_FavoriteToggle(t *testing.T) {
 
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	req := httptest.NewRequest("POST", "/favorites", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/favorites", nil)
 	req.Form = map[string][]string{
 		"owner": {"kalverra"},
 		"repo":  {"octometrics"},
@@ -202,7 +212,7 @@ func TestHandler_PendingInterstitial(t *testing.T) {
 	// Handler with nil client so rendering entity fails or stays pending
 	handler := NewOnDemandHandler(log, nil, dataDir, outputDir)
 
-	req := httptest.NewRequest("GET", "/owner/repo/workflow_runs/999.html", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/owner/repo/workflow_runs/999.html", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)

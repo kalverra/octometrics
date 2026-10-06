@@ -165,10 +165,15 @@ func parseRealRunsOnLabel(label string) string {
 	return cpu + "cpu-linux-" + arch
 }
 
-// runsOnRate returns the per-minute rate in tenths-of-cent for a runs-on runner key.
-func runsOnRate(key string) (int64, bool) {
+// RunsOnRate returns the per-minute rate in tenths-of-cent for a runs-on runner key.
+func RunsOnRate(key string) (int64, bool) {
 	rate, ok := runsOnRates[key]
 	return rate, ok
+}
+
+// runsOnRate returns the per-minute rate in tenths-of-cent for a runs-on runner key.
+func runsOnRate(key string) (int64, bool) {
+	return RunsOnRate(key)
 }
 
 // calculateRunsOnCost computes the estimated cost for a runs-on runner.

@@ -120,7 +120,7 @@ func SearchRepos(
 
 	log.Trace().Str("query", query).Msg("searching repositories via GitHub API")
 	opts := &github.SearchOptions{
-		ListOptions: github.ListOptions{PerPage: limit},
+		PerPage: limit,
 	}
 	res, _, err := client.Rest.Search.Repositories(ctx, query, opts)
 	if err != nil {
@@ -171,7 +171,7 @@ func SearchPullRequests(
 
 	log.Trace().Str("query", q).Msg("searching pull requests via GitHub API")
 	opts := &github.SearchOptions{
-		ListOptions: github.ListOptions{PerPage: limit},
+		PerPage: limit,
 	}
 	res, _, err := client.Rest.Search.Issues(ctx, q, opts)
 	if err != nil {
@@ -329,7 +329,7 @@ func ListRuns(
 		Int64("workflowID", workflowID).
 		Msg("listing workflow runs via GitHub API")
 	opts := &github.ListWorkflowRunsOptions{
-		ListOptions: github.ListOptions{PerPage: limit},
+		PerPage: limit,
 	}
 
 	var runs []*github.WorkflowRun
@@ -401,7 +401,7 @@ func ListCommits(
 
 	log.Trace().Str("owner", owner).Str("repo", repo).Msg("listing commits via GitHub API")
 	opts := &github.CommitsListOptions{
-		ListOptions: github.ListOptions{PerPage: limit},
+		PerPage: limit,
 	}
 	res, _, err := client.Rest.Repositories.ListCommits(ctx, owner, repo, opts)
 	if err != nil {
@@ -482,8 +482,8 @@ func ListPullRequests(
 
 	log.Trace().Str("owner", owner).Str("repo", repo).Msg("listing PRs via GitHub API")
 	opts := &github.PullRequestListOptions{
-		State:       "all",
-		ListOptions: github.ListOptions{PerPage: limit},
+		State:   "all",
+		PerPage: limit,
 	}
 	res, _, err := client.Rest.PullRequests.List(ctx, owner, repo, opts)
 	if err != nil {
