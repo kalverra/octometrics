@@ -223,10 +223,10 @@ func TestFetchRunsOnCostFromLogs_DiskCache(t *testing.T) {
 	require.NoError(t, os.WriteFile(cacheFile, data, 0o600))
 
 	// client is nil to prove no HTTP network calls are made
-	cost, loadedSummary, err := fetchRunsOnCostFromLogs(t.Context(), log, nil, "owner", "repo", 999, tempDir)
+	loadedSummary, err := fetchRunsOnCostFromLogs(t.Context(), log, nil, "owner", "repo", 999, tempDir)
 	require.NoError(t, err)
 	require.NotNil(t, loadedSummary)
-	assert.Equal(t, int64(50), cost)
+	assert.Equal(t, int64(50), loadedSummary.CostInTenthsOfCent())
 	assert.Equal(t, "c7i.2xlarge", loadedSummary.InstanceType)
 }
 

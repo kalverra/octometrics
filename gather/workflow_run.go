@@ -829,11 +829,6 @@ func downloadWorkflowRunLogs(
 	return logsDir, nil
 }
 
-type runsOnLogResult struct {
-	cost    int64
-	summary *RunsOnCostSummary
-}
-
 // processJobs processes the jobs for a workflow run.
 func processJobs(
 	parentCtx context.Context,
@@ -876,7 +871,7 @@ func processJobs(
 				if _, isRunsOn := parseRunsOnLabel(job.Labels); isRunsOn {
 					jobID := job.GetID()
 					logFetchGroup.Go(func() error {
-						logCost, logSummary, logErr := fetchRunsOnCostFromLogs(
+						logSummary, logErr := fetchRunsOnCostFromLogs(
 							egCtx,
 							log,
 							client,
@@ -895,8 +890,8 @@ func processJobs(
 								Int64("job_id", jobID).
 								Msg("no runs-on cost summary in logs, will use label estimate")
 						}
-						if logErr == nil && logSummary != nil {
-							logResults.Store(jobID, runsOnLogResult{cost: logCost, summary: logSummary})
+						if logSummary != nil {
+							logResults.Store(jobID, logSummary)
 						}
 						return nil
 					})
@@ -926,11 +921,9 @@ func processJobs(
 			runsOnCost    *RunsOnCostSummary
 		)
 		if val, ok := logResults.Load(job.GetID()); ok {
-			res := val.(runsOnLogResult)
-			runsOnCost = res.summary
-			if res.summary != nil {
-				runsOnMetrics = res.summary.Metrics
-			}
+			summary := val.(*RunsOnCostSummary)
+			runsOnCost = summary
+			runsOnMetrics = summary.Metrics
 		}
 
 		data.Jobs = append(data.Jobs, &JobData{
@@ -965,26 +958,23 @@ func calculateJobCostAndRunner(
 
 	if cost == 0 && gatherCost && completed {
 		conclusion := job.GetConclusion()
-		startedAt := job.GetStartedAt().Time
-		completedAt := job.GetCompletedAt().Time
-		duration := completedAt.Sub(startedAt)
+		duration := job.GetCompletedAt().Sub(job.GetStartedAt().Time)
 
 		if conclusion != "skipped" && duration > 0 {
 			if _, isRunsOn := parseRunsOnLabel(job.Labels); isRunsOn {
+				var summary *RunsOnCostSummary
 				if val, ok := logResults.Load(job.GetID()); ok {
-					res := val.(runsOnLogResult)
-					cost = res.cost
-					costEstimate = false
-					if res.summary != nil && res.summary.InstanceType != "" {
-						runner = formatRunsOnRunner(res.summary, job.Labels)
-					} else if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
-						runner = runsOnName
+					summary = val.(*RunsOnCostSummary)
+				}
+				if summary.HasCostData() {
+					cost = summary.CostInTenthsOfCent()
+					runner = formatRunsOnRunner(summary, job.Labels)
+				} else {
+					if estimated, isEstimate := calculateRunsOnCost(job.Labels, duration); estimated > 0 {
+						cost, costEstimate = estimated, isEstimate
 					}
-				} else if runsOnCost, isEstimate := calculateRunsOnCost(job.Labels, duration); runsOnCost > 0 {
-					cost = runsOnCost
-					costEstimate = isEstimate
-					if runsOnName := runsOnRunnerName(job.Labels); runsOnName != "" {
-						runner = runsOnName
+					if name := runsOnRunnerName(job.Labels); name != "" {
+						runner = name
 					}
 				}
 			}

@@ -60,6 +60,13 @@ func (s *RunsOnCostSummary) CostInTenthsOfCent() int64 {
 	return int64(math.Round(s.CostUSD * 1000))
 }
 
+// HasCostData reports whether the summary contains a parsed Execution Cost Summary
+// table, as opposed to only Job Metrics with no cost fields. Metrics-only summaries
+// must not be treated as cost results: callers fall back to a label-based estimate.
+func (s *RunsOnCostSummary) HasCostData() bool {
+	return s != nil && (s.InstanceType != "" || s.CostUSD > 0 || s.GitHubEquivalentCost > 0)
+}
+
 // costSummaryMarker is the marker that runs-on uses in job logs.
 const costSummaryMarker = "Execution Cost Summary"
 
@@ -494,6 +501,7 @@ func fetchFullJobLogs(
 
 // fetchRunsOnCostFromLogs fetches job logs and parses the runs-on cost summary.
 // Checks disk cache at data/<owner>/<repo>/runs_on_costs/<jobID>.json first.
+// Returns a summary with cost data, a metrics-only summary, or nil if neither is found.
 func fetchRunsOnCostFromLogs(
 	ctx context.Context,
 	log zerolog.Logger,
@@ -501,20 +509,20 @@ func fetchRunsOnCostFromLogs(
 	owner, repo string,
 	jobID int64,
 	dataDir string,
-) (int64, *RunsOnCostSummary, error) {
+) (*RunsOnCostSummary, error) {
 	cacheFile := filepath.Join(dataDir, owner, repo, "runs_on_costs", fmt.Sprintf("%d.json", jobID))
 
 	if cacheFileExists(cacheFile) {
 		if summary, err := readJSONFile[*RunsOnCostSummary](cacheFile); err == nil && summary != nil {
 			log.Debug().Int64("job_id", jobID).Msg("loaded runs-on cost summary from disk cache")
-			return summary.CostInTenthsOfCent(), summary, nil
+			return summary, nil
 		}
 	}
 
 	logs, err := fetchJobLogs(ctx, client, owner, repo, jobID)
 	if err != nil {
 		log.Debug().Err(err).Int64("job_id", jobID).Msg("failed to fetch job logs for runs-on cost")
-		return 0, nil, err
+		return nil, err
 	}
 
 	summary, ok := ParseRunsOnCostSummary(logs)
@@ -531,13 +539,13 @@ func fetchRunsOnCostFromLogs(
 			Int64("job_id", jobID).
 			Int("log_size", len(logs)).
 			Msg("no runs-on cost summary or metrics found in job logs")
-		return 0, nil, nil
+		return nil, nil
 	}
 
 	_ = ensureDataDir(filepath.Dir(cacheFile), "runs_on_costs")
 	_ = writeJSONFile(cacheFile, summary)
 
-	return summary.CostInTenthsOfCent(), summary, nil
+	return summary, nil
 }
 
 // LogGap represents a delay between consecutive log lines.

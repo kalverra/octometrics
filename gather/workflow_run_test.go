@@ -9,12 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/google/go-github/v89/github"
 	"github.com/migueleliasweb/go-github-mock/src/mock"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -727,6 +729,69 @@ func TestProcessJobs_RunsOnAlwaysFetchLogs(t *testing.T) {
 	assert.Equal(t, int64(0), data.Jobs[0].Cost)
 	assert.Positive(t, data.Jobs[1].Cost)
 	assert.True(t, data.Jobs[1].CostEstimate, "cost should be estimate when log fetch fails to return exact cost")
+}
+
+func TestCalculateJobCostAndRunner(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	runsOnJob := func() *github.WorkflowJob {
+		return &github.WorkflowJob{
+			ID:          new(int64(1)),
+			Labels:      []string{"runs-on=123/cpu=16/ram=64/family=m8i/spot=false/image=ubuntu24-full-x64"},
+			Conclusion:  new("success"),
+			StartedAt:   new(github.Timestamp{Time: now}),
+			CompletedAt: new(github.Timestamp{Time: now.Add(22 * time.Minute)}),
+		}
+	}
+
+	tests := []struct {
+		name         string
+		summary      *RunsOnCostSummary
+		wantCost     int64
+		wantEstimate bool
+		wantRunner   string
+	}{
+		{
+			name:         "metrics-only summary falls back to label estimate",
+			summary:      &RunsOnCostSummary{Metrics: &RunsOnJobMetrics{}},
+			wantCost:     946, // 22 min * 43 tenths-of-cent/min (16cpu-linux-x64)
+			wantEstimate: true,
+			wantRunner:   "runs-on:m8i (on-demand)",
+		},
+		{
+			name:         "cost summary provides exact cost",
+			summary:      &RunsOnCostSummary{InstanceType: "m8i.4xlarge", InstanceLifecycle: "on-demand", CostUSD: 0.5},
+			wantCost:     500,
+			wantEstimate: false,
+			wantRunner:   "runs-on:m8i.4xlarge (on-demand)",
+		},
+		{
+			name:         "exact zero cost is not overridden by label estimate",
+			summary:      &RunsOnCostSummary{InstanceType: "m8i.4xlarge", CostUSD: 0},
+			wantCost:     0,
+			wantEstimate: false,
+			wantRunner:   "runs-on:m8i.4xlarge",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			job := runsOnJob()
+			var logResults sync.Map
+			if tt.summary != nil {
+				logResults.Store(job.GetID(), tt.summary)
+			}
+
+			runner, cost, costEstimate := calculateJobCostAndRunner(zerolog.Nop(), job, true, true, nil, &logResults)
+
+			assert.Equal(t, tt.wantCost, cost)
+			assert.Equal(t, tt.wantEstimate, costEstimate)
+			assert.Equal(t, tt.wantRunner, runner)
+		})
+	}
 }
 
 func TestWorkflowRun_ReadCacheAndSingleflight(t *testing.T) {
