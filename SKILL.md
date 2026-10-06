@@ -1,17 +1,99 @@
 ---
 name: octometrics
-description: Profile GitHub Actions workflows, inspect job durations and step timelines, compare runs/commits.
+description: Profile and inspect GitHub Actions workflows, jobs, and step metrics. Triage CI failures, pinpoint bottlenecks, fetch clean job logs, or compare workflow runs side-by-side.
 ---
 
-`octometrics` is a Go CLI for profiling GitHub Actions workflows. It fetches workflow run data via GitHub API, calculates costs and step timelines, and produces structured Markdown output.
+# Octometrics Agent Guide
 
-Always pass `--format md` or `--stdout` to print raw Markdown directly to stdout.
+`octometrics` is a CLI tool for profiling and analyzing GitHub Actions workflows, jobs, and runner steps. It calculates execution durations, identifies critical paths, downloads clean logs, and outputs Markdown or JSON.
 
-```sh
-# Get data on specific workflow run, PR, or commit
-octometrics [url] --format [json|md] -f output.[json|md]
+## Core Rules
 
-# Compare two workflow runs or commits against each other
-octometrics compare -o [owner] -r [repo] --workflow-runs [run_id_1],[run_id_2] --format md
-octometrics compare -o [owner] -r [repo] --commits [sha_1],[sha_2] --format md
-```
+1. **URL-First**: Always prefer passing a GitHub URL (`https://github.com/...`). It auto-detects owner, repo, run ID, PR number, or commit SHA.
+2. **Output Format**:
+   - Non-interactive shells (scripts, agents) default to Markdown (`--format md`).
+   - Use `--json` for machine-parseable JSON stdout.
+   - Use `-f <path>` to save output directly to a file.
+3. **In-Progress Runs**: By default, `octometrics` waits for active runs to finish (`--wait=true`, polling every 10s up to 30m). Pass `--wait=false` to inspect immediately available completed jobs without waiting.
+4. **Authentication**: Set `GITHUB_TOKEN` in the environment to avoid GitHub API rate limits.
+
+---
+
+## Workflows
+
+### 1. Triage CI Failures
+
+When a PR check or workflow run fails, inspect the overall failure state, then grab clean logs for the specific failed job.
+
+1. **Profile the run**:
+   ```sh
+   octometrics <pr-or-run-url>
+   ```
+2. **Locate failed jobs**:
+   Inspect the rendered Markdown summary table for jobs with `failure` status and their run durations.
+3. **Fetch clean logs**:
+   Run `log` with the job URL or ID:
+   ```sh
+   octometrics log https://github.com/owner/repo/actions/runs/123/job/456
+   ```
+   Or if given owner, repo, and job ID:
+   ```sh
+   octometrics log 456 -o owner -r repo
+   ```
+4. **Identify root cause**:
+   The `log` command strips ANSI escape codes and normalizes timestamps. Read the error lines to determine why the step failed.
+
+**Completion Criterion**: Failing job and step identified with specific error message cited.
+
+---
+
+### 2. Profile Workflow Bottlenecks
+
+When optimizing CI speed or investigating why a workflow is slow.
+
+1. **Profile the PR or run**:
+   ```sh
+   octometrics https://github.com/owner/repo/pull/123
+   ```
+2. **Analyze step timeline**:
+   - Review job duration totals and step breakdowns.
+   - Look for setup steps taking excessive time (e.g. cold caches, dependency downloads).
+   - Check runner queue time vs active execution time.
+3. **Rank slow steps**:
+   Identify the top 3 longest-running steps across the workflow.
+
+**Completion Criterion**: Slowest steps ranked by duration with optimization recommendations.
+
+---
+
+### 3. Compare Workflow Performance
+
+When verifying an optimization (before vs after), or comparing a feature branch against `main`.
+
+1. **Compare by URL**:
+   ```sh
+   octometrics <target-run-url> --vs <baseline-run-url-or-sha>
+   ```
+2. **Compare by Run IDs or Commits**:
+   ```sh
+   octometrics compare -o owner -r repo --workflow-runs 123,456
+   octometrics compare -o owner -r repo --commits sha1,sha2
+   ```
+3. **Review duration deltas**:
+   Examine the comparison table to verify duration reductions and ensure no unintended status changes.
+
+**Completion Criterion**: Duration delta table reviewed; performance improvement or regression quantified.
+
+---
+
+## Command Reference
+
+| Command / Flag | Purpose | Example |
+| :--- | :--- | :--- |
+| `octometrics <url>` | Profile PR, run, or commit | `octometrics https://github.com/owner/repo/pull/42` |
+| `octometrics log <job>` | Fetch ANSI-stripped logs | `octometrics log https://github.com/owner/repo/actions/runs/1/job/2` |
+| `octometrics <url> --vs <target>` | Compare two runs or commits | `octometrics https://.../runs/2 --vs 1` |
+| `octometrics <url> --json` | Output structured JSON | `octometrics https://.../pull/42 --json` |
+| `octometrics <url> --wait=false` | Skip waiting for active runs | `octometrics https://.../pull/42 --wait=false` |
+| `octometrics <url> -u` | Force refresh cache | `octometrics https://.../pull/42 -u` |
+| `octometrics skill` | Output this agent guide | `octometrics skill` |

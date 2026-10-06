@@ -58,7 +58,7 @@ func versionInfo() string {
 func commandNeedsGitHubToken(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "monitor", "report", "help", "completion", "cost":
+		case "monitor", "report", "help", "completion", "cost", "skill", "instructions", "agent":
 			return false
 		}
 	}
@@ -111,12 +111,24 @@ func buildObserveOptions(cfg *config.Config, reporter gather.ProgressReporter) [
 var rootCmd = &cobra.Command{
 	Use:   "octometrics [url]",
 	Args:  cobra.MaximumNArgs(1),
-	Short: "See metrics and profiling of your GitHub Actions",
-	Long: `See metrics and profiling of your GitHub Actions.
+	Short: "Profile and analyze GitHub Actions workflows, runs, and logs",
+	Long: `Profile, analyze, and visualize GitHub Actions workflows, jobs, and step timelines.
 
-GitHub Actions provides surprisingly little metrics to help you optimize things like runtime and profiling data.
-Octometrics aims to help you easily visualize what your workflows look like, helping you identify bottlenecks and
-inefficiencies in your CI/CD pipelines.`,
+Agents: Run 'octometrics skill' for autonomous agent guidelines and workflows.`,
+	Example: `
+  # Profile a PR or workflow run (outputs Markdown in non-terminal)
+  octometrics https://github.com/owner/repo/pull/123
+  octometrics https://github.com/owner/repo/actions/runs/456
+
+  # Compare two runs or commits side-by-side
+  octometrics https://github.com/owner/repo/actions/runs/123 --vs 456
+
+  # Fetch clean, ANSI-stripped logs for a failed job
+  octometrics log https://github.com/owner/repo/actions/runs/123/job/456
+
+  # Retrieve complete agent instructions & skill guide
+  octometrics skill
+`,
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 		var err error
 
@@ -149,6 +161,14 @@ inefficiencies in your CI/CD pipelines.`,
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if cfg == nil {
+			var cfgErr error
+			cfg, cfgErr = config.Load(config.WithFlags(cmd.Flags()))
+			if cfgErr != nil {
+				return fmt.Errorf("failed to load config: %w", cfgErr)
+			}
+		}
+
 		rebuild, _ := cmd.Flags().GetBool("rebuild-manifest")
 		if rebuild {
 			if err := observe.RebuildManifest(cmd.Context(), logger, cfg.DataDir); err != nil {
@@ -182,6 +202,10 @@ inefficiencies in your CI/CD pipelines.`,
 
 		hasTarget := cfg.WorkflowRunID != 0 || cfg.PullRequestNumber != 0 || cfg.CommitSHA != "" ||
 			(!cfg.From.IsZero() && !cfg.To.IsZero())
+
+		if !hasTarget && len(args) == 0 && !rebuild && cfg.Owner == "" && cfg.Repo == "" {
+			return cmd.Help()
+		}
 
 		var githubClient *gather.GitHubClient
 		if cfg.GitHubToken != "" {
@@ -468,6 +492,9 @@ func init() {
 	rootCmd.Flags().String("vs", "", "Baseline workflow run ID, commit SHA, or URL to compare against")
 	rootCmd.Flags().Bool("no-open", false, "Do not open browser window on startup")
 	rootCmd.Flags().Int("port", 8080, "Port for local web server")
+
+	_ = rootCmd.PersistentFlags().MarkHidden("cpu-profile")
+	_ = rootCmd.Flags().MarkHidden("rebuild-manifest")
 }
 
 // Execute runs the root command for octometrics.
