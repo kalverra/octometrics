@@ -16,6 +16,8 @@ type Result struct {
 	JobID             int64
 	CommitSHA         string
 	PullRequestNumber int
+	WorkflowFileName  string
+	WorkflowID        int64
 }
 
 // Parse parses a GitHub web URL for workflow run, job, commit, or PR into a Result struct.
@@ -43,6 +45,19 @@ func Parse(rawURL string) (*Result, error) {
 
 	switch parts[2] {
 	case "actions":
+		if len(parts) >= 5 && parts[3] == "workflows" {
+			res := &Result{
+				Owner: owner,
+				Repo:  repo,
+			}
+			if wfID, parseErr := strconv.ParseInt(parts[4], 10, 64); parseErr == nil {
+				res.WorkflowID = wfID
+			} else {
+				res.WorkflowFileName = parts[4]
+			}
+			return res, nil
+		}
+
 		if len(parts) < 5 || parts[3] != "runs" {
 			return nil, fmt.Errorf("unsupported GitHub URL path %q", u.Path)
 		}

@@ -20,19 +20,36 @@ var unauthenticatedHTTPClient = &http.Client{
 	Timeout: 30 * time.Second,
 }
 
+// MinMaxAvg holds min, max, and avg statistics for a resource metric.
+type MinMaxAvg struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
+	Avg float64 `json:"avg"`
+}
+
+// RunsOnJobMetrics holds resource metrics extracted from RunsOn's "📊 Job Metrics" log section.
+type RunsOnJobMetrics struct {
+	CPULoad1m      *MinMaxAvg `json:"cpu_load_1m,omitempty"`
+	CPULoad5m      *MinMaxAvg `json:"cpu_load_5m,omitempty"`
+	CPUUtilCorePct *MinMaxAvg `json:"cpu_util_core_pct,omitempty"`
+	MemoryUtilPct  *MinMaxAvg `json:"memory_util_pct,omitempty"`
+	NetworkIOMB    *MinMaxAvg `json:"network_io_mb,omitempty"`
+}
+
 // RunsOnCostSummary holds parsed cost data from runs-on's "Execution Cost Summary" step.
 type RunsOnCostSummary struct {
-	InstanceType         string
-	InstanceLifecycle    string
-	Region               string
-	Platform             string
-	Arch                 string
-	Az                   string
-	ZoneID               string
-	Duration             string
-	CostUSD              float64
-	GitHubEquivalentCost float64
-	Savings              string
+	InstanceType         string            `json:"instance_type,omitempty"`
+	InstanceLifecycle    string            `json:"instance_lifecycle,omitempty"`
+	Region               string            `json:"region,omitempty"`
+	Platform             string            `json:"platform,omitempty"`
+	Arch                 string            `json:"arch,omitempty"`
+	Az                   string            `json:"az,omitempty"`
+	ZoneID               string            `json:"zone_id,omitempty"`
+	Duration             string            `json:"duration,omitempty"`
+	CostUSD              float64           `json:"cost_usd,omitempty"`
+	GitHubEquivalentCost float64           `json:"github_equivalent_cost,omitempty"`
+	Savings              string            `json:"savings,omitempty"`
+	Metrics              *RunsOnJobMetrics `json:"metrics,omitempty"`
 }
 
 // CostInTenthsOfCent converts CostUSD to tenths-of-cent (matching existing convention).
@@ -263,6 +280,92 @@ func parseUSDValue(s string) float64 {
 	return f
 }
 
+var (
+	cpuLoad1mChartPattern = regexp.MustCompile(
+		`CPU Load Average \(1m\)\s*\(min:\s*([0-9.-]+),\s*max:\s*([0-9.-]+),\s*avg:\s*([0-9.-]+)\)`,
+	)
+	cpuUtilCoreChartPattern = regexp.MustCompile(
+		`CPU Utilization per Core \(%\)\s*\(min:\s*([0-9.-]+),\s*max:\s*([0-9.-]+),\s*avg:\s*([0-9.-]+)\s*%\)`,
+	)
+	memUtilChartPattern = regexp.MustCompile(
+		`Memory Utilization \(%\)\s*\(min:\s*([0-9.-]+),\s*max:\s*([0-9.-]+),\s*avg:\s*([0-9.-]+)\s*%\)`,
+	)
+	netIOChartPattern = regexp.MustCompile(
+		`Network I/O by Direction \(MB\)\s*\(min:\s*([0-9.-]+),\s*max:\s*([0-9.-]+),\s*avg:\s*([0-9.-]+)\s*MB\)`,
+	)
+
+	cpuLoad1mStatPattern = regexp.MustCompile(
+		`system\.cpu\.load_average\.1m\s+min:\s*([0-9.-]+)\s+max:\s*([0-9.-]+)\s+avg:\s*([0-9.-]+)`,
+	)
+	cpuLoad5mStatPattern = regexp.MustCompile(
+		`system\.cpu\.load_average\.5m\s+min:\s*([0-9.-]+)\s+max:\s*([0-9.-]+)\s+avg:\s*([0-9.-]+)`,
+	)
+	memUtilStatPattern = regexp.MustCompile(
+		`system\.memory\.utilization(?:\s*\(used\))?\s+min:\s*([0-9.-]+)\s+max:\s*([0-9.-]+)\s+avg:\s*([0-9.-]+)`,
+	)
+)
+
+func parseMinMaxAvgMatch(m []string) *MinMaxAvg {
+	if len(m) < 4 {
+		return nil
+	}
+	minVal, _ := strconv.ParseFloat(m[1], 64)
+	maxVal, _ := strconv.ParseFloat(m[2], 64)
+	avgVal, _ := strconv.ParseFloat(m[3], 64)
+	return &MinMaxAvg{
+		Min: minVal,
+		Max: maxVal,
+		Avg: avgVal,
+	}
+}
+
+// ParseRunsOnJobMetrics extracts CPU, memory, and network metrics from RunsOn's "📊 Job Metrics" section.
+func ParseRunsOnJobMetrics(logs string) (*RunsOnJobMetrics, bool) {
+	if !strings.Contains(logs, "Job Metrics") && !strings.Contains(logs, "Summary Statistics:") {
+		return nil, false
+	}
+
+	metrics := &RunsOnJobMetrics{}
+	found := false
+
+	if m := cpuLoad1mStatPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.CPULoad1m = parseMinMaxAvgMatch(m)
+		found = true
+	} else if m := cpuLoad1mChartPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.CPULoad1m = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if m := cpuLoad5mStatPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.CPULoad5m = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if m := cpuUtilCoreChartPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.CPUUtilCorePct = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if m := memUtilStatPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.MemoryUtilPct = parseMinMaxAvgMatch(m)
+		found = true
+	} else if m := memUtilChartPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.MemoryUtilPct = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if m := netIOChartPattern.FindStringSubmatch(logs); len(m) >= 4 {
+		metrics.NetworkIOMB = parseMinMaxAvgMatch(m)
+		found = true
+	}
+
+	if !found {
+		return nil, false
+	}
+
+	return metrics, true
+}
+
 // fetchJobLogs downloads the logs for a single workflow job.
 func fetchJobLogs(parentCtx context.Context, client *GitHubClient, owner, repo string, jobID int64) (string, error) {
 	ctx, cancel := ghCtx(parentCtx)
@@ -299,7 +402,7 @@ func fetchJobLogs(parentCtx context.Context, client *GitHubClient, owner, repo s
 
 	logs := string(bodyBytes)
 	if downloadResp.StatusCode == http.StatusPartialContent || downloadResp.StatusCode == http.StatusOK {
-		if strings.Contains(logs, costSummaryMarker) {
+		if strings.Contains(logs, costSummaryMarker) || strings.Contains(logs, "Job Metrics") {
 			return logs, nil
 		}
 	}
@@ -412,8 +515,19 @@ func fetchRunsOnCostFromLogs(
 	}
 
 	summary, ok := ParseRunsOnCostSummary(logs)
-	if !ok || summary == nil {
-		log.Debug().Int64("job_id", jobID).Int("log_size", len(logs)).Msg("no runs-on cost summary found in job logs")
+	metrics, hasMetrics := ParseRunsOnJobMetrics(logs)
+	if hasMetrics {
+		if summary == nil {
+			summary = &RunsOnCostSummary{}
+		}
+		summary.Metrics = metrics
+	}
+
+	if summary == nil || (!ok && !hasMetrics) {
+		log.Debug().
+			Int64("job_id", jobID).
+			Int("log_size", len(logs)).
+			Msg("no runs-on cost summary or metrics found in job logs")
 		return 0, nil, nil
 	}
 

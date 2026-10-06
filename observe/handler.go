@@ -115,9 +115,11 @@ func (h *OnDemandHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *OnDemandHandler) handleStatic(w http.ResponseWriter, r *http.Request) {
 	reqPath := filepath.Clean(r.URL.Path)
 	filePath := filepath.Join(h.outputDir, reqPath)
+	//nolint:gosec // static asset serving from output dir
 	if _, err := os.Stat(filePath); err != nil {
 		_ = WriteStaticAssets(h.outputDir)
 	}
+	//nolint:gosec // static asset serving from output dir
 	http.ServeFile(w, r, filePath)
 }
 
@@ -141,6 +143,7 @@ func (h *OnDemandHandler) handleEntity(w http.ResponseWriter, r *http.Request) {
 	jobKey := fmt.Sprintf("%s/%s/%s/%s", owner, repo, category, id)
 	entityName := fmt.Sprintf("%s/%s %s %s", owner, repo, category, id)
 
+	//nolint:gosec // cache existence check
 	if outStat, err := os.Stat(targetOutFile); err == nil {
 		stale := false
 		if execPath, execErr := os.Executable(); execErr == nil {

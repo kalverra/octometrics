@@ -97,6 +97,10 @@ type JobData struct {
 	Analysis *monitor.Analysis `json:"analysis,omitempty"`
 	// LogPath is the path to the downloaded raw log file for this job
 	LogPath string `json:"log_path,omitempty"`
+	// RunsOnMetrics holds resource metrics parsed from RunsOn job logs
+	RunsOnMetrics *RunsOnJobMetrics `json:"runs_on_metrics,omitempty"`
+	// RunsOnCost holds detailed runs-on cost summary if available
+	RunsOnCost *RunsOnCostSummary `json:"runs_on_cost,omitempty"`
 }
 
 // GetRunner returns the runner type used for the job.
@@ -145,6 +149,22 @@ func (j *JobData) GetAnalysis() *monitor.Analysis {
 		return nil
 	}
 	return j.Analysis
+}
+
+// GetRunsOnMetrics returns the RunsOn job resource metrics if available.
+func (j *JobData) GetRunsOnMetrics() *RunsOnJobMetrics {
+	if j == nil {
+		return nil
+	}
+	return j.RunsOnMetrics
+}
+
+// GetRunsOnCost returns the RunsOn cost summary if available.
+func (j *JobData) GetRunsOnCost() *RunsOnCostSummary {
+	if j == nil {
+		return nil
+	}
+	return j.RunsOnCost
 }
 
 // WorkflowRunData wraps standard GitHub WorkflowRun data with additional fields
@@ -901,15 +921,26 @@ func processJobs(
 		if costEstimate {
 			data.CostEstimate = true
 		}
-		if gatherCost && completed {
-			data.CostGathered = true
+		var (
+			runsOnMetrics *RunsOnJobMetrics
+			runsOnCost    *RunsOnCostSummary
+		)
+		if val, ok := logResults.Load(job.GetID()); ok {
+			res := val.(runsOnLogResult)
+			runsOnCost = res.summary
+			if res.summary != nil {
+				runsOnMetrics = res.summary.Metrics
+			}
 		}
+
 		data.Jobs = append(data.Jobs, &JobData{
-			WorkflowJob:  job,
-			Runner:       runner,
-			Cost:         cost,
-			CostEstimate: costEstimate,
-			CostGathered: gatherCost && completed,
+			WorkflowJob:   job,
+			Runner:        runner,
+			Cost:          cost,
+			CostEstimate:  costEstimate,
+			CostGathered:  gatherCost && completed,
+			RunsOnMetrics: runsOnMetrics,
+			RunsOnCost:    runsOnCost,
 		})
 	}
 }

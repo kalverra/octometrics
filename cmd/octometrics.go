@@ -110,7 +110,7 @@ func buildObserveOptions(cfg *config.Config, reporter gather.ProgressReporter) [
 
 var rootCmd = &cobra.Command{
 	Use:   "octometrics [url]",
-	Args:  cobra.MaximumNArgs(1),
+	Args:  cobra.MaximumNArgs(2),
 	Short: "Profile and analyze GitHub Actions workflows, runs, and logs",
 	Long: `Profile, analyze, and visualize GitHub Actions workflows, jobs, and step timelines.
 
@@ -189,6 +189,14 @@ Agents: Run 'octometrics skill' for autonomous agent guidelines and workflows.`,
 			}
 			cfg.Owner = res.Owner
 			cfg.Repo = res.Repo
+			if res.WorkflowFileName != "" || res.WorkflowID != 0 {
+				if len(args) > 1 {
+					if n, nErr := strconv.Atoi(args[1]); nErr == nil && n > 0 && !cmd.Flags().Changed("runs") {
+						auditFlagRuns = n
+					}
+				}
+				return runAuditFlow(cmd, args[0])
+			}
 			if res.WorkflowRunID != 0 {
 				cfg.WorkflowRunID = res.WorkflowRunID
 			}
@@ -492,6 +500,15 @@ func init() {
 	rootCmd.Flags().String("vs", "", "Baseline workflow run ID, commit SHA, or URL to compare against")
 	rootCmd.Flags().Bool("no-open", false, "Do not open browser window on startup")
 	rootCmd.Flags().Int("port", 8080, "Port for local web server")
+	rootCmd.Flags().
+		BoolVar(&auditFlagAIOutput, "ai-output", false, "AI agent mode: print Markdown/JSON to stdout without web server or browser")
+	rootCmd.Flags().IntVar(&auditFlagRuns, "runs", 10, "Number of recent workflow runs to audit")
+	rootCmd.Flags().IntVar(&auditFlagRuns, "limit", 10, "Number of recent workflow runs to audit (alias for --runs)")
+	rootCmd.Flags().
+		StringSliceVar(&auditFlagIncludeRuns, "include-runs", nil, "Specific workflow run IDs or URLs to include in audit")
+	rootCmd.Flags().
+		StringSliceVar(&auditFlagExcludeRuns, "exclude-runs", nil, "Specific workflow run IDs or URLs to exclude from audit")
+	_ = rootCmd.Flags().MarkHidden("limit")
 
 	_ = rootCmd.PersistentFlags().MarkHidden("cpu-profile")
 	_ = rootCmd.Flags().MarkHidden("rebuild-manifest")

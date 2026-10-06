@@ -75,6 +75,33 @@ func TestParse(t *testing.T) {
 			},
 		},
 		{
+			name:  "workflow URL with YAML filename",
+			input: "https://github.com/smartcontractkit/chainlink-data-feeds/actions/workflows/monitoring-alert-firedrill-pr.yaml",
+			want: &githuburl.Result{
+				Owner:            "smartcontractkit",
+				Repo:             "chainlink-data-feeds",
+				WorkflowFileName: "monitoring-alert-firedrill-pr.yaml",
+			},
+		},
+		{
+			name:  "workflow URL with numeric ID",
+			input: "https://github.com/owner/repo/actions/workflows/12345678",
+			want: &githuburl.Result{
+				Owner:      "owner",
+				Repo:       "repo",
+				WorkflowID: 12345678,
+			},
+		},
+		{
+			name:  "workflow URL with query params",
+			input: "https://github.com/owner/repo/actions/workflows/ci.yml?query=branch%3Amain",
+			want: &githuburl.Result{
+				Owner:            "owner",
+				Repo:             "repo",
+				WorkflowFileName: "ci.yml",
+			},
+		},
+		{
 			name:    "non-github host",
 			input:   "https://gitlab.com/owner/repo/pull/1",
 			wantErr: "unsupported GitHub URL host",

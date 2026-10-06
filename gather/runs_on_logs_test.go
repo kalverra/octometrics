@@ -267,3 +267,63 @@ func TestParseLogGaps_BufferedFlushHeuristic(t *testing.T) {
 		"Gap ending with multiple lines sharing same timestamp should be flagged as buffered flush",
 	)
 }
+
+func TestParseRunsOnJobMetrics(t *testing.T) {
+	t.Parallel()
+
+	sampleLog := `
+📊 Job Metrics
+================================================================================
+✅ No significant resource constraints detected
+================================================================================
+
+ 30.43 ┤       ╭╮
+ 27.39 ┤      ╭╯│
+                 CPU Load Average (1m) (min: 0, max: 30.63, avg: 4.37)
+
+ 99.70 ┤    ╭──╮
+            CPU Utilization per Core (%) (min: 0, max: 99.80, avg: 17.47 %)
+
+ 23.65 ┤              ╭─╮       ╭╮            ╭──────────────────────────────
+              Memory Utilization (%) (min: 0.80, max: 23.83, avg: 17.94 %)
+
+ 6803 ┤                     ╭───────────────────────────────────────────────
+        Network I/O by Direction (MB) (min: 0.23, max: 6802.88, avg: 3021.15 MB)
+
+📈 Summary Statistics:
+--------------------------------------------------------------------------------
+  system.cpu.load_average.1m                     min: 0  max: 30.63  avg: 4.37 
+  system.cpu.load_average.5m                     min: 0  max: 10.29  avg: 4.13 
+  system.memory.utilization (used)               min: 0.80  max: 23.83  avg: 17.94 %
+================================================================================
+`
+
+	metrics, ok := ParseRunsOnJobMetrics(sampleLog)
+	require.True(t, ok)
+	require.NotNil(t, metrics)
+
+	require.NotNil(t, metrics.CPULoad1m)
+	assert.InDelta(t, 0.0, metrics.CPULoad1m.Min, 0.001)
+	assert.InDelta(t, 30.63, metrics.CPULoad1m.Max, 0.001)
+	assert.InDelta(t, 4.37, metrics.CPULoad1m.Avg, 0.001)
+
+	require.NotNil(t, metrics.CPULoad5m)
+	assert.InDelta(t, 0.0, metrics.CPULoad5m.Min, 0.001)
+	assert.InDelta(t, 10.29, metrics.CPULoad5m.Max, 0.001)
+	assert.InDelta(t, 4.13, metrics.CPULoad5m.Avg, 0.001)
+
+	require.NotNil(t, metrics.CPUUtilCorePct)
+	assert.InDelta(t, 0.0, metrics.CPUUtilCorePct.Min, 0.001)
+	assert.InDelta(t, 99.80, metrics.CPUUtilCorePct.Max, 0.001)
+	assert.InDelta(t, 17.47, metrics.CPUUtilCorePct.Avg, 0.001)
+
+	require.NotNil(t, metrics.MemoryUtilPct)
+	assert.InDelta(t, 0.80, metrics.MemoryUtilPct.Min, 0.001)
+	assert.InDelta(t, 23.83, metrics.MemoryUtilPct.Max, 0.001)
+	assert.InDelta(t, 17.94, metrics.MemoryUtilPct.Avg, 0.001)
+
+	require.NotNil(t, metrics.NetworkIOMB)
+	assert.InDelta(t, 0.23, metrics.NetworkIOMB.Min, 0.001)
+	assert.InDelta(t, 6802.88, metrics.NetworkIOMB.Max, 0.001)
+	assert.InDelta(t, 3021.15, metrics.NetworkIOMB.Avg, 0.001)
+}
